@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Record Movement — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main>
+  <div id="mv-msg"></div>
+  <div class="card">
+    <h3>Record a Movement</h3>
+    <p class="muted">Covers receiving, non-sale stock out, damage, missing items, and corrections. Sales and branch transfers are handled elsewhere (see Transfers page; sales stay in the existing Kittymae app for now).</p>
+    <form id="mv-form">
+      <div class="field"><label>SKU *</label><input type="text" name="sku" required></div>
+      <div class="field" id="branch-field"></div>
+      <div class="field"><label>Movement Type *</label>
+        <select name="transactionType" required>
+          <option value="Stock In">Stock In (receiving)</option>
+          <option value="Stock Out">Stock Out (non-sale)</option>
+          <option value="Damage">Damage</option>
+          <option value="Missing">Missing</option>
+          <option value="Customer Return">Customer Return</option>
+          <option value="Supplier Return">Supplier Return</option>
+          <option value="Adjustment">Adjustment</option>
+          <option value="Correction">Correction</option>
+        </select>
+      </div>
+      <div class="field"><label>Qty *</label><input type="number" name="qty" min="1" required></div>
+      <div class="field"><label>Reference #</label><input type="text" name="referenceNumber"></div>
+      <div class="field"><label>Reason</label><input type="text" name="reason"></div>
+      <div class="field"><label>Notes</label><input type="text" name="notes"></div>
+      <button class="btn" type="submit">Record</button>
+    </form>
+    <p class="muted" style="margin-top:8px;">Stock In / Customer Return add to inventory; Stock Out / Damage / Missing / Supplier Return remove from it. Adjustment/Correction can go either way and require Admin or Manager.</p>
+  </div>
+</main>
+
+<script type="module">
+import { initShell, toast, esc } from './js/shell.js';
+import { getBranches, recordMovement } from './js/api.js';
+
+const REMOVES = new Set(['Stock Out', 'Damage', 'Missing', 'Supplier Return']);
+
+const employee = await initShell('movement');
+if (employee) {
+  const branches = await getBranches();
+  const isScoped = employee.role === 'Branch Supervisor' || employee.role === 'Staff';
+  const branchField = document.getElementById('branch-field');
+  if (isScoped) {
+    const b = branches.find((x) => x.id === employee.branch_id);
+    branchField.innerHTML = '<label>Branch</label><input type="text" value="' + esc(b?.name || '') + '" disabled>';
+  } else {
+    branchField.innerHTML = '<label>Branch *</label><select name="branchId" required>' +
+      branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('') + '</select>';
+  }
+
+  document.getElementById('mv-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    const branchId = isScoped ? employee.branch_id : Number(f.branchId.value);
+    const qty = Number(f.qty.value);
+    const removes = REMOVES.has(f.transactionType.value);
+    const btn = f.querySelector('button[type=submit]');
+    btn.disabled = true;
+    try {
+      await recordMovement({
+        sku: f.sku.value.trim(),
+        branchId,
+        transactionType: f.transactionType.value,
+        qtyChange: removes ? -qty : qty,
+        referenceNumber: f.referenceNumber.value,
+        reason: f.reason.value,
+        notes: f.notes.value,
+      });
+      toast('mv-msg', 'Movement recorded.', false);
+      f.reset();
+    } catch (err) {
+      toast('mv-msg', String(err.message || err), true);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+</script>
+</body>
+</html>

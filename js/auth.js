@@ -1,0 +1,39 @@
+// Google sign-in + employee linking. Mirrors the old Apps Script system's model — the
+// Google account IS the identity, matched by email against a roster (now `employees`
+// instead of the Employees sheet) — just persisted via `link_my_employee_record()`
+// (01_branches_employees.sql) instead of re-derived on every single call.
+import { supabase } from './supabaseClient.js';
+
+export async function signInWithGoogle() {
+  const redirectTo = new URL('dashboard.html', window.location.href).toString();
+  const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
+  if (error) throw error;
+}
+
+export async function signOut() {
+  await supabase.auth.signOut();
+  window.location.href = 'login.html';
+}
+
+/**
+ * Call once per page load (after sign-in). Returns the linked employees row, or throws
+ * an Error whose message starts with 'NOT_REGISTERED' or 'INACTIVE' — callers should
+ * check for those prefixes the same way the old app's renderGate() branched on
+ * user.status.
+ */
+export async function linkEmployee() {
+  const { data, error } = await supabase.rpc('link_my_employee_record');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Redirects to login.html if there's no active session. Call at the top of every
+ * page except login.html itself. */
+export async function requireSession() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    window.location.href = 'login.html';
+    return null;
+  }
+  return session;
+}

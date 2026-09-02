@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bills — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main>
+  <div id="bill-msg"></div>
+  <div id="bills-root"></div>
+</main>
+
+<script type="module">
+import { initShell, toast, esc } from './js/shell.js';
+import { listBills, createBill, setBillStatus, updateBill, deleteBill, uploadBillAttachment, getBillAttachmentUrl, removeBillAttachment } from './js/api.js';
+
+const STATUS_BADGE = { Unpaid: 'pending', Overdue: 'low', 'Auto-debited': 'transit', Paid: 'ok' };
+const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+const CATEGORIES = ['Rent', 'Internet', 'Electricity', 'Water', 'Salaries', 'Supplies', 'Transportation', 'Marketing', 'Government/Taxes', 'Business', 'Personal', 'Other'];
+const CATEGORY_OPTIONS = (selected) => CATEGORIES.map((c) => '<option' + (c === selected ? ' selected' : '') + '>' + c + '</option>').join('');
+
+const employee = await initShell('bills');
+if (employee) {
+  const root = document.getElementById('bills-root');
+
+  if (employee.role !== 'Admin' && !employee.bills_access) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Bills tracking is restricted to Admin or accounts granted Bills access.</p></div></div>';
+  } else {
+    root.innerHTML =
+      '<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">' +
+        '<div style="flex:1 1 500px;min-width:0;">' +
+          '<div class="card">' +
+            '<h3>Add Bill</h3>' +
+            '<form id="bill-form">' +
+              '<div class="field"><label>Name *</label><input type="text" name="name" required></div>' +
+              '<div class="field"><label>Account Name</label><input type="text" name="accountName"></div>' +
+              '<div class="field"><label>Account Number</label><input type="text" name="accountNumber"></div>' +
+              '<div class="field"><label>Category *</label><select name="category" required>' + CATEGORY_OPTIONS() +
+              '</select></div>' +
+              '<div class="field"><label>Amount (PHP)</label><input type="number" name="amount" step="0.01" min="0"></div>' +
+              '<div class="field"><label>Due Date</label><input type="date" name="dueDate"></div>' +
+              '<div class="field"><label>Status</label><select name="status">' +
+                '<option>Unpaid</option><option>Overdue</option><option>Auto-debited</option><option>Paid</option>' +
+              '</select></div>' +
+              '<div class="field"><label>Recurring monthly?</label><select name="isRecurring"><option value="">No</option><option value="1">Yes</option></select></div>' +
+              '<div class="field" style="min-width:220px;"><label>Notes</label><input type="text" name="notes"></div>' +
+              '<div class="field"><label>Proof Photo</label><input type="file" name="attachment" accept="image/*"></div>' +
+              '<button class="btn" type="submit">Add Bill</button>' +
+            '</form>' +
+          '</div>' +
+          '<div class="tiles" id="bill-tiles"></div>' +
+          '<h2>Bills <span class="muted" style="font-weight:normal;">— month: </span>' +
+            '<select id="month-filter" style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></select>' +
+          '</h2>' +
+          '<div class="card">' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+              '<div class="field"><label>Name</label><input type="text" id="f-name" placeholder="Search…"></div>' +
+              '<div class="field"><label>Account Name</label><input type="text" id="f-account-name" placeholder="Search…"></div>' +
+              '<div class="field"><label>Account Number</label><input type="text" id="f-account-number" placeholder="Search…"></div>' +
+              '<div class="field"><label>Category</label><select id="f-category"><option value="all">All Categories</option>' + CATEGORY_OPTIONS() + '</select></div>' +
+              '<div class="field"><label>Status</label><select id="f-status"><option value="all">All Statuses</option><option>Unpaid</option><option>Overdue</option><option>Auto-debited</option><option>Paid</option></select></div>' +
+              '<div class="field"><label>Due Date</label><input type="date" id="f-due-date"></div>' +
+              '<div class="field"><label>Min Amount</label><input type="number" id="f-amount-min" step="0.01" min="0" style="width:100px;"></div>' +
+              '<div class="field"><label>Max Amount</label><input type="number" id="f-amount-max" step="0.01" min="0" style="width:100px;"></div>' +
+              '<div class="field"><label>Recurring</label><select id="f-recurring"><option value="all">All</option><option value="1">Recurring only</option><option value="0">One-time only</option></select></div>' +
+              '<div class="field" style="min-width:180px;"><label>Notes</label><input type="text" id="f-notes" placeholder="Search…"></div>' +
+              '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="bill-list"><div class="muted">Loading…</div></div>' +
+        '</div>' +
+        '<div style="flex:0 0 260px;">' +
+          '<div class="card">' +
+            '<h3>Recurring Bills <span class="muted" style="font-weight:normal;">— next schedule</span></h3>' +
+            '<div id="recurring-list"><div class="muted">Loading…</div></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById('bill-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      try {
+        const newId = await createBill({
+          name: f.name.value.trim(), category: f.category.value,
+          accountName: f.accountName.value.trim(), accountNumber: f.accountNumber.value.trim(),
+          amount: f.amount.value ? Number(f.amount.value) : null,
+          dueDate: f.dueDate.value || null, status: f.status.value, isRecurring: !!f.isRecurring.value, notes: f.notes.value.trim(),
+        });
+        if (f.attachment.files[0]) await uploadBillAttachment(newId, f.attachment.files[0]);
+        toast('bill-msg', 'Bill added.', false);
+        f.reset();
+        await load();
+      } catch (err) {
+        toast('bill-msg', String(err.message || err), true);
+      }
+    });
+
+    let allBills = [];
+    await load();
+
+    document.getElementById('month-filter').addEventListener('change', render);
+    ['f-name', 'f-account-name', 'f-account-number', 'f-amount-min', 'f-amount-max', 'f-notes'].forEach((id) =>
+      document.getElementById(id).addEventListener('input', render));
+    ['f-category', 'f-status', 'f-due-date', 'f-recurring'].forEach((id) =>
+      document.getElementById(id).addEventListener('change', render));
+    document.getElementById('f-clear').addEventListener('click', () => {
+      ['f-name', 'f-account-name', 'f-account-number', 'f-due-date', 'f-amount-min', 'f-amount-max', 'f-notes'].forEach((id) => { document.getElementById(id).value = ''; });
+      document.getElementById('f-category').value = 'all';
+      document.getElementById('f-status').value = 'all';
+      document.getElementById('f-recurring').value = 'all';
+      render();
+    });
+
+    async function load() {
+      const list = document.getElementById('bill-list');
+      list.innerHTML = '<div class="muted">Loading…</div>';
+      try {
+        allBills = await listBills();
+        populateMonthFilter();
+        render();
+        renderRecurring();
+      } catch (err) {
+        list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+      }
+    }
+
+    /** Recurring bills grouped by category (in CATEGORIES order), each group
+     * sorted alphabetically by name — grouping makes it faster to scan "what
+     * recurring rent/utility bills do we have" than one flat alphabetical list. */
+    function renderRecurring() {
+      const box = document.getElementById('recurring-list');
+      const recurring = allBills.filter((b) => b.is_recurring);
+      if (!recurring.length) { box.innerHTML = '<p class="muted">No recurring bills yet.</p>'; return; }
+
+      const groups = CATEGORIES
+        .map((cat) => ({ cat, bills: recurring.filter((b) => b.category === cat).sort((a, b) => a.name.localeCompare(b.name)) }))
+        .filter((g) => g.bills.length);
+
+      box.innerHTML = groups.map((g) =>
+        '<div style="margin-bottom:10px;">' +
+          '<div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;padding-top:8px;">' + esc(g.cat) + '</div>' +
+          g.bills.map((b) =>
+            '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;">' +
+              '<div style="font-size:13px;font-weight:bold;">' + esc(b.name) + '</div>' +
+              '<div class="muted" style="font-size:12px;">' + (b.due_date || 'no date set') + ' · ' + money(b.amount) + '</div>' +
+              (b.attachment_path ? '<button class="btn small secondary" style="margin-top:4px;" data-id="' + b.id + '" data-act="view-recurring-photo">View Photo</button>' : '') +
+            '</div>'
+          ).join('') +
+        '</div>'
+      ).join('');
+
+      box.querySelectorAll('[data-act="view-recurring-photo"]').forEach((btn) => btn.addEventListener('click', async () => {
+        const b = recurring.find((r) => String(r.id) === btn.dataset.id);
+        try {
+          window.open(await getBillAttachmentUrl(b.attachment_path), '_blank');
+        } catch (err) {
+          toast('bill-msg', String(err.message || err), true);
+        }
+      }));
+    }
+
+    function populateMonthFilter() {
+      const sel = document.getElementById('month-filter');
+      const current = sel.value;
+      const months = new Set(allBills.filter((b) => b.due_date).map((b) => b.due_date.slice(0, 7)));
+      const now = new Date().toISOString().slice(0, 7);
+      months.add(now);
+      const sorted = Array.from(months).sort();
+      sel.innerHTML = '<option value="all">All months</option>' +
+        sorted.map((m) => '<option value="' + m + '"' + (m === now ? ' selected' : '') + '>' + monthLabel(m) + '</option>').join('');
+      if (current && sorted.concat('all').includes(current)) sel.value = current;
+    }
+
+    function monthLabel(ym) {
+      const [y, m] = ym.split('-');
+      return new Date(Number(y), Number(m) - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    }
+
+    function render() {
+      const filter = document.getElementById('month-filter').value;
+      let rows = filter === 'all' ? allBills : allBills.filter((b) => b.due_date && b.due_date.slice(0, 7) === filter);
+
+      const fName = document.getElementById('f-name').value.trim().toLowerCase();
+      const fAccName = document.getElementById('f-account-name').value.trim().toLowerCase();
+      const fAccNumber = document.getElementById('f-account-number').value.trim().toLowerCase();
+      const fCategory = document.getElementById('f-category').value;
+      const fStatus = document.getElementById('f-status').value;
+      const fDueDate = document.getElementById('f-due-date').value;
+      const fMin = document.getElementById('f-amount-min').value;
+      const fMax = document.getElementById('f-amount-max').value;
+      const fRecurring = document.getElementById('f-recurring').value;
+      const fNotes = document.getElementById('f-notes').value.trim().toLowerCase();
+
+      if (fName) rows = rows.filter((b) => b.name.toLowerCase().includes(fName));
+      if (fAccName) rows = rows.filter((b) => (b.account_name || '').toLowerCase().includes(fAccName));
+      if (fAccNumber) rows = rows.filter((b) => (b.account_number || '').toLowerCase().includes(fAccNumber));
+      if (fCategory !== 'all') rows = rows.filter((b) => b.category === fCategory);
+      if (fStatus !== 'all') rows = rows.filter((b) => b.status === fStatus);
+      if (fDueDate) rows = rows.filter((b) => b.due_date === fDueDate);
+      if (fMin) rows = rows.filter((b) => Number(b.amount || 0) >= Number(fMin));
+      if (fMax) rows = rows.filter((b) => Number(b.amount || 0) <= Number(fMax));
+      if (fRecurring !== 'all') rows = rows.filter((b) => (fRecurring === '1') === !!b.is_recurring);
+      if (fNotes) rows = rows.filter((b) => (b.notes || '').toLowerCase().includes(fNotes));
+
+      const totalAll = rows.reduce((s, b) => s + Number(b.amount || 0), 0);
+      const totalUnpaid = rows.filter((b) => b.status === 'Unpaid' || b.status === 'Overdue').reduce((s, b) => s + Number(b.amount || 0), 0);
+      const totalPaid = rows.filter((b) => b.status === 'Paid' || b.status === 'Auto-debited').reduce((s, b) => s + Number(b.amount || 0), 0);
+      document.getElementById('bill-tiles').innerHTML =
+        tile('Total', money(totalAll)) + tile('Outstanding', money(totalUnpaid)) + tile('Paid / Auto-debited', money(totalPaid)) + tile('Count', String(rows.length));
+
+      const list = document.getElementById('bill-list');
+      if (!rows.length) { list.innerHTML = '<p class="muted">No bills for this filter.</p>'; return; }
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Name</th><th>Account Name</th><th>Account Number</th><th>Category</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Recurring</th><th>Notes</th><th>Photo</th><th></th></tr>' +
+        rows.map((b) =>
+          '<tr data-row-id="' + b.id + '">' +
+            '<td>' + esc(b.name) + '</td>' +
+            '<td>' + esc(b.account_name || '') + '</td>' +
+            '<td>' + esc(b.account_number || '') + '</td>' +
+            '<td>' + esc(b.category) + '</td>' +
+            '<td>' + money(b.amount) + '</td>' +
+            '<td>' + (b.due_date || '—') + '</td>' +
+            '<td><span class="badge ' + (STATUS_BADGE[b.status] || 'pending') + '">' + esc(b.status) + '</span></td>' +
+            '<td>' + (b.is_recurring ? 'Monthly' : '—') + '</td>' +
+            '<td>' + esc(b.notes || '') + '</td>' +
+            '<td>' + (b.attachment_path ? '<button class="btn small secondary" data-id="' + b.id + '" data-act="view-photo">View Photo</button>' : '—') + '</td>' +
+            '<td style="white-space:nowrap;">' +
+              (b.status !== 'Paid' ? '<button class="btn small" data-id="' + b.id + '" data-act="paid">Mark Paid</button> ' : '<button class="btn small secondary" data-id="' + b.id + '" data-act="unpaid">Mark Unpaid</button> ') +
+              '<button class="btn small secondary" data-id="' + b.id + '" data-act="edit">Edit</button> ' +
+              '<button class="btn small secondary" data-id="' + b.id + '" data-act="delete">Delete</button>' +
+            '</td>' +
+          '</tr>' +
+          '<tr class="edit-row" data-edit-for="' + b.id + '" style="display:none;"><td colspan="11"></td></tr>'
+        ).join('') + '</table></div>';
+
+      list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        try {
+          if (btn.dataset.act === 'paid') { await setBillStatus(id, 'Paid'); toast('bill-msg', 'Updated.', false); await load(); }
+          else if (btn.dataset.act === 'unpaid') { await setBillStatus(id, 'Unpaid'); toast('bill-msg', 'Updated.', false); await load(); }
+          else if (btn.dataset.act === 'delete') { if (!confirm('Delete this bill?')) return; await deleteBill(id); toast('bill-msg', 'Updated.', false); await load(); }
+          else if (btn.dataset.act === 'edit') openEdit(id, rows);
+          else if (btn.dataset.act === 'view-photo') {
+            const b = rows.find((r) => String(r.id) === String(id));
+            const url = await getBillAttachmentUrl(b.attachment_path);
+            window.open(url, '_blank');
+          }
+        } catch (err) {
+          toast('bill-msg', String(err.message || err), true);
+        }
+      }));
+    }
+
+    /** Opens an inline edit form pre-filled with the bill's current values — this is
+     * the "just update the amount each month" path for a recurring bill, rather than
+     * deleting and re-adding a row every time a new invoice comes in. */
+    function openEdit(id, rows) {
+      const b = rows.find((r) => String(r.id) === String(id));
+      const cell = document.querySelector('tr[data-edit-for="' + id + '"]');
+      const isOpen = cell.style.display !== 'none';
+      document.querySelectorAll('.edit-row').forEach((r) => { r.style.display = 'none'; r.querySelector('td').innerHTML = ''; });
+      if (isOpen) return; // toggle closed if it was already open
+      cell.style.display = '';
+      cell.querySelector('td').innerHTML =
+        '<form class="edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+          '<div class="field"><label>Name</label><input type="text" name="name" value="' + esc(b.name) + '" required></div>' +
+          '<div class="field"><label>Account Name</label><input type="text" name="accountName" value="' + esc(b.account_name || '') + '"></div>' +
+          '<div class="field"><label>Account Number</label><input type="text" name="accountNumber" value="' + esc(b.account_number || '') + '"></div>' +
+          '<div class="field"><label>Category</label><select name="category">' + CATEGORY_OPTIONS(b.category) +
+          '</select></div>' +
+          '<div class="field"><label>Amount (PHP)</label><input type="number" name="amount" step="0.01" min="0" value="' + (b.amount ?? '') + '"></div>' +
+          '<div class="field"><label>Due Date</label><input type="date" name="dueDate" value="' + (b.due_date || '') + '"></div>' +
+          '<div class="field"><label>Status</label><select name="status">' +
+            ['Unpaid', 'Overdue', 'Auto-debited', 'Paid'].map((s) => '<option' + (b.status === s ? ' selected' : '') + '>' + s + '</option>').join('') +
+          '</select></div>' +
+          '<div class="field"><label>Recurring monthly?</label><select name="isRecurring">' +
+            '<option value=""' + (!b.is_recurring ? ' selected' : '') + '>No</option><option value="1"' + (b.is_recurring ? ' selected' : '') + '>Yes</option>' +
+          '</select></div>' +
+          '<div class="field" style="min-width:220px;"><label>Notes</label><input type="text" name="notes" value="' + esc(b.notes || '') + '"></div>' +
+          '<div class="field"><label>' + (b.attachment_path ? 'Replace Photo' : 'Proof Photo') + '</label><input type="file" name="attachment" accept="image/*"></div>' +
+          (b.attachment_path ? '<button class="btn small secondary" type="button" data-view-current="1">View Current</button> <button class="btn small secondary" type="button" data-remove-photo="1">Remove Photo</button> ' : '') +
+          '<button class="btn small" type="submit">Save</button> ' +
+          '<button class="btn small secondary" type="button" data-cancel="1">Cancel</button>' +
+        '</form>';
+      const form = cell.querySelector('.edit-form');
+      form.querySelector('[data-cancel]').addEventListener('click', () => { cell.style.display = 'none'; form.remove(); });
+      if (form.querySelector('[data-view-current]')) {
+        form.querySelector('[data-view-current]').addEventListener('click', async () => {
+          try { window.open(await getBillAttachmentUrl(b.attachment_path), '_blank'); }
+          catch (err) { toast('bill-msg', String(err.message || err), true); }
+        });
+      }
+      if (form.querySelector('[data-remove-photo]')) {
+        form.querySelector('[data-remove-photo]').addEventListener('click', async () => {
+          if (!confirm('Remove this photo?')) return;
+          try { await removeBillAttachment(id, b.attachment_path); toast('bill-msg', 'Photo removed.', false); await load(); }
+          catch (err) { toast('bill-msg', String(err.message || err), true); }
+        });
+      }
+      form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        try {
+          await updateBill(id, {
+            name: f.name.value.trim(), category: f.category.value,
+            accountName: f.accountName.value.trim(), accountNumber: f.accountNumber.value.trim(),
+            amount: f.amount.value ? Number(f.amount.value) : null,
+            dueDate: f.dueDate.value || null, status: f.status.value, isRecurring: !!f.isRecurring.value, notes: f.notes.value.trim(),
+          });
+          if (f.attachment.files[0]) await uploadBillAttachment(id, f.attachment.files[0]);
+          toast('bill-msg', 'Bill updated.', false);
+          await load();
+        } catch (err) {
+          toast('bill-msg', String(err.message || err), true);
+        }
+      });
+    }
+
+    function tile(lbl, num) {
+      return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + lbl + '</div></div>';
+    }
+  }
+}
+</script>
+</body>
+</html>

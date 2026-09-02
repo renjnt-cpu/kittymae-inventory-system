@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Access Checklist — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  .ac-item { display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid #f0f0f0; }
+  .ac-item:last-child { border-bottom:none; }
+  .ac-item input[type="checkbox"] { margin-top:3px; width:16px; height:16px; flex-shrink:0; }
+  .ac-item .lbl { flex:1; }
+  .ac-item.checked .lbl-text { color:var(--muted); }
+  .ac-progress { font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <div id="ac-msg"></div>
+  <div id="ac-root"></div>
+</main>
+
+<script type="module">
+import { initShell, toast, esc } from './js/shell.js';
+import { getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem } from './js/api.js';
+
+/** Builds the list of things to verify from the employee's CURRENT role,
+ * branch, and bills_access -- not a hardcoded name lookup -- so a role or
+ * task change shows up here automatically instead of needing a code edit. */
+function itemsForEmployee(emp) {
+  const branch = (emp.branches && emp.branches.name) || 'their branch';
+  const items = [];
+  if (emp.role === 'Manager') {
+    items.push({ id: 'inventory-all', label: 'Sees inventory for every branch, not just ' + branch, expect: true });
+    items.push({ id: 'movement', label: 'Can record stock movements at any branch', expect: true });
+    items.push({ id: 'transfers', label: 'Can approve, ship, and receive transfers anywhere', expect: true });
+  } else if (emp.role === 'Branch Supervisor') {
+    items.push({ id: 'inventory-own', label: 'Sees inventory for ' + branch, expect: true });
+    items.push({ id: 'inventory-other', label: 'Cannot see inventory for other branches', expect: false });
+    items.push({ id: 'movement', label: 'Can record Stock In/Out, Damage, Missing at ' + branch, expect: true });
+    items.push({ id: 'adjustment', label: 'Cannot post Adjustment or Correction entries', expect: false });
+    items.push({ id: 'transfers', label: 'Can request, ship, and receive transfers involving ' + branch, expect: true });
+  } else if (emp.role === 'Staff') {
+    items.push({ id: 'inventory-own', label: 'Sees inventory for ' + branch, expect: true });
+    items.push({ id: 'inventory-other', label: 'Cannot see inventory for other branches', expect: false });
+    items.push({ id: 'movement', label: 'Can record Stock In/Out, Damage, Missing at ' + branch, expect: true });
+    items.push({ id: 'transfers-view', label: 'Can view transfers involving ' + branch + ', but cannot request or approve them', expect: true });
+  } else if (emp.role === 'None') {
+    items.push({ id: 'inventory', label: 'Cannot see any branch’s inventory', expect: false });
+    items.push({ id: 'movement', label: 'Cannot record any stock movement', expect: false });
+    items.push({ id: 'transfers', label: 'Cannot see or act on transfers', expect: false });
+  }
+  items.push({
+    id: 'bills',
+    label: emp.bills_access ? 'Can see and add Bills' : 'Cannot see the Bills tracker',
+    expect: true, // either outcome is correct as long as it matches today's bills_access flag
+  });
+  return items;
+}
+
+const employee = await initShell('access-checklist');
+if (employee) {
+  const root = document.getElementById('ac-root');
+
+  if (employee.role !== 'Admin') {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">This checklist is Admin-only.</p></div></div>';
+  } else {
+    let people = [];
+    let checked = {};
+    try {
+      const [emps, rows] = await Promise.all([getEmployeesForChecklist(), getAccessChecklist()]);
+      people = emps.map((e) => ({ id: e.id, name: e.full_name, role: e.role, position: e.position, items: itemsForEmployee(e) }));
+      rows.forEach((r) => { if (r.checked) checked[r.employee_id + ':' + r.item_key] = true; });
+    } catch (err) {
+      toast('ac-msg', String(err.message || err), true);
+    }
+
+    render();
+
+    function render() {
+      let total = 0, done = 0;
+      people.forEach((p) => p.items.forEach((it) => { total++; if (checked[p.id + ':' + it.id]) done++; }));
+
+      root.innerHTML =
+        '<h2>Access Verification Checklist</h2>' +
+        '<p class="muted">Tick each item off only after you’ve personally confirmed it with that person’s real account. This list is built from each person’s current role and branch, so it updates on its own whenever their task changes — Ren isn’t listed since Admin already has full access by definition.</p>' +
+        '<div class="tiles"><div class="tile"><div class="num">' + done + ' / ' + total + '</div><div class="lbl">Verified</div></div></div>' +
+        (!people.length ? '<p class="muted">No non-Admin employees yet.</p>' : people.map((p) => {
+          const pDone = p.items.filter((it) => checked[p.id + ':' + it.id]).length;
+          return '<div class="card">' +
+            '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;">' +
+              '<h3 style="margin:0;">' + esc(p.name) + ' <span class="muted" style="font-weight:normal;font-size:13px;">— ' + esc(p.role) + (p.position ? ' · ' + esc(p.position) : '') + '</span></h3>' +
+              '<span class="ac-progress">' + pDone + ' / ' + p.items.length + ' verified</span>' +
+            '</div>' +
+            p.items.map((it) => {
+              const key = p.id + ':' + it.id;
+              const isChecked = !!checked[key];
+              return '<label class="ac-item' + (isChecked ? ' checked' : '') + '">' +
+                '<input type="checkbox" data-key="' + key + '"' + (isChecked ? ' checked' : '') + '>' +
+                '<span class="lbl"><span class="lbl-text">' + esc(it.label) + '</span> ' +
+                  '<span class="badge ' + (it.expect ? 'ok' : 'low') + '">' + (it.expect ? 'Should have access' : 'Should NOT have access') + '</span>' +
+                '</span>' +
+              '</label>';
+            }).join('') +
+          '</div>';
+        }).join(''));
+
+      root.querySelectorAll('input[type="checkbox"]').forEach((cb) => cb.addEventListener('change', async (ev) => {
+        const key = ev.target.dataset.key;
+        const isChecked = ev.target.checked;
+        if (isChecked) checked[key] = true; else delete checked[key];
+        try {
+          const sep = key.indexOf(':');
+          const employeeId = key.slice(0, sep), itemKey = key.slice(sep + 1);
+          await setAccessChecklistItem(employeeId, itemKey, isChecked);
+          render();
+        } catch (err) {
+          ev.target.checked = !isChecked;
+          if (isChecked) delete checked[key]; else checked[key] = true;
+          toast('ac-msg', String(err.message || err), true);
+        }
+      }));
+    }
+  }
+}
+</script>
+</body>
+</html>
