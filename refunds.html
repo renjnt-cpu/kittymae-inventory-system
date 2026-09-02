@@ -30,15 +30,18 @@ if (employee) {
       '<div class="layout-2col">' +
         '<div class="layout-2col-side">' +
           '<div class="card">' +
-            '<h3>Add Refund</h3>' +
-            '<p class="muted" style="margin-top:-4px;">No photo here — a refund starts as a request awaiting approval. Proof-of-payment photos get attached after it\'s approved and actually paid out.</p>' +
+            '<h3>Add Refund Request</h3>' +
+            '<p class="muted" style="margin-top:-4px;">No photo here — proof-of-payment gets attached after Manager/Admin approval, once it\'s actually paid out.</p>' +
             '<form id="ref-form" style="flex-direction:column;align-items:stretch;">' +
-              '<div class="field"><label>Customer Name *</label><input type="text" name="customerName" required></div>' +
-              '<div class="field"><label>Order Reference</label><input type="text" name="orderReference"></div>' +
+              '<div class="field"><label>Name *</label><input type="text" name="customerName" required></div>' +
+              '<div class="field"><label>Order ID</label><input type="text" name="orderReference"></div>' +
+              '<div class="field"><label>Date Purchased</label><input type="date" name="purchaseDate"></div>' +
               '<div class="field"><label>Item</label><input type="text" name="itemDescription"></div>' +
-              '<div class="field"><label>Refund Amount (PHP) *</label><input type="number" name="refundAmount" step="0.01" min="0" required></div>' +
-              '<div class="field"><label>Refund Method</label><select name="refundMethod"><option>Cash</option><option>GCash</option><option>Bank Transfer</option></select></div>' +
               '<div class="field"><label>Reason</label><input type="text" name="reason"></div>' +
+              '<div class="field"><label>Refund Method *</label><select name="refundMethod" required><option>Cash</option><option>GCash</option><option>Bank Transfer</option></select></div>' +
+              '<div class="field"><label>Account Name</label><input type="text" name="accountName" placeholder="Payout account name"></div>' +
+              '<div class="field"><label>Account Number</label><input type="text" name="accountNumber" placeholder="Payout account number"></div>' +
+              '<div class="field"><label>Amount to Refund (PHP) *</label><input type="number" name="refundAmount" step="0.01" min="0.01" required></div>' +
               '<div class="field"><label>Refund Date</label><input type="date" name="refundDate"></div>' +
               '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
               '<button class="btn" type="submit">Add Refund Request</button>' +
@@ -49,7 +52,7 @@ if (employee) {
           '<div class="tiles" id="ref-tiles"></div>' +
           '<div class="card">' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
-              '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Customer, order ref, item…"></div>' +
+              '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Customer, order ID, item…"></div>' +
               '<div class="field"><label>Status</label><select id="f-status"><option value="all">All Statuses</option><option>Pending Approval</option><option>Approved</option><option>Completed</option></select></div>' +
               '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
             '</div>' +
@@ -64,9 +67,10 @@ if (employee) {
       try {
         await createRefund({
           customerName: f.customerName.value.trim(), orderReference: f.orderReference.value.trim(),
-          itemDescription: f.itemDescription.value.trim(), refundAmount: Number(f.refundAmount.value),
-          refundMethod: f.refundMethod.value, reason: f.reason.value.trim(),
-          refundDate: f.refundDate.value || null, notes: f.notes.value.trim(),
+          purchaseDate: f.purchaseDate.value || null, itemDescription: f.itemDescription.value.trim(),
+          reason: f.reason.value.trim(), refundMethod: f.refundMethod.value,
+          accountName: f.accountName.value.trim(), accountNumber: f.accountNumber.value.trim(),
+          refundAmount: Number(f.refundAmount.value), refundDate: f.refundDate.value || null, notes: f.notes.value.trim(),
         });
         toast('ref-msg', 'Refund request added — pending approval.', false);
         f.reset();
@@ -77,6 +81,7 @@ if (employee) {
     });
 
     let allRefunds = [];
+    let openAddProofFor = null;
     await load();
 
     document.getElementById('f-search').addEventListener('input', render);
@@ -116,32 +121,47 @@ if (employee) {
 
       const list = document.getElementById('ref-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No refunds for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Customer</th><th>Order Ref</th><th>Item</th><th>Amount</th><th>Method</th><th>Reason</th><th>Status</th><th>Date</th><th>Proof Photos</th><th></th></tr>' +
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Customer</th><th>Order ID</th><th>Date Purchased</th><th>Item</th><th>Reason</th><th>Amount</th><th>Method</th><th>Payout Account</th><th>Status</th><th>Proof of Payment</th><th></th></tr>' +
         rows.map((r) => {
-          const canAttach = r.status !== 'Pending Approval';
           const photos = r.refund_attachments || [];
+          const paidSoFar = photos.reduce((s, a) => s + Number(a.amount || 0), 0);
+          const remaining = Number(r.refund_amount || 0) - paidSoFar;
+          const canAttach = r.status !== 'Pending Approval';
+          const canComplete = r.status === 'Approved' && remaining <= 0;
           return '<tr>' +
             '<td data-label="Customer">' + esc(r.customer_name) +
               (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
             '</td>' +
-            '<td data-label="Order Ref">' + esc(r.order_reference || '') + '</td>' +
+            '<td data-label="Order ID">' + esc(r.order_reference || '') + '</td>' +
+            '<td data-label="Date Purchased">' + (r.purchase_date || '—') + '</td>' +
             '<td data-label="Item">' + esc(r.item_description || '') + '</td>' +
-            '<td data-label="Amount">' + money(r.refund_amount) + '</td>' +
-            '<td data-label="Method">' + esc(r.refund_method) + '</td>' +
             '<td data-label="Reason">' + esc(r.reason || '') + '</td>' +
+            '<td data-label="Amount">' + money(r.refund_amount) +
+              (photos.length ? '<div class="muted" style="font-size:10px;margin-top:2px;">Paid ' + money(paidSoFar) + (remaining > 0 ? ' · ' + money(remaining) + ' left' : ' · fully covered') + '</div>' : '') +
+            '</td>' +
+            '<td data-label="Method">' + esc(r.refund_method) + '</td>' +
+            '<td data-label="Payout Account">' + (r.account_name || r.account_number ? esc(r.account_name || '') + (r.account_number ? ' · ' + esc(r.account_number) : '') : '—') + '</td>' +
             '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
-            '<td data-label="Date">' + (r.refund_date || '—') + '</td>' +
-            '<td data-label="Proof Photos">' +
+            '<td data-label="Proof of Payment">' +
               (photos.length
-                ? photos.map((a, i) => '<div style="margin-bottom:2px;"><button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View ' + (i + 1) + '</button> <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">✕</button></div>').join('')
+                ? photos.map((a, i) => '<div style="margin-bottom:2px;">' + money(a.amount) + ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button> <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">✕</button></div>').join('')
                 : '<span class="muted">None yet</span>') +
               (canAttach
-                ? '<label class="btn small secondary" style="cursor:pointer;display:inline-block;margin-top:2px;">+ Add Photo<input type="file" accept="image/*" data-add-for="' + r.id + '" style="display:none;"></label>'
+                ? (openAddProofFor === r.id
+                    ? '<form class="add-proof-form" data-refund-id="' + r.id + '" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;max-width:180px;">' +
+                        '<input type="number" name="amount" step="0.01" min="0.01" placeholder="Amount paid" required style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
+                        '<input type="file" name="photo" accept="image/*" required style="font-size:11px;">' +
+                        '<div><button class="btn small" type="submit">Save</button> <button class="btn small secondary" type="button" data-cancel-proof="1">Cancel</button></div>' +
+                      '</form>'
+                    : '<button type="button" class="btn small secondary" data-open-proof="' + r.id + '" style="margin-top:4px;">+ Add Proof of Payment</button>')
                 : '<div class="muted" style="font-size:11px;">Approve first</div>') +
             '</td>' +
             '<td data-label="Actions" style="white-space:nowrap;">' +
               (r.status === 'Pending Approval' ? '<button class="btn small" data-id="' + r.id + '" data-act="approve">Approve</button> ' : '') +
-              (r.status === 'Approved' ? '<button class="btn small" data-id="' + r.id + '" data-act="complete">Mark Completed</button> ' : '') +
+              (r.status === 'Approved' ? (canComplete
+                  ? '<button class="btn small" data-id="' + r.id + '" data-act="complete">Mark Completed</button> '
+                  : '<span class="muted" style="font-size:11px;">' + money(remaining) + ' left to refund</span> ')
+                : '') +
               (r.status === 'Completed' ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="reopen">Reopen</button> ' : '') +
               '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' +
             '</td>' +
@@ -166,16 +186,34 @@ if (employee) {
       }));
 
       list.querySelectorAll('[data-remove-id]').forEach((btn) => btn.addEventListener('click', async () => {
-        if (!confirm('Remove this photo?')) return;
-        try { await removeRefundAttachment(btn.dataset.removeId, btn.dataset.path); toast('ref-msg', 'Photo removed.', false); await load(); }
+        if (!confirm('Remove this proof of payment?')) return;
+        try { await removeRefundAttachment(btn.dataset.removeId, btn.dataset.path); toast('ref-msg', 'Removed.', false); await load(); }
         catch (err) { toast('ref-msg', String(err.message || err), true); }
       }));
 
-      list.querySelectorAll('[data-add-for]').forEach((input) => input.addEventListener('change', async () => {
-        const file = input.files[0];
-        if (!file) return;
-        try { await addRefundAttachment(input.dataset.addFor, file); toast('ref-msg', 'Photo added.', false); await load(); }
-        catch (err) { toast('ref-msg', String(err.message || err), true); }
+      list.querySelectorAll('[data-open-proof]').forEach((btn) => btn.addEventListener('click', () => {
+        openAddProofFor = Number(btn.dataset.openProof);
+        render();
+      }));
+
+      list.querySelectorAll('[data-cancel-proof]').forEach((btn) => btn.addEventListener('click', () => {
+        openAddProofFor = null;
+        render();
+      }));
+
+      list.querySelectorAll('.add-proof-form').forEach((form) => form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const refundId = form.dataset.refundId;
+        const file = form.photo.files[0];
+        const amount = Number(form.amount.value);
+        try {
+          await addRefundAttachment(refundId, amount, file);
+          toast('ref-msg', 'Proof of payment added.', false);
+          openAddProofFor = null;
+          await load();
+        } catch (err) {
+          toast('ref-msg', String(err.message || err), true);
+        }
       }));
     }
 

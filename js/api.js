@@ -321,7 +321,7 @@ export async function deletePayment(id) {
 
 export async function listRefunds() {
   const { data, error } = await supabase.from('refunds')
-    .select('*, creator:employees!refunds_created_by_fkey(full_name), refund_attachments(id, attachment_path, uploaded_at)')
+    .select('*, creator:employees!refunds_created_by_fkey(full_name), refund_attachments(id, attachment_path, amount, uploaded_at)')
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return data;
@@ -330,12 +330,14 @@ export async function listRefunds() {
 /** No photo field here on purpose — a refund starts as a request awaiting Manager/Admin
  * approval, and proof-of-payment photos only make sense once it's actually been paid
  * out, which can't happen before approval. */
-export async function createRefund({ customerName, orderReference, itemDescription, refundAmount, refundMethod, reason, refundDate, notes }) {
+export async function createRefund({ customerName, orderReference, itemDescription, purchaseDate, refundAmount, refundMethod, accountName, accountNumber, reason, refundDate, notes }) {
   const { data: auth } = await supabase.auth.getUser();
   const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
   const { data, error } = await supabase.from('refunds').insert({
     customer_name: customerName, order_reference: orderReference || null,
-    item_description: itemDescription || null, refund_amount: refundAmount, refund_method: refundMethod || 'Cash',
+    item_description: itemDescription || null, purchase_date: purchaseDate || null,
+    refund_amount: refundAmount, refund_method: refundMethod || 'Cash',
+    account_name: accountName || null, account_number: accountNumber || null,
     reason: reason || null, refund_date: refundDate || null, notes: notes || null, created_by: emp ? emp.id : null,
   }).select('id').single();
   if (error) throw new Error(error.message);
@@ -357,17 +359,19 @@ export async function deleteRefund(id) {
 }
 
 /** Refunds for a large amount are sometimes paid out in staggered installments, each
- * with its own proof-of-payment screenshot -- so this ADDS an attachment row rather
- * than replacing a single column. Callers are expected to only allow this once the
- * refund is Approved (or later), matching the real payout timing. */
-export async function addRefundAttachment(refundId, file) {
+ * with its own amount + proof-of-payment screenshot -- so this ADDS an attachment row
+ * (amount + photo together) rather than replacing a single column. Callers are expected
+ * to only allow this once the refund is Approved (or later), matching real payout
+ * timing, and to only allow marking a refund Completed once the attached amounts sum
+ * to the full requested refund_amount — see refunds.html's remaining-balance check. */
+export async function addRefundAttachment(refundId, amount, file) {
   const path = refundId + '/' + Date.now() + '_' + file.name;
   const { error: upErr } = await supabase.storage.from('refund-attachments').upload(path, file, { upsert: true });
   if (upErr) throw new Error(upErr.message);
   const { data: auth } = await supabase.auth.getUser();
   const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
   const { error: insErr } = await supabase.from('refund_attachments')
-    .insert({ refund_id: refundId, attachment_path: path, uploaded_by: emp ? emp.id : null });
+    .insert({ refund_id: refundId, attachment_path: path, amount, uploaded_by: emp ? emp.id : null });
   if (insErr) throw new Error(insErr.message);
   return path;
 }
