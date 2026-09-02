@@ -14,10 +14,10 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { listRefunds, createRefund, setRefundStatus, deleteRefund, uploadRefundAttachment, getRefundAttachmentUrl } from './js/api.js';
+import { listRefunds, createRefund, setRefundStatus, deleteRefund, addRefundAttachment, removeRefundAttachment, getRefundAttachmentUrl } from './js/api.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
-const STATUS_BADGE = { Pending: 'pending', Completed: 'ok' };
+const STATUS_BADGE = { 'Pending Approval': 'pending', 'Approved': 'transit', 'Completed': 'ok' };
 
 const employee = await initShell('refunds');
 if (employee) {
@@ -31,6 +31,7 @@ if (employee) {
         '<div class="layout-2col-side">' +
           '<div class="card">' +
             '<h3>Add Refund</h3>' +
+            '<p class="muted" style="margin-top:-4px;">No photo here — a refund starts as a request awaiting approval. Proof-of-payment photos get attached after it\'s approved and actually paid out.</p>' +
             '<form id="ref-form" style="flex-direction:column;align-items:stretch;">' +
               '<div class="field"><label>Customer Name *</label><input type="text" name="customerName" required></div>' +
               '<div class="field"><label>Order Reference</label><input type="text" name="orderReference"></div>' +
@@ -40,8 +41,7 @@ if (employee) {
               '<div class="field"><label>Reason</label><input type="text" name="reason"></div>' +
               '<div class="field"><label>Refund Date</label><input type="date" name="refundDate"></div>' +
               '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
-              '<div class="field"><label>Proof Photo</label><input type="file" name="attachment" accept="image/*"></div>' +
-              '<button class="btn" type="submit">Add Refund</button>' +
+              '<button class="btn" type="submit">Add Refund Request</button>' +
             '</form>' +
           '</div>' +
         '</div>' +
@@ -50,7 +50,7 @@ if (employee) {
           '<div class="card">' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
               '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Customer, order ref, item…"></div>' +
-              '<div class="field"><label>Status</label><select id="f-status"><option value="all">All Statuses</option><option>Pending</option><option>Completed</option></select></div>' +
+              '<div class="field"><label>Status</label><select id="f-status"><option value="all">All Statuses</option><option>Pending Approval</option><option>Approved</option><option>Completed</option></select></div>' +
               '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
             '</div>' +
           '</div>' +
@@ -62,14 +62,13 @@ if (employee) {
       ev.preventDefault();
       const f = ev.target;
       try {
-        const newId = await createRefund({
+        await createRefund({
           customerName: f.customerName.value.trim(), orderReference: f.orderReference.value.trim(),
           itemDescription: f.itemDescription.value.trim(), refundAmount: Number(f.refundAmount.value),
           refundMethod: f.refundMethod.value, reason: f.reason.value.trim(),
           refundDate: f.refundDate.value || null, notes: f.notes.value.trim(),
         });
-        if (f.attachment.files[0]) await uploadRefundAttachment(newId, f.attachment.files[0]);
-        toast('ref-msg', 'Refund added.', false);
+        toast('ref-msg', 'Refund request added — pending approval.', false);
         f.reset();
         await load();
       } catch (err) {
@@ -109,16 +108,19 @@ if (employee) {
         (r.item_description || '').toLowerCase().includes(fSearch));
       if (fStatus !== 'all') rows = rows.filter((r) => r.status === fStatus);
 
-      const total = rows.reduce((s, r) => s + Number(r.refund_amount || 0), 0);
-      const pendingCount = rows.filter((r) => r.status === 'Pending').length;
+      const pendingCount = rows.filter((r) => r.status === 'Pending Approval').length;
+      const approvedCount = rows.filter((r) => r.status === 'Approved').length;
+      const completedTotal = rows.filter((r) => r.status === 'Completed').reduce((s, r) => s + Number(r.refund_amount || 0), 0);
       document.getElementById('ref-tiles').innerHTML =
-        tile(money(total), 'Total Refunded') + tile(String(pendingCount), 'Pending') + tile(String(rows.length), 'Count');
+        tile(String(pendingCount), 'Pending Approval') + tile(String(approvedCount), 'Approved') + tile(money(completedTotal), 'Total Refunded') + tile(String(rows.length), 'Count');
 
       const list = document.getElementById('ref-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No refunds for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Customer</th><th>Order Ref</th><th>Item</th><th>Amount</th><th>Method</th><th>Reason</th><th>Status</th><th>Date</th><th>Photo</th><th></th></tr>' +
-        rows.map((r) =>
-          '<tr>' +
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Customer</th><th>Order Ref</th><th>Item</th><th>Amount</th><th>Method</th><th>Reason</th><th>Status</th><th>Date</th><th>Proof Photos</th><th></th></tr>' +
+        rows.map((r) => {
+          const canAttach = r.status !== 'Pending Approval';
+          const photos = r.refund_attachments || [];
+          return '<tr>' +
             '<td data-label="Customer">' + esc(r.customer_name) +
               (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
             '</td>' +
@@ -129,27 +131,51 @@ if (employee) {
             '<td data-label="Reason">' + esc(r.reason || '') + '</td>' +
             '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
             '<td data-label="Date">' + (r.refund_date || '—') + '</td>' +
-            '<td data-label="Photo">' + (r.attachment_path ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="view-photo">View Photo</button>' : '—') + '</td>' +
+            '<td data-label="Proof Photos">' +
+              (photos.length
+                ? photos.map((a, i) => '<div style="margin-bottom:2px;"><button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View ' + (i + 1) + '</button> <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">✕</button></div>').join('')
+                : '<span class="muted">None yet</span>') +
+              (canAttach
+                ? '<label class="btn small secondary" style="cursor:pointer;display:inline-block;margin-top:2px;">+ Add Photo<input type="file" accept="image/*" data-add-for="' + r.id + '" style="display:none;"></label>'
+                : '<div class="muted" style="font-size:11px;">Approve first</div>') +
+            '</td>' +
             '<td data-label="Actions" style="white-space:nowrap;">' +
-              (r.status !== 'Completed' ? '<button class="btn small" data-id="' + r.id + '" data-act="complete">Mark Completed</button> ' : '<button class="btn small secondary" data-id="' + r.id + '" data-act="pending">Mark Pending</button> ') +
+              (r.status === 'Pending Approval' ? '<button class="btn small" data-id="' + r.id + '" data-act="approve">Approve</button> ' : '') +
+              (r.status === 'Approved' ? '<button class="btn small" data-id="' + r.id + '" data-act="complete">Mark Completed</button> ' : '') +
+              (r.status === 'Completed' ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="reopen">Reopen</button> ' : '') +
               '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' +
             '</td>' +
-          '</tr>'
-        ).join('') + '</table></div>';
+          '</tr>';
+        }).join('') + '</table></div>';
 
       list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
         const id = btn.dataset.id;
         try {
-          if (btn.dataset.act === 'complete') { await setRefundStatus(id, 'Completed'); toast('ref-msg', 'Updated.', false); await load(); }
-          else if (btn.dataset.act === 'pending') { await setRefundStatus(id, 'Pending'); toast('ref-msg', 'Updated.', false); await load(); }
+          if (btn.dataset.act === 'approve') { await setRefundStatus(id, 'Approved'); toast('ref-msg', 'Approved.', false); await load(); }
+          else if (btn.dataset.act === 'complete') { await setRefundStatus(id, 'Completed'); toast('ref-msg', 'Marked completed.', false); await load(); }
+          else if (btn.dataset.act === 'reopen') { await setRefundStatus(id, 'Approved'); toast('ref-msg', 'Reopened to Approved.', false); await load(); }
           else if (btn.dataset.act === 'delete') { if (!confirm('Delete this refund?')) return; await deleteRefund(id); toast('ref-msg', 'Deleted.', false); await load(); }
-          else if (btn.dataset.act === 'view-photo') {
-            const r = rows.find((x) => String(x.id) === String(id));
-            window.open(await getRefundAttachmentUrl(r.attachment_path), '_blank');
-          }
         } catch (err) {
           toast('ref-msg', String(err.message || err), true);
         }
+      }));
+
+      list.querySelectorAll('[data-view-id]').forEach((btn) => btn.addEventListener('click', async () => {
+        try { window.open(await getRefundAttachmentUrl(btn.dataset.path), '_blank'); }
+        catch (err) { toast('ref-msg', String(err.message || err), true); }
+      }));
+
+      list.querySelectorAll('[data-remove-id]').forEach((btn) => btn.addEventListener('click', async () => {
+        if (!confirm('Remove this photo?')) return;
+        try { await removeRefundAttachment(btn.dataset.removeId, btn.dataset.path); toast('ref-msg', 'Photo removed.', false); await load(); }
+        catch (err) { toast('ref-msg', String(err.message || err), true); }
+      }));
+
+      list.querySelectorAll('[data-add-for]').forEach((input) => input.addEventListener('change', async () => {
+        const file = input.files[0];
+        if (!file) return;
+        try { await addRefundAttachment(input.dataset.addFor, file); toast('ref-msg', 'Photo added.', false); await load(); }
+        catch (err) { toast('ref-msg', String(err.message || err), true); }
       }));
     }
 
