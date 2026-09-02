@@ -22,13 +22,15 @@ export async function initShell(activePage) {
 
   const pages = [
     { id: 'dashboard', label: 'Dashboard', href: 'dashboard.html' },
-    { id: 'movement', label: 'Record Movement', href: 'movement.html' },
-    { id: 'transfers', label: 'Transfers', href: 'transfers.html' },
-    { id: 'bills', label: 'Bills', href: 'bills.html' },
   ];
   if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role)) {
     pages.push({ id: 'branches', label: 'Branches', href: 'branches.html' });
   }
+  pages.push(
+    { id: 'movement', label: 'Record Movement', href: 'movement.html' },
+    { id: 'transfers', label: 'Transfers', href: 'transfers.html' },
+    { id: 'bills', label: 'Bills', href: 'bills.html' },
+  );
   if (['Admin', 'Manager'].includes(employee.role)) {
     // Payments/Refunds don't fit the per-branch model (a different process, per Ren) —
     // flat company-wide logs, Admin + Manager only.
