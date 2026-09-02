@@ -30,10 +30,10 @@ if (employee) {
   } else {
     root.innerHTML =
       '<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">' +
-        '<div style="flex:1 1 500px;min-width:0;">' +
+        '<div style="flex:0 0 300px;">' +
           '<div class="card">' +
             '<h3>Add Bill</h3>' +
-            '<form id="bill-form">' +
+            '<form id="bill-form" style="flex-direction:column;align-items:stretch;">' +
               '<div class="field"><label>Name *</label><input type="text" name="name" required></div>' +
               '<div class="field"><label>Account Name</label><input type="text" name="accountName"></div>' +
               '<div class="field"><label>Account Number</label><input type="text" name="accountNumber"></div>' +
@@ -45,11 +45,13 @@ if (employee) {
                 '<option>Unpaid</option><option>Overdue</option><option>Auto-debited</option><option>Paid</option>' +
               '</select></div>' +
               '<div class="field"><label>Recurring monthly?</label><select name="isRecurring"><option value="">No</option><option value="1">Yes</option></select></div>' +
-              '<div class="field" style="min-width:220px;"><label>Notes</label><input type="text" name="notes"></div>' +
+              '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
               '<div class="field"><label>Proof Photo</label><input type="file" name="attachment" accept="image/*"></div>' +
               '<button class="btn" type="submit">Add Bill</button>' +
             '</form>' +
           '</div>' +
+        '</div>' +
+        '<div style="flex:1 1 500px;min-width:0;">' +
           '<div class="tiles" id="bill-tiles"></div>' +
           '<h2>Bills <span class="muted" style="font-weight:normal;">— month: </span>' +
             '<select id="month-filter" style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></select>' +
@@ -71,6 +73,7 @@ if (employee) {
         '<div style="flex:0 0 260px;">' +
           '<div class="card">' +
             '<h3>Recurring Bills <span class="muted" style="font-weight:normal;">— next schedule</span></h3>' +
+            '<div class="field" style="margin-bottom:10px;"><label>Category</label><select id="recurring-category-filter"><option value="all">All Categories</option>' + CATEGORY_OPTIONS() + '</select></div>' +
             '<div id="recurring-list"><div class="muted">Loading…</div></div>' +
           '</div>' +
         '</div>' +
@@ -103,6 +106,7 @@ if (employee) {
       document.getElementById(id).addEventListener('input', render));
     ['f-category', 'f-status', 'f-due-date', 'f-recurring'].forEach((id) =>
       document.getElementById(id).addEventListener('change', render));
+    document.getElementById('recurring-category-filter').addEventListener('change', renderRecurring);
     document.getElementById('f-clear').addEventListener('click', () => {
       ['f-search', 'f-due-date', 'f-amount-min', 'f-amount-max'].forEach((id) => { document.getElementById(id).value = ''; });
       document.getElementById('f-category').value = 'all';
@@ -129,12 +133,15 @@ if (employee) {
      * recurring rent/utility bills do we have" than one flat alphabetical list. */
     function renderRecurring() {
       const box = document.getElementById('recurring-list');
+      const catFilter = document.getElementById('recurring-category-filter').value;
       const recurring = allBills.filter((b) => b.is_recurring);
       if (!recurring.length) { box.innerHTML = '<p class="muted">No recurring bills yet.</p>'; return; }
 
-      const groups = CATEGORIES
+      const cats = catFilter === 'all' ? CATEGORIES : [catFilter];
+      const groups = cats
         .map((cat) => ({ cat, bills: recurring.filter((b) => b.category === cat).sort((a, b) => a.name.localeCompare(b.name)) }))
         .filter((g) => g.bills.length);
+      if (!groups.length) { box.innerHTML = '<p class="muted">No recurring bills in this category.</p>'; return; }
 
       box.innerHTML = groups.map((g) =>
         '<div style="margin-bottom:10px;">' +

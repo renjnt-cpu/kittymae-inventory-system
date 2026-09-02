@@ -1,5 +1,5 @@
-/* White and green theme. */
-:root { --rose:#8bcc6f; --rose-lt:#c3e6b3; --rose-bg:#f3faf0; --ink:#2b2b2b; --muted:#767676; --ok:#2e7d32; --warn:#c62828; }
+/* White and pastel blue theme. */
+:root { --rose:#7fc4e0; --rose-lt:#bfe4f2; --rose-bg:#f0f9fc; --ink:#2b2b2b; --muted:#767676; --ok:#2e7d32; --warn:#c62828; }
 * { box-sizing:border-box; }
 body { font-family:Arial,Helvetica,sans-serif; margin:0; background:var(--rose-bg); color:var(--ink); }
 header { background:var(--rose); color:var(--ink); padding:14px 20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
