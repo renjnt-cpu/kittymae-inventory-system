@@ -114,8 +114,8 @@ if (employee) {
 
   function renderApproverView() {
     root.innerHTML =
-      '<div class="layout-2col">' +
-        '<div class="layout-2col-side">' +
+      '<div class="layout-3col">' +
+        '<div class="layout-3col-side">' +
           '<div class="card">' +
             '<h3>Add Refund Request</h3>' +
             '<p class="muted" style="margin-top:-4px;">No photo here — proof-of-payment gets attached after approval, once it\'s actually paid out.</p>' +
@@ -124,16 +124,23 @@ if (employee) {
             '</form>' +
           '</div>' +
         '</div>' +
-        '<div class="layout-2col-main">' +
+        '<div class="layout-3col-main">' +
           '<div class="tiles" id="ref-tiles"></div>' +
           '<div class="card">' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
               '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Customer, order ID, item…"></div>' +
-              '<div class="field"><label>Status</label><select id="f-status"><option value="all">All Statuses</option><option>Pending Approval</option><option>Approved</option><option>Completed</option></select></div>' +
+              '<div class="field"><label>Status</label><select id="f-status"><option value="all">All Statuses</option><option>Pending Approval</option><option>Approved</option></select></div>' +
               '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
             '</div>' +
           '</div>' +
           '<div id="ref-list"><div class="muted">Loading…</div></div>' +
+        '</div>' +
+        '<div class="layout-3col-right">' +
+          '<div class="card">' +
+            '<h3>Completed</h3>' +
+            '<div class="field"><label>Filter Order ID</label><input type="text" id="completed-search" placeholder="Order ID…"></div>' +
+            '<div id="completed-list"><div class="muted">Loading…</div></div>' +
+          '</div>' +
         '</div>' +
       '</div>';
 
@@ -152,6 +159,7 @@ if (employee) {
 
     let allRefunds = [];
     let openAddProofFor = null;
+    let openCompletedId = null;
     load();
 
     document.getElementById('f-search').addEventListener('input', render);
@@ -161,6 +169,7 @@ if (employee) {
       document.getElementById('f-status').value = 'all';
       render();
     });
+    document.getElementById('completed-search').addEventListener('input', renderCompletedPanel);
 
     async function load() {
       const list = document.getElementById('ref-list');
@@ -173,21 +182,74 @@ if (employee) {
       }
     }
 
+    /** Completed refunds move out of the main table entirely and live in the
+     * right-side panel instead — a compact, click-to-expand list keyed by Order ID
+     * rather than another wide row of columns. */
+    function renderCompletedPanel() {
+      const box = document.getElementById('completed-list');
+      const q = document.getElementById('completed-search').value.trim().toLowerCase();
+      let completed = allRefunds.filter((r) => r.status === 'Completed');
+      if (q) completed = completed.filter((r) => (r.order_reference || '').toLowerCase().includes(q));
+      if (!completed.length) { box.innerHTML = '<p class="muted">No completed refunds yet.</p>'; return; }
+
+      box.innerHTML = completed.map((r) => {
+        const photos = r.refund_attachments || [];
+        const isOpen = openCompletedId === r.id;
+        return '<div class="completed-item">' +
+          '<button type="button" class="completed-orderid" data-toggle-completed="' + r.id + '">' + esc(r.order_reference || '(no Order ID) — ' + r.customer_name) + '</button>' +
+          (isOpen ? '<div class="completed-detail">' +
+            '<div><b>Customer:</b> ' + esc(r.customer_name) + '</div>' +
+            '<div><b>Item:</b> ' + esc(r.item_description || '—') + '</div>' +
+            '<div><b>Date Purchased:</b> ' + (r.purchase_date || '—') + '</div>' +
+            '<div><b>Reason:</b> ' + esc(r.reason || '—') + '</div>' +
+            '<div><b>Amount:</b> ' + money(r.refund_amount) + '</div>' +
+            '<div><b>Method:</b> ' + esc(r.refund_method) + '</div>' +
+            '<div><b>Payout Account:</b> ' + (r.account_name || r.account_number ? esc(r.account_name || '') + (r.account_number ? ' · ' + esc(r.account_number) : '') : '—') + '</div>' +
+            '<div><b>Requested by:</b> ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div>' +
+            '<div style="margin-top:4px;"><b>Proof of Payment:</b><br>' +
+              (photos.length
+                ? photos.map((a) => '<div>' + money(a.amount) + ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button></div>').join('')
+                : 'None') +
+            '</div>' +
+            '<button class="btn small secondary" type="button" data-id="' + r.id + '" data-act="reopen" style="margin-top:8px;">Reopen</button>' +
+          '</div>' : '') +
+        '</div>';
+      }).join('');
+
+      box.querySelectorAll('[data-toggle-completed]').forEach((btn) => btn.addEventListener('click', () => {
+        const id = Number(btn.dataset.toggleCompleted);
+        openCompletedId = openCompletedId === id ? null : id;
+        renderCompletedPanel();
+      }));
+      box.querySelectorAll('[data-view-id]').forEach((btn) => btn.addEventListener('click', async () => {
+        try { window.open(await getRefundAttachmentUrl(btn.dataset.path), '_blank'); }
+        catch (err) { toast('ref-msg', String(err.message || err), true); }
+      }));
+      box.querySelectorAll('[data-act="reopen"]').forEach((btn) => btn.addEventListener('click', async () => {
+        try { await setRefundStatus(btn.dataset.id, 'Approved'); toast('ref-msg', 'Reopened to Approved.', false); openCompletedId = null; await load(); }
+        catch (err) { toast('ref-msg', String(err.message || err), true); }
+      }));
+    }
+
     function render() {
-      let rows = allRefunds;
       const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
       const fStatus = document.getElementById('f-status').value;
-      if (fSearch) rows = rows.filter((r) =>
+      let filtered = allRefunds;
+      if (fSearch) filtered = filtered.filter((r) =>
         r.customer_name.toLowerCase().includes(fSearch) ||
         (r.order_reference || '').toLowerCase().includes(fSearch) ||
         (r.item_description || '').toLowerCase().includes(fSearch));
-      if (fStatus !== 'all') rows = rows.filter((r) => r.status === fStatus);
+      if (fStatus !== 'all') filtered = filtered.filter((r) => r.status === fStatus);
 
-      const pendingCount = rows.filter((r) => r.status === 'Pending Approval').length;
-      const approvedCount = rows.filter((r) => r.status === 'Approved').length;
-      const completedTotal = rows.filter((r) => r.status === 'Completed').reduce((s, r) => s + Number(r.refund_amount || 0), 0);
+      const pendingCount = filtered.filter((r) => r.status === 'Pending Approval').length;
+      const approvedCount = filtered.filter((r) => r.status === 'Approved').length;
+      const completedTotal = allRefunds.filter((r) => r.status === 'Completed').reduce((s, r) => s + Number(r.refund_amount || 0), 0);
+      // Completed refunds live in the right-side panel, not this table.
+      const rows = filtered.filter((r) => r.status !== 'Completed');
       document.getElementById('ref-tiles').innerHTML =
         tile(String(pendingCount), 'Pending Approval') + tile(String(approvedCount), 'Approved') + tile(money(completedTotal), 'Total Refunded') + tile(String(rows.length), 'Count');
+
+      renderCompletedPanel();
 
       const list = document.getElementById('ref-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No refunds for this filter.</p>'; return; }
@@ -232,7 +294,6 @@ if (employee) {
                   ? '<button class="btn small" data-id="' + r.id + '" data-act="complete">Mark Completed</button> '
                   : '<span class="muted" style="font-size:11px;">' + money(remaining) + ' left to refund</span> ')
                 : '') +
-              (r.status === 'Completed' ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="reopen">Reopen</button> ' : '') +
               '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' +
             '</td>' +
           '</tr>';

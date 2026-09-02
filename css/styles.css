@@ -60,6 +60,23 @@ button.btn.small { padding:4px 10px; font-size:12px; }
   .layout-2col-main { flex:1 1 auto; min-width:0; }
 }
 
+/* 3-column variant (Add form / active list / a compact sidebar) — used by Refunds to
+   set Completed records apart in their own panel on the right. */
+.layout-3col { display:flex; flex-direction:column; gap:16px; }
+.layout-3col-side, .layout-3col-main, .layout-3col-right { flex:1 1 auto; min-width:0; }
+@media (min-width:960px) {
+  .layout-3col { flex-direction:row; flex-wrap:nowrap; align-items:flex-start; }
+  .layout-3col-side { flex:0 0 280px; }
+  .layout-3col-main { flex:1 1 auto; min-width:0; }
+  .layout-3col-right { flex:0 0 280px; }
+}
+.completed-item { border-bottom:1px solid #f0f0f0; padding:8px 0; }
+.completed-item:last-child { border-bottom:none; }
+.completed-orderid { width:100%; text-align:left; font-weight:bold; background:none; border:none; padding:4px 0; cursor:pointer; color:var(--ink); font-size:13px; }
+.completed-orderid:hover { color:var(--muted); }
+.completed-detail { font-size:12px; padding:6px 2px 2px; line-height:1.6; }
+.completed-detail b { color:var(--muted); font-weight:normal; }
+
 /* Mobile: turn wide data tables into one-field-per-line cards (using each
    <td>'s data-label) instead of forcing horizontal scroll — a scrollbar is easy
    to miss and hides columns like Status or the action buttons entirely on a phone. */
