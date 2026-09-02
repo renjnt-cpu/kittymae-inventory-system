@@ -56,16 +56,13 @@ if (employee) {
           '</h2>' +
           '<div class="card">' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
-              '<div class="field"><label>Name</label><input type="text" id="f-name" placeholder="Search…"></div>' +
-              '<div class="field"><label>Account Name</label><input type="text" id="f-account-name" placeholder="Search…"></div>' +
-              '<div class="field"><label>Account Number</label><input type="text" id="f-account-number" placeholder="Search…"></div>' +
+              '<div class="field" style="min-width:260px;"><label>Search</label><input type="text" id="f-search" placeholder="Name, account, notes, due date…"></div>' +
               '<div class="field"><label>Category</label><select id="f-category"><option value="all">All Categories</option>' + CATEGORY_OPTIONS() + '</select></div>' +
               '<div class="field"><label>Status</label><select id="f-status"><option value="all">All Statuses</option><option>Unpaid</option><option>Overdue</option><option>Auto-debited</option><option>Paid</option></select></div>' +
               '<div class="field"><label>Due Date</label><input type="date" id="f-due-date"></div>' +
               '<div class="field"><label>Min Amount</label><input type="number" id="f-amount-min" step="0.01" min="0" style="width:100px;"></div>' +
               '<div class="field"><label>Max Amount</label><input type="number" id="f-amount-max" step="0.01" min="0" style="width:100px;"></div>' +
               '<div class="field"><label>Recurring</label><select id="f-recurring"><option value="all">All</option><option value="1">Recurring only</option><option value="0">One-time only</option></select></div>' +
-              '<div class="field" style="min-width:180px;"><label>Notes</label><input type="text" id="f-notes" placeholder="Search…"></div>' +
               '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
             '</div>' +
           '</div>' +
@@ -102,12 +99,12 @@ if (employee) {
     await load();
 
     document.getElementById('month-filter').addEventListener('change', render);
-    ['f-name', 'f-account-name', 'f-account-number', 'f-amount-min', 'f-amount-max', 'f-notes'].forEach((id) =>
+    ['f-search', 'f-amount-min', 'f-amount-max'].forEach((id) =>
       document.getElementById(id).addEventListener('input', render));
     ['f-category', 'f-status', 'f-due-date', 'f-recurring'].forEach((id) =>
       document.getElementById(id).addEventListener('change', render));
     document.getElementById('f-clear').addEventListener('click', () => {
-      ['f-name', 'f-account-name', 'f-account-number', 'f-due-date', 'f-amount-min', 'f-amount-max', 'f-notes'].forEach((id) => { document.getElementById(id).value = ''; });
+      ['f-search', 'f-due-date', 'f-amount-min', 'f-amount-max'].forEach((id) => { document.getElementById(id).value = ''; });
       document.getElementById('f-category').value = 'all';
       document.getElementById('f-status').value = 'all';
       document.getElementById('f-recurring').value = 'all';
@@ -183,27 +180,26 @@ if (employee) {
       const filter = document.getElementById('month-filter').value;
       let rows = filter === 'all' ? allBills : allBills.filter((b) => b.due_date && b.due_date.slice(0, 7) === filter);
 
-      const fName = document.getElementById('f-name').value.trim().toLowerCase();
-      const fAccName = document.getElementById('f-account-name').value.trim().toLowerCase();
-      const fAccNumber = document.getElementById('f-account-number').value.trim().toLowerCase();
+      const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
       const fCategory = document.getElementById('f-category').value;
       const fStatus = document.getElementById('f-status').value;
       const fDueDate = document.getElementById('f-due-date').value;
       const fMin = document.getElementById('f-amount-min').value;
       const fMax = document.getElementById('f-amount-max').value;
       const fRecurring = document.getElementById('f-recurring').value;
-      const fNotes = document.getElementById('f-notes').value.trim().toLowerCase();
 
-      if (fName) rows = rows.filter((b) => b.name.toLowerCase().includes(fName));
-      if (fAccName) rows = rows.filter((b) => (b.account_name || '').toLowerCase().includes(fAccName));
-      if (fAccNumber) rows = rows.filter((b) => (b.account_number || '').toLowerCase().includes(fAccNumber));
+      if (fSearch) rows = rows.filter((b) =>
+        b.name.toLowerCase().includes(fSearch) ||
+        (b.account_name || '').toLowerCase().includes(fSearch) ||
+        (b.account_number || '').toLowerCase().includes(fSearch) ||
+        (b.notes || '').toLowerCase().includes(fSearch) ||
+        (b.due_date || '').toLowerCase().includes(fSearch));
       if (fCategory !== 'all') rows = rows.filter((b) => b.category === fCategory);
       if (fStatus !== 'all') rows = rows.filter((b) => b.status === fStatus);
       if (fDueDate) rows = rows.filter((b) => b.due_date === fDueDate);
       if (fMin) rows = rows.filter((b) => Number(b.amount || 0) >= Number(fMin));
       if (fMax) rows = rows.filter((b) => Number(b.amount || 0) <= Number(fMax));
       if (fRecurring !== 'all') rows = rows.filter((b) => (fRecurring === '1') === !!b.is_recurring);
-      if (fNotes) rows = rows.filter((b) => (b.notes || '').toLowerCase().includes(fNotes));
 
       const totalAll = rows.reduce((s, b) => s + Number(b.amount || 0), 0);
       const totalUnpaid = rows.filter((b) => b.status === 'Unpaid' || b.status === 'Overdue').reduce((s, b) => s + Number(b.amount || 0), 0);
