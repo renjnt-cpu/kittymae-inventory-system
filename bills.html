@@ -29,8 +29,8 @@ if (employee) {
     root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Bills tracking is restricted to Admin or accounts granted Bills access.</p></div></div>';
   } else {
     root.innerHTML =
-      '<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">' +
-        '<div style="flex:0 0 300px;">' +
+      '<div class="bills-layout">' +
+        '<div class="bills-col-add">' +
           '<div class="card">' +
             '<h3>Add Bill</h3>' +
             '<form id="bill-form" style="flex-direction:column;align-items:stretch;">' +
@@ -51,7 +51,7 @@ if (employee) {
             '</form>' +
           '</div>' +
         '</div>' +
-        '<div style="flex:1 1 500px;min-width:0;">' +
+        '<div class="bills-col-main">' +
           '<div class="tiles" id="bill-tiles"></div>' +
           '<h2>Bills <span class="muted" style="font-weight:normal;">— month: </span>' +
             '<select id="month-filter" style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></select>' +
@@ -70,7 +70,7 @@ if (employee) {
           '</div>' +
           '<div id="bill-list"><div class="muted">Loading…</div></div>' +
         '</div>' +
-        '<div style="flex:0 0 260px;">' +
+        '<div class="bills-col-recurring">' +
           '<div class="card">' +
             '<h3>Recurring Bills <span class="muted" style="font-weight:normal;">— next schedule</span></h3>' +
             '<div class="field" style="margin-bottom:10px;"><label>Category</label><select id="recurring-category-filter"><option value="all">All Categories</option>' + CATEGORY_OPTIONS() + '</select></div>' +
@@ -219,17 +219,17 @@ if (employee) {
       list.innerHTML = '<div class="table-scroll"><table><tr><th>Name</th><th>Account Name</th><th>Account Number</th><th>Category</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Recurring</th><th>Notes</th><th>Photo</th><th></th></tr>' +
         rows.map((b) =>
           '<tr data-row-id="' + b.id + '">' +
-            '<td>' + esc(b.name) + '</td>' +
-            '<td>' + esc(b.account_name || '') + '</td>' +
-            '<td>' + esc(b.account_number || '') + '</td>' +
-            '<td>' + esc(b.category) + '</td>' +
-            '<td>' + money(b.amount) + '</td>' +
-            '<td>' + (b.due_date || '—') + '</td>' +
-            '<td><span class="badge ' + (STATUS_BADGE[b.status] || 'pending') + '">' + esc(b.status) + '</span></td>' +
-            '<td>' + (b.is_recurring ? 'Monthly' : '—') + '</td>' +
-            '<td>' + esc(b.notes || '') + '</td>' +
-            '<td>' + (b.attachment_path ? '<button class="btn small secondary" data-id="' + b.id + '" data-act="view-photo">View Photo</button>' : '—') + '</td>' +
-            '<td style="white-space:nowrap;">' +
+            '<td data-label="Name">' + esc(b.name) + '</td>' +
+            '<td data-label="Account Name">' + esc(b.account_name || '') + '</td>' +
+            '<td data-label="Account Number">' + esc(b.account_number || '') + '</td>' +
+            '<td data-label="Category">' + esc(b.category) + '</td>' +
+            '<td data-label="Amount">' + money(b.amount) + '</td>' +
+            '<td data-label="Due Date">' + (b.due_date || '—') + '</td>' +
+            '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[b.status] || 'pending') + '">' + esc(b.status) + '</span></td>' +
+            '<td data-label="Recurring">' + (b.is_recurring ? 'Monthly' : '—') + '</td>' +
+            '<td data-label="Notes">' + esc(b.notes || '') + '</td>' +
+            '<td data-label="Photo">' + (b.attachment_path ? '<button class="btn small secondary" data-id="' + b.id + '" data-act="view-photo">View Photo</button>' : '—') + '</td>' +
+            '<td data-label="Actions" style="white-space:nowrap;">' +
               (b.status !== 'Paid' ? '<button class="btn small" data-id="' + b.id + '" data-act="paid">Mark Paid</button> ' : '<button class="btn small secondary" data-id="' + b.id + '" data-act="unpaid">Mark Unpaid</button> ') +
               '<button class="btn small secondary" data-id="' + b.id + '" data-act="edit">Edit</button> ' +
               '<button class="btn small secondary" data-id="' + b.id + '" data-act="delete">Delete</button>' +

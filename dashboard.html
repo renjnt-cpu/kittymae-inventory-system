@@ -87,8 +87,8 @@ if (employee) {
         const status = r.qty_available === 0
           ? '<span class="badge low">OUT OF STOCK</span>'
           : low ? '<span class="badge low">LOW STOCK</span>' : '<span class="badge ok">OK</span>';
-        return '<tr><td>' + esc(r.sku) + '</td><td>' + esc(r.products?.item_name || '') + '</td><td>' + r.qty_available +
-          '</td><td>' + r.qty_reserved + '</td><td>' + (r.total_grams_on_hand ?? '—') + '</td><td>' + status + '</td></tr>';
+        return '<tr><td data-label="SKU">' + esc(r.sku) + '</td><td data-label="Item Name">' + esc(r.products?.item_name || '') + '</td><td data-label="Available">' + r.qty_available +
+          '</td><td data-label="Reserved">' + r.qty_reserved + '</td><td data-label="Grams on Hand">' + (r.total_grams_on_hand ?? '—') + '</td><td data-label="Status">' + status + '</td></tr>';
       }).join('') + '</table></div>';
   }
 }

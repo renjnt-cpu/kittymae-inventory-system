@@ -113,8 +113,8 @@ if (employee) {
     if (['Draft', 'Requested', 'Approved', 'Preparing'].includes(t.status) && isAdminManager) actions += btn('Cancel', 'cancel', t.id, true);
 
     const items = t.inventory_transfer_items.map((i) =>
-      '<tr><td>' + esc(i.sku) + '</td><td>' + i.requested_qty + '</td><td>' + (i.sent_qty ?? '—') + '</td><td>' + (i.received_qty ?? '—') +
-      '</td><td>' + (i.discrepancy_qty ? '<span class="badge low">' + i.discrepancy_qty + '</span>' : '—') + '</td></tr>'
+      '<tr><td data-label="SKU">' + esc(i.sku) + '</td><td data-label="Requested">' + i.requested_qty + '</td><td data-label="Sent">' + (i.sent_qty ?? '—') + '</td><td data-label="Received">' + (i.received_qty ?? '—') +
+      '</td><td data-label="Discrepancy">' + (i.discrepancy_qty ? '<span class="badge low">' + i.discrepancy_qty + '</span>' : '—') + '</td></tr>'
     ).join('');
 
     return '<div class="card" data-transfer-id="' + t.id + '">' +
