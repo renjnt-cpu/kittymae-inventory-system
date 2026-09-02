@@ -39,6 +39,7 @@ export async function initShell(activePage) {
     // Payments doesn't fit the per-branch model (a different process, per Ren) —
     // flat company-wide log, Admin + Manager only.
     pages.push({ id: 'payments', label: 'Payments', href: 'payments.html' });
+    pages.push({ id: 'assets', label: 'Asset & Supplies Custodian', href: 'assets.html' });
   }
   if (employee.role === 'Admin') {
     pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });

@@ -388,6 +388,53 @@ export async function getRefundAttachmentUrl(path) {
   return data.signedUrl;
 }
 
+// ---- Asset & Supplies Custodian registry — one row per item, assigned to the employee
+// accountable for it. Company-wide, Admin + Manager only (like Payments/Branch Capital). ----
+
+/** Plain roster for the Custodian dropdown — unlike getEmployeesForChecklist(), this
+ * includes Admin, since Ren can just as well be the custodian of an item. */
+export async function listActiveEmployees() {
+  const { data, error } = await supabase.from('employees')
+    .select('id, full_name').eq('status', 'Active').order('full_name');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function listAssetCustodianItems() {
+  const { data, error } = await supabase.from('asset_custodian_items')
+    .select('*, custodian:employees!asset_custodian_items_custodian_id_fkey(full_name), creator:employees!asset_custodian_items_created_by_fkey(full_name), branches(name)')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createAssetCustodianItem({ itemName, itemType, branchId, custodianId, quantity, unitValue, condition, dateAssigned, notes }) {
+  const { data: auth } = await supabase.auth.getUser();
+  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const { error } = await supabase.from('asset_custodian_items').insert({
+    item_name: itemName, item_type: itemType || 'Asset', branch_id: branchId || null,
+    custodian_id: custodianId || null, quantity: quantity || 1, unit_value: unitValue || null,
+    condition: condition || 'Good', date_assigned: dateAssigned || null, notes: notes || null,
+    created_by: emp ? emp.id : null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function updateAssetCustodianItem(id, { itemName, itemType, branchId, custodianId, quantity, unitValue, condition, dateAssigned, notes }) {
+  const { error } = await supabase.from('asset_custodian_items').update({
+    item_name: itemName, item_type: itemType, branch_id: branchId || null,
+    custodian_id: custodianId || null, quantity: quantity || 1, unit_value: unitValue || null,
+    condition, date_assigned: dateAssigned || null, notes: notes || null,
+    updated_at: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteAssetCustodianItem(id) {
+  const { error } = await supabase.from('asset_custodian_items').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 // ---- Branch Capital (money Ren injects into a branch — the inverse of Bills) ----
 // Admin-only, same access model as Bills.
 

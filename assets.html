@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asset &amp; Supplies Custodian — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main>
+  <div id="ac-msg"></div>
+  <div id="assets-root"></div>
+</main>
+
+<script type="module">
+import { initShell, toast, esc } from './js/shell.js';
+import { getBranches, listActiveEmployees, listAssetCustodianItems, createAssetCustodianItem, updateAssetCustodianItem, deleteAssetCustodianItem } from './js/api.js';
+
+const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+const CONDITION_BADGE = { Good: 'ok', Damaged: 'low', Lost: 'low', Returned: 'pending' };
+const CONDITIONS = ['Good', 'Damaged', 'Lost', 'Returned'];
+const CONDITION_OPTIONS = (selected) => CONDITIONS.map((c) => '<option' + (c === selected ? ' selected' : '') + '>' + c + '</option>').join('');
+
+const employee = await initShell('assets');
+if (employee) {
+  const root = document.getElementById('assets-root');
+
+  if (!['Admin', 'Manager'].includes(employee.role)) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Asset &amp; Supplies Custodian tracking is restricted to Admin and Manager.</p></div></div>';
+  } else {
+    const [branches, employees] = await Promise.all([getBranches(), listActiveEmployees()]);
+    const branchOptions = (selected) => '<option value="">—</option>' + branches.map((b) =>
+      '<option value="' + b.id + '"' + (b.id === selected ? ' selected' : '') + '>' + esc(b.name) + '</option>'
+    ).join('');
+    const custodianOptions = (selected) => '<option value="">Unassigned</option>' + employees.map((e) =>
+      '<option value="' + e.id + '"' + (e.id === selected ? ' selected' : '') + '>' + esc(e.full_name) + '</option>'
+    ).join('');
+
+    root.innerHTML =
+      '<div class="layout-2col">' +
+        '<div class="layout-2col-side">' +
+          '<div class="card">' +
+            '<h3>Add Item</h3>' +
+            '<form id="asset-form" style="flex-direction:column;align-items:stretch;">' +
+              '<div class="field"><label>Item Name *</label><input type="text" name="itemName" required></div>' +
+              '<div class="field"><label>Type *</label><select name="itemType" required><option>Asset</option><option>Supplies</option></select></div>' +
+              '<div class="field"><label>Custodian</label><select name="custodianId">' + custodianOptions() + '</select></div>' +
+              '<div class="field"><label>Branch</label><select name="branchId">' + branchOptions() + '</select></div>' +
+              '<div class="field"><label>Quantity</label><input type="number" name="quantity" min="1" value="1"></div>' +
+              '<div class="field"><label>Unit Value (PHP)</label><input type="number" name="unitValue" step="0.01" min="0"></div>' +
+              '<div class="field"><label>Condition</label><select name="condition">' + CONDITION_OPTIONS('Good') + '</select></div>' +
+              '<div class="field"><label>Date Assigned</label><input type="date" name="dateAssigned"></div>' +
+              '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+              '<button class="btn" type="submit">Add Item</button>' +
+            '</form>' +
+          '</div>' +
+        '</div>' +
+        '<div class="layout-2col-main">' +
+          '<div class="tiles" id="asset-tiles"></div>' +
+          '<div class="card">' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+              '<div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="f-search" placeholder="Item, custodian, notes…"></div>' +
+              '<div class="field"><label>Type</label><select id="f-type"><option value="all">All</option><option>Asset</option><option>Supplies</option></select></div>' +
+              '<div class="field"><label>Condition</label><select id="f-condition"><option value="all">All</option>' + CONDITION_OPTIONS() + '</select></div>' +
+              '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="asset-list"><div class="muted">Loading…</div></div>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById('asset-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      try {
+        await createAssetCustodianItem({
+          itemName: f.itemName.value.trim(), itemType: f.itemType.value,
+          custodianId: f.custodianId.value || null, branchId: f.branchId.value ? Number(f.branchId.value) : null,
+          quantity: Number(f.quantity.value) || 1, unitValue: f.unitValue.value ? Number(f.unitValue.value) : null,
+          condition: f.condition.value, dateAssigned: f.dateAssigned.value || null, notes: f.notes.value.trim(),
+        });
+        toast('ac-msg', 'Item added.', false);
+        f.reset();
+        await load();
+      } catch (err) {
+        toast('ac-msg', String(err.message || err), true);
+      }
+    });
+
+    let allItems = [];
+    await load();
+
+    document.getElementById('f-search').addEventListener('input', render);
+    document.getElementById('f-type').addEventListener('change', render);
+    document.getElementById('f-condition').addEventListener('change', render);
+    document.getElementById('f-clear').addEventListener('click', () => {
+      document.getElementById('f-search').value = '';
+      document.getElementById('f-type').value = 'all';
+      document.getElementById('f-condition').value = 'all';
+      render();
+    });
+
+    async function load() {
+      const list = document.getElementById('asset-list');
+      list.innerHTML = '<div class="muted">Loading…</div>';
+      try {
+        allItems = await listAssetCustodianItems();
+        render();
+      } catch (err) {
+        list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+      }
+    }
+
+    function render() {
+      let rows = allItems;
+      const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
+      const fType = document.getElementById('f-type').value;
+      const fCondition = document.getElementById('f-condition').value;
+      if (fSearch) rows = rows.filter((r) =>
+        r.item_name.toLowerCase().includes(fSearch) ||
+        (r.custodian?.full_name || '').toLowerCase().includes(fSearch) ||
+        (r.notes || '').toLowerCase().includes(fSearch));
+      if (fType !== 'all') rows = rows.filter((r) => r.item_type === fType);
+      if (fCondition !== 'all') rows = rows.filter((r) => r.condition === fCondition);
+
+      const assetCount = rows.filter((r) => r.item_type === 'Asset').length;
+      const suppliesCount = rows.filter((r) => r.item_type === 'Supplies').length;
+      const totalValue = rows.reduce((s, r) => s + Number(r.unit_value || 0) * Number(r.quantity || 1), 0);
+      document.getElementById('asset-tiles').innerHTML =
+        tile(String(assetCount), 'Assets') + tile(String(suppliesCount), 'Supplies') + tile(money(totalValue), 'Total Value') + tile(String(rows.length), 'Count');
+
+      const list = document.getElementById('asset-list');
+      if (!rows.length) { list.innerHTML = '<p class="muted">No items for this filter.</p>'; return; }
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Item</th><th>Type</th><th>Custodian</th><th>Branch</th><th>Qty</th><th>Unit Value</th><th>Condition</th><th>Date Assigned</th><th>Notes</th><th></th></tr>' +
+        rows.map((r) =>
+          '<tr data-row-id="' + r.id + '">' +
+            '<td data-label="Item">' + esc(r.item_name) +
+              (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
+            '</td>' +
+            '<td data-label="Type">' + esc(r.item_type) + '</td>' +
+            '<td data-label="Custodian">' + esc(r.custodian?.full_name || 'Unassigned') + '</td>' +
+            '<td data-label="Branch">' + esc(r.branches?.name || '—') + '</td>' +
+            '<td data-label="Qty">' + r.quantity + '</td>' +
+            '<td data-label="Unit Value">' + money(r.unit_value) + '</td>' +
+            '<td data-label="Condition"><span class="badge ' + (CONDITION_BADGE[r.condition] || 'ok') + '">' + esc(r.condition) + '</span></td>' +
+            '<td data-label="Date Assigned">' + (r.date_assigned || '—') + '</td>' +
+            '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
+            '<td data-label="Actions" style="white-space:nowrap;">' +
+              '<button class="btn small secondary" data-id="' + r.id + '" data-act="edit">Edit</button> ' +
+              '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' +
+            '</td>' +
+          '</tr>' +
+          '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="10"></td></tr>'
+        ).join('') + '</table></div>';
+
+      list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        try {
+          if (btn.dataset.act === 'delete') { if (!confirm('Delete this item?')) return; await deleteAssetCustodianItem(id); toast('ac-msg', 'Deleted.', false); await load(); }
+          else if (btn.dataset.act === 'edit') openEdit(id, rows);
+        } catch (err) {
+          toast('ac-msg', String(err.message || err), true);
+        }
+      }));
+    }
+
+    function openEdit(id, rows) {
+      const r = rows.find((x) => String(x.id) === String(id));
+      const cell = document.querySelector('tr[data-edit-for="' + id + '"]');
+      const isOpen = cell.style.display !== 'none';
+      document.querySelectorAll('.edit-row').forEach((row) => { row.style.display = 'none'; row.querySelector('td').innerHTML = ''; });
+      if (isOpen) return;
+      cell.style.display = '';
+      cell.querySelector('td').innerHTML =
+        '<form class="edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+          '<div class="field"><label>Item Name</label><input type="text" name="itemName" value="' + esc(r.item_name) + '" required></div>' +
+          '<div class="field"><label>Type</label><select name="itemType"><option' + (r.item_type === 'Asset' ? ' selected' : '') + '>Asset</option><option' + (r.item_type === 'Supplies' ? ' selected' : '') + '>Supplies</option></select></div>' +
+          '<div class="field"><label>Custodian</label><select name="custodianId">' + custodianOptions(r.custodian_id) + '</select></div>' +
+          '<div class="field"><label>Branch</label><select name="branchId">' + branchOptions(r.branch_id) + '</select></div>' +
+          '<div class="field"><label>Quantity</label><input type="number" name="quantity" min="1" value="' + r.quantity + '"></div>' +
+          '<div class="field"><label>Unit Value (PHP)</label><input type="number" name="unitValue" step="0.01" min="0" value="' + (r.unit_value ?? '') + '"></div>' +
+          '<div class="field"><label>Condition</label><select name="condition">' + CONDITION_OPTIONS(r.condition) + '</select></div>' +
+          '<div class="field"><label>Date Assigned</label><input type="date" name="dateAssigned" value="' + (r.date_assigned || '') + '"></div>' +
+          '<div class="field" style="min-width:180px;"><label>Notes</label><input type="text" name="notes" value="' + esc(r.notes || '') + '"></div>' +
+          '<button class="btn small" type="submit">Save</button> ' +
+          '<button class="btn small secondary" type="button" data-cancel="1">Cancel</button>' +
+        '</form>';
+      const form = cell.querySelector('.edit-form');
+      form.querySelector('[data-cancel]').addEventListener('click', () => { cell.style.display = 'none'; form.remove(); });
+      form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        try {
+          await updateAssetCustodianItem(id, {
+            itemName: f.itemName.value.trim(), itemType: f.itemType.value,
+            custodianId: f.custodianId.value || null, branchId: f.branchId.value ? Number(f.branchId.value) : null,
+            quantity: Number(f.quantity.value) || 1, unitValue: f.unitValue.value ? Number(f.unitValue.value) : null,
+            condition: f.condition.value, dateAssigned: f.dateAssigned.value || null, notes: f.notes.value.trim(),
+          });
+          toast('ac-msg', 'Item updated.', false);
+          await load();
+        } catch (err) {
+          toast('ac-msg', String(err.message || err), true);
+        }
+      });
+    }
+
+    function tile(num, label) { return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>'; }
+  }
+}
+</script>
+</body>
+</html>
