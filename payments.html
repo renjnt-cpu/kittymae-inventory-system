@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payments — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main>
+  <div id="pay-msg"></div>
+  <div id="payments-root"></div>
+</main>
+
+<script type="module">
+import { initShell, toast, esc } from './js/shell.js';
+import { getBranches, listPayments, createPayment, deletePayment } from './js/api.js';
+
+const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+
+const employee = await initShell('payments');
+if (employee) {
+  const root = document.getElementById('payments-root');
+
+  if (!['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role)) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Payments monitoring is restricted to Admin, Manager, or Branch Supervisor accounts.</p></div></div>';
+  } else {
+    const isScoped = employee.role === 'Branch Supervisor';
+    const branches = await getBranches();
+    let selectedBranch = isScoped ? employee.branch_id : null; // null = All Branches
+
+    root.innerHTML =
+      '<div class="card">' +
+        '<h3>Branch</h3>' +
+        '<div id="branch-buttons" style="display:flex;gap:8px;flex-wrap:wrap;"></div>' +
+      '</div>' +
+      '<div class="layout-2col">' +
+        '<div class="layout-2col-side">' +
+          '<div class="card">' +
+            '<h3>Add Payment</h3>' +
+            '<form id="pay-form" style="flex-direction:column;align-items:stretch;">' +
+              '<div class="field"><label>Method *</label><select name="method" required><option>GCash</option><option>Bank Transfer</option></select></div>' +
+              '<div class="field"><label>Date</label><input type="date" name="transactionDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
+              '<div class="field"><label>Amount (PHP) *</label><input type="number" name="amount" step="0.01" min="0" required></div>' +
+              '<div class="field"><label>Reference Number</label><input type="text" name="referenceNumber" placeholder="GCash ref # / bank ref"></div>' +
+              '<div class="field"><label>Payer Name</label><input type="text" name="payerName"></div>' +
+              '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+              '<button class="btn" type="submit">Add Payment</button>' +
+            '</form>' +
+          '</div>' +
+        '</div>' +
+        '<div class="layout-2col-main">' +
+          '<div class="tiles" id="pay-tiles"></div>' +
+          '<div class="card">' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+              '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Reference, payer, notes…"></div>' +
+              '<div class="field"><label>Method</label><select id="f-method"><option value="all">All</option><option>GCash</option><option>Bank Transfer</option></select></div>' +
+              '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="pay-list"><div class="muted">Loading…</div></div>' +
+        '</div>' +
+      '</div>';
+
+    const payForm = document.getElementById('pay-form');
+    renderBranchButtons();
+
+    document.getElementById('pay-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      if (selectedBranch === null) { toast('pay-msg', 'Pick a branch first.', true); return; }
+      try {
+        await createPayment({
+          branchId: selectedBranch, method: f.method.value, transactionDate: f.transactionDate.value,
+          amount: Number(f.amount.value), referenceNumber: f.referenceNumber.value.trim(),
+          payerName: f.payerName.value.trim(), notes: f.notes.value.trim(),
+        });
+        toast('pay-msg', 'Payment added.', false);
+        f.reset();
+        f.transactionDate.value = new Date().toISOString().slice(0, 10);
+        await load();
+      } catch (err) {
+        toast('pay-msg', String(err.message || err), true);
+      }
+    });
+
+    let allPayments = [];
+    await load();
+
+    document.getElementById('f-search').addEventListener('input', render);
+    document.getElementById('f-method').addEventListener('change', render);
+    document.getElementById('f-clear').addEventListener('click', () => {
+      document.getElementById('f-search').value = '';
+      document.getElementById('f-method').value = 'all';
+      render();
+    });
+
+    function renderBranchButtons() {
+      const box = document.getElementById('branch-buttons');
+      const options = isScoped ? branches.filter((b) => b.id === employee.branch_id) : [{ id: null, name: 'All Branches' }, ...branches];
+      box.innerHTML = options.map((b) =>
+        '<button type="button" class="btn ' + (b.id === selectedBranch ? '' : 'secondary') + '" data-id="' + b.id + '">' + esc(b.name) + '</button>'
+      ).join('');
+      box.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', async () => {
+        selectedBranch = btn.dataset.id === 'null' ? null : Number(btn.dataset.id);
+        renderBranchButtons();
+        await load();
+      }));
+    }
+
+    async function load() {
+      const list = document.getElementById('pay-list');
+      list.innerHTML = '<div class="muted">Loading…</div>';
+      try {
+        allPayments = await listPayments();
+        render();
+      } catch (err) {
+        list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+      }
+    }
+
+    function render() {
+      let rows = selectedBranch === null ? allPayments : allPayments.filter((p) => p.branch_id === selectedBranch);
+      const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
+      const fMethod = document.getElementById('f-method').value;
+      if (fSearch) rows = rows.filter((p) =>
+        (p.reference_number || '').toLowerCase().includes(fSearch) ||
+        (p.payer_name || '').toLowerCase().includes(fSearch) ||
+        (p.notes || '').toLowerCase().includes(fSearch));
+      if (fMethod !== 'all') rows = rows.filter((p) => p.method === fMethod);
+
+      const total = rows.reduce((s, p) => s + Number(p.amount || 0), 0);
+      const gcashTotal = rows.filter((p) => p.method === 'GCash').reduce((s, p) => s + Number(p.amount || 0), 0);
+      const bankTotal = rows.filter((p) => p.method === 'Bank Transfer').reduce((s, p) => s + Number(p.amount || 0), 0);
+      document.getElementById('pay-tiles').innerHTML =
+        tile(money(total), 'Total') + tile(money(gcashTotal), 'GCash') + tile(money(bankTotal), 'Bank Transfer') + tile(String(rows.length), 'Count');
+
+      const list = document.getElementById('pay-list');
+      if (!rows.length) { list.innerHTML = '<p class="muted">No payments for this filter.</p>'; return; }
+      list.innerHTML = '<div class="table-scroll"><table><tr>' + (selectedBranch === null ? '<th>Branch</th>' : '') + '<th>Date</th><th>Method</th><th>Amount</th><th>Reference</th><th>Payer</th><th>Notes</th><th></th></tr>' +
+        rows.map((p) =>
+          '<tr>' +
+            (selectedBranch === null ? '<td data-label="Branch">' + esc(p.branches?.name || '') + '</td>' : '') +
+            '<td data-label="Date">' + (p.transaction_date || '—') + '</td>' +
+            '<td data-label="Method"><span class="badge ' + (p.method === 'GCash' ? 'transit' : 'ok') + '">' + esc(p.method) + '</span></td>' +
+            '<td data-label="Amount">' + money(p.amount) +
+              (p.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(p.creator.full_name) + '</div>' : '') +
+            '</td>' +
+            '<td data-label="Reference">' + esc(p.reference_number || '') + '</td>' +
+            '<td data-label="Payer">' + esc(p.payer_name || '') + '</td>' +
+            '<td data-label="Notes">' + esc(p.notes || '') + '</td>' +
+            '<td data-label="Actions" style="white-space:nowrap;"><button class="btn small secondary" data-id="' + p.id + '" data-act="delete">Delete</button></td>' +
+          '</tr>'
+        ).join('') + '</table></div>';
+
+      list.querySelectorAll('[data-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
+        if (!confirm('Delete this payment?')) return;
+        try { await deletePayment(btn.dataset.id); toast('pay-msg', 'Deleted.', false); await load(); }
+        catch (err) { toast('pay-msg', String(err.message || err), true); }
+      }));
+    }
+
+    function tile(num, label) { return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>'; }
+  }
+}
+</script>
+</body>
+</html>

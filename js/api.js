@@ -289,6 +289,86 @@ export async function deleteScrapEntry(id) {
   if (error) throw new Error(error.message);
 }
 
+// ---- Payments (GCash + Bank Transfer combined — money received from a customer) —
+// per branch, Admin/Manager see everything, Branch Supervisor sees/manages own branch. ----
+
+export async function listPayments() {
+  const { data, error } = await supabase.from('payment_transactions')
+    .select('*, creator:employees!payment_transactions_created_by_fkey(full_name), branches(name)')
+    .order('transaction_date', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createPayment({ branchId, method, transactionDate, amount, referenceNumber, payerName, notes }) {
+  const { data: auth } = await supabase.auth.getUser();
+  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const { error } = await supabase.from('payment_transactions').insert({
+    branch_id: branchId, method, transaction_date: transactionDate || new Date().toISOString().slice(0, 10),
+    amount, reference_number: referenceNumber || null, payer_name: payerName || null,
+    notes: notes || null, created_by: emp ? emp.id : null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function deletePayment(id) {
+  const { error } = await supabase.from('payment_transactions').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+// ---- Refunds — per branch, same access pattern as Payments. Optional proof photo in a
+// private bucket, path "<branch_id>/<refund_id>/<file>" so RLS can scope by branch. ----
+
+export async function listRefunds() {
+  const { data, error } = await supabase.from('refunds')
+    .select('*, creator:employees!refunds_created_by_fkey(full_name), branches(name)')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createRefund({ branchId, customerName, orderReference, itemDescription, refundAmount, refundMethod, reason, refundDate, notes }) {
+  const { data: auth } = await supabase.auth.getUser();
+  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const { data, error } = await supabase.from('refunds').insert({
+    branch_id: branchId, customer_name: customerName, order_reference: orderReference || null,
+    item_description: itemDescription || null, refund_amount: refundAmount, refund_method: refundMethod || 'Cash',
+    reason: reason || null, refund_date: refundDate || null, notes: notes || null, created_by: emp ? emp.id : null,
+  }).select('id').single();
+  if (error) throw new Error(error.message);
+  return data.id;
+}
+
+export async function setRefundStatus(id, status) {
+  const { error } = await supabase.from('refunds').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteRefund(id) {
+  const { data: refund } = await supabase.from('refunds').select('attachment_path').eq('id', id).single();
+  if (refund && refund.attachment_path) {
+    await supabase.storage.from('refund-attachments').remove([refund.attachment_path]);
+  }
+  const { error } = await supabase.from('refunds').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function uploadRefundAttachment(branchId, refundId, file) {
+  const path = branchId + '/' + refundId + '/' + Date.now() + '_' + file.name;
+  const { error: upErr } = await supabase.storage.from('refund-attachments').upload(path, file, { upsert: true });
+  if (upErr) throw new Error(upErr.message);
+  const { error: updErr } = await supabase.from('refunds')
+    .update({ attachment_path: path, updated_at: new Date().toISOString() }).eq('id', refundId);
+  if (updErr) throw new Error(updErr.message);
+  return path;
+}
+
+export async function getRefundAttachmentUrl(path) {
+  const { data, error } = await supabase.storage.from('refund-attachments').createSignedUrl(path, 300);
+  if (error) throw new Error(error.message);
+  return data.signedUrl;
+}
+
 // ---- Branch Capital (money Ren injects into a branch — the inverse of Bills) ----
 // Admin-only, same access model as Bills.
 

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Refunds — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main>
+  <div id="ref-msg"></div>
+  <div id="refunds-root"></div>
+</main>
+
+<script type="module">
+import { initShell, toast, esc } from './js/shell.js';
+import { getBranches, listRefunds, createRefund, setRefundStatus, deleteRefund, uploadRefundAttachment, getRefundAttachmentUrl } from './js/api.js';
+
+const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+const STATUS_BADGE = { Pending: 'pending', Completed: 'ok' };
+
+const employee = await initShell('refunds');
+if (employee) {
+  const root = document.getElementById('refunds-root');
+
+  if (!['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role)) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Refund monitoring is restricted to Admin, Manager, or Branch Supervisor accounts.</p></div></div>';
+  } else {
+    const isScoped = employee.role === 'Branch Supervisor';
+    const branches = await getBranches();
+    let selectedBranch = isScoped ? employee.branch_id : null; // null = All Branches
+
+    root.innerHTML =
+      '<div class="card">' +
+        '<h3>Branch</h3>' +
+        '<div id="branch-buttons" style="display:flex;gap:8px;flex-wrap:wrap;"></div>' +
+      '</div>' +
+      '<div class="layout-2col">' +
+        '<div class="layout-2col-side">' +
+          '<div class="card">' +
+            '<h3>Add Refund</h3>' +
+            '<form id="ref-form" style="flex-direction:column;align-items:stretch;">' +
+              '<div class="field"><label>Customer Name *</label><input type="text" name="customerName" required></div>' +
+              '<div class="field"><label>Order Reference</label><input type="text" name="orderReference"></div>' +
+              '<div class="field"><label>Item</label><input type="text" name="itemDescription"></div>' +
+              '<div class="field"><label>Refund Amount (PHP) *</label><input type="number" name="refundAmount" step="0.01" min="0" required></div>' +
+              '<div class="field"><label>Refund Method</label><select name="refundMethod"><option>Cash</option><option>GCash</option><option>Bank Transfer</option></select></div>' +
+              '<div class="field"><label>Reason</label><input type="text" name="reason"></div>' +
+              '<div class="field"><label>Refund Date</label><input type="date" name="refundDate"></div>' +
+              '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+              '<div class="field"><label>Proof Photo</label><input type="file" name="attachment" accept="image/*"></div>' +
+              '<button class="btn" type="submit">Add Refund</button>' +
+            '</form>' +
+          '</div>' +
+        '</div>' +
+        '<div class="layout-2col-main">' +
+          '<div class="tiles" id="ref-tiles"></div>' +
+          '<div class="card">' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+              '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Customer, order ref, item…"></div>' +
+              '<div class="field"><label>Status</label><select id="f-status"><option value="all">All Statuses</option><option>Pending</option><option>Completed</option></select></div>' +
+              '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="ref-list"><div class="muted">Loading…</div></div>' +
+        '</div>' +
+      '</div>';
+
+    renderBranchButtons();
+
+    document.getElementById('ref-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      if (selectedBranch === null) { toast('ref-msg', 'Pick a branch first.', true); return; }
+      try {
+        const newId = await createRefund({
+          branchId: selectedBranch, customerName: f.customerName.value.trim(),
+          orderReference: f.orderReference.value.trim(), itemDescription: f.itemDescription.value.trim(),
+          refundAmount: Number(f.refundAmount.value), refundMethod: f.refundMethod.value,
+          reason: f.reason.value.trim(), refundDate: f.refundDate.value || null, notes: f.notes.value.trim(),
+        });
+        if (f.attachment.files[0]) await uploadRefundAttachment(selectedBranch, newId, f.attachment.files[0]);
+        toast('ref-msg', 'Refund added.', false);
+        f.reset();
+        await load();
+      } catch (err) {
+        toast('ref-msg', String(err.message || err), true);
+      }
+    });
+
+    let allRefunds = [];
+    await load();
+
+    document.getElementById('f-search').addEventListener('input', render);
+    document.getElementById('f-status').addEventListener('change', render);
+    document.getElementById('f-clear').addEventListener('click', () => {
+      document.getElementById('f-search').value = '';
+      document.getElementById('f-status').value = 'all';
+      render();
+    });
+
+    function renderBranchButtons() {
+      const box = document.getElementById('branch-buttons');
+      const options = isScoped ? branches.filter((b) => b.id === employee.branch_id) : [{ id: null, name: 'All Branches' }, ...branches];
+      box.innerHTML = options.map((b) =>
+        '<button type="button" class="btn ' + (b.id === selectedBranch ? '' : 'secondary') + '" data-id="' + b.id + '">' + esc(b.name) + '</button>'
+      ).join('');
+      box.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', async () => {
+        selectedBranch = btn.dataset.id === 'null' ? null : Number(btn.dataset.id);
+        renderBranchButtons();
+        await load();
+      }));
+    }
+
+    async function load() {
+      const list = document.getElementById('ref-list');
+      list.innerHTML = '<div class="muted">Loading…</div>';
+      try {
+        allRefunds = await listRefunds();
+        render();
+      } catch (err) {
+        list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+      }
+    }
+
+    function render() {
+      let rows = selectedBranch === null ? allRefunds : allRefunds.filter((r) => r.branch_id === selectedBranch);
+      const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
+      const fStatus = document.getElementById('f-status').value;
+      if (fSearch) rows = rows.filter((r) =>
+        r.customer_name.toLowerCase().includes(fSearch) ||
+        (r.order_reference || '').toLowerCase().includes(fSearch) ||
+        (r.item_description || '').toLowerCase().includes(fSearch));
+      if (fStatus !== 'all') rows = rows.filter((r) => r.status === fStatus);
+
+      const total = rows.reduce((s, r) => s + Number(r.refund_amount || 0), 0);
+      const pendingCount = rows.filter((r) => r.status === 'Pending').length;
+      document.getElementById('ref-tiles').innerHTML =
+        tile(money(total), 'Total Refunded') + tile(String(pendingCount), 'Pending') + tile(String(rows.length), 'Count');
+
+      const list = document.getElementById('ref-list');
+      if (!rows.length) { list.innerHTML = '<p class="muted">No refunds for this filter.</p>'; return; }
+      list.innerHTML = '<div class="table-scroll"><table><tr>' + (selectedBranch === null ? '<th>Branch</th>' : '') + '<th>Customer</th><th>Order Ref</th><th>Item</th><th>Amount</th><th>Method</th><th>Reason</th><th>Status</th><th>Date</th><th>Photo</th><th></th></tr>' +
+        rows.map((r) =>
+          '<tr>' +
+            (selectedBranch === null ? '<td data-label="Branch">' + esc(r.branches?.name || '') + '</td>' : '') +
+            '<td data-label="Customer">' + esc(r.customer_name) +
+              (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
+            '</td>' +
+            '<td data-label="Order Ref">' + esc(r.order_reference || '') + '</td>' +
+            '<td data-label="Item">' + esc(r.item_description || '') + '</td>' +
+            '<td data-label="Amount">' + money(r.refund_amount) + '</td>' +
+            '<td data-label="Method">' + esc(r.refund_method) + '</td>' +
+            '<td data-label="Reason">' + esc(r.reason || '') + '</td>' +
+            '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
+            '<td data-label="Date">' + (r.refund_date || '—') + '</td>' +
+            '<td data-label="Photo">' + (r.attachment_path ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="view-photo">View Photo</button>' : '—') + '</td>' +
+            '<td data-label="Actions" style="white-space:nowrap;">' +
+              (r.status !== 'Completed' ? '<button class="btn small" data-id="' + r.id + '" data-act="complete">Mark Completed</button> ' : '<button class="btn small secondary" data-id="' + r.id + '" data-act="pending">Mark Pending</button> ') +
+              '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' +
+            '</td>' +
+          '</tr>'
+        ).join('') + '</table></div>';
+
+      list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        try {
+          if (btn.dataset.act === 'complete') { await setRefundStatus(id, 'Completed'); toast('ref-msg', 'Updated.', false); await load(); }
+          else if (btn.dataset.act === 'pending') { await setRefundStatus(id, 'Pending'); toast('ref-msg', 'Updated.', false); await load(); }
+          else if (btn.dataset.act === 'delete') { if (!confirm('Delete this refund?')) return; await deleteRefund(id); toast('ref-msg', 'Deleted.', false); await load(); }
+          else if (btn.dataset.act === 'view-photo') {
+            const r = rows.find((x) => String(x.id) === String(id));
+            window.open(await getRefundAttachmentUrl(r.attachment_path), '_blank');
+          }
+        } catch (err) {
+          toast('ref-msg', String(err.message || err), true);
+        }
+      }));
+    }
+
+    function tile(num, label) { return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>'; }
+  }
+}
+</script>
+</body>
+</html>
