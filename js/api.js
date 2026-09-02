@@ -336,7 +336,7 @@ export async function createRefund({ customerName, orderReference, itemDescripti
   const { data, error } = await supabase.from('refunds').insert({
     customer_name: customerName, order_reference: orderReference || null,
     item_description: itemDescription || null, purchase_date: purchaseDate || null,
-    refund_amount: refundAmount, refund_method: refundMethod || 'Cash',
+    refund_amount: refundAmount, refund_method: refundMethod || 'GCash',
     account_name: accountName || null, account_number: accountNumber || null,
     reason: reason || null, refund_date: refundDate || null, notes: notes || null, created_by: emp ? emp.id : null,
   }).select('id').single();
