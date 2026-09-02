@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branches — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main>
+  <div id="br-msg"></div>
+  <div id="branches-root"></div>
+</main>
+
+<script type="module">
+import { initShell, toast, esc } from './js/shell.js';
+import {
+  getBranches,
+  listSubastaItems, createSubastaItem, updateSubastaItem, deleteSubastaItem,
+  listScrapEntries, getScrapBalances, createScrapEntry, deleteScrapEntry,
+} from './js/api.js';
+
+const SUB_STATUS_BADGE = { Pending: 'pending', Listed: 'transit', Sold: 'ok', Cancelled: 'low' };
+const SUB_STATUSES = ['Pending', 'Listed', 'Sold', 'Cancelled'];
+const SUB_STATUS_OPTIONS = (selected) => SUB_STATUSES.map((s) => '<option' + (s === selected ? ' selected' : '') + '>' + s + '</option>').join('');
+const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g';
+
+const employee = await initShell('branches');
+if (employee) {
+  const root = document.getElementById('branches-root');
+
+  if (!['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role)) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Subasta/Scrap monitoring is restricted to Admin, Manager, or Branch Supervisor accounts.</p></div></div>';
+  } else {
+    const isScoped = employee.role === 'Branch Supervisor';
+    const branches = await getBranches();
+    const branchOptions = (selected) => branches.map((b) =>
+      '<option value="' + b.id + '"' + (b.id === selected ? ' selected' : '') + '>' + esc(b.name) + '</option>'
+    ).join('');
+    // Branches are the primary lens here — always exactly one selected, no combined
+    // "All Branches" view. Branch Supervisor is locked to their own; everyone else
+    // starts on the first branch in the list.
+    let selectedBranch = isScoped ? employee.branch_id : branches[0].id;
+    const branchName = (id) => (branches.find((b) => b.id === id) || {}).name || '';
+
+    root.innerHTML =
+      '<div class="card">' +
+        '<h3>Branch</h3>' +
+        '<div id="branch-buttons" style="display:flex;gap:8px;flex-wrap:wrap;"></div>' +
+      '</div>' +
+
+      '<h2>Subasta <span class="muted" id="sub-branch-label" style="font-weight:normal;"></span></h2>' +
+      '<div class="layout-2col">' +
+        '<div class="layout-2col-side">' +
+          '<div class="card">' +
+            '<h3>Add Subasta Item</h3>' +
+            '<form id="sub-form" style="flex-direction:column;align-items:stretch;">' +
+              '<div class="field"><label>Item Description *</label><input type="text" name="itemDescription" required></div>' +
+              '<div class="field"><label>Pawn Reference</label><input type="text" name="pawnReference"></div>' +
+              '<div class="field"><label>Pawn Date</label><input type="date" name="pawnDate"></div>' +
+              '<div class="field"><label>Auction Eligible Date</label><input type="date" name="auctionEligibleDate"></div>' +
+              '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+              '<button class="btn" type="submit">Add Item</button>' +
+            '</form>' +
+          '</div>' +
+        '</div>' +
+        '<div class="layout-2col-main">' +
+          '<div class="tiles" id="sub-tiles"></div>' +
+          '<div class="card">' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+              '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="sub-f-search" placeholder="Item, pawn ref, buyer…"></div>' +
+              '<div class="field"><label>Status</label><select id="sub-f-status"><option value="all">All Statuses</option>' + SUB_STATUS_OPTIONS() + '</select></div>' +
+              '<button type="button" class="btn small secondary" id="sub-f-clear">Clear Filters</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="sub-list"><div class="muted">Loading…</div></div>' +
+        '</div>' +
+      '</div>' +
+
+      '<h2 style="margin-top:30px;">Scrap <span class="muted" id="scrap-branch-label" style="font-weight:normal;"></span></h2>' +
+      '<div class="layout-2col">' +
+        '<div class="layout-2col-side">' +
+          '<div class="card">' +
+            '<h3>Add Scrap Entry</h3>' +
+            '<form id="scrap-form" style="flex-direction:column;align-items:stretch;">' +
+              '<div class="field"><label>Date</label><input type="date" name="entryDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
+              '<div class="field"><label>Type *</label><select name="entryType"><option value="In">In (bought from customer)</option><option value="Out">Out (sold to refiner)</option></select></div>' +
+              '<div class="field"><label>Metal *</label><select name="metalType" required><option>Gold</option><option>Silver</option></select></div>' +
+              '<div class="field"><label>Karat / Purity</label><input type="text" name="karat" placeholder="e.g. 18K, 925"></div>' +
+              '<div class="field"><label>Weight (grams) *</label><input type="number" name="weightGrams" step="0.001" min="0" required></div>' +
+              '<div class="field"><label>Price per Gram (PHP)</label><input type="number" name="pricePerGram" step="0.01" min="0"></div>' +
+              '<div class="field"><label>Total Amount (PHP)</label><input type="number" name="totalAmount" step="0.01" min="0"></div>' +
+              '<div class="field"><label>Source</label><input type="text" name="source" placeholder="Walk-in, buyback, refiner name…"></div>' +
+              '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+              '<button class="btn" type="submit">Add Entry</button>' +
+            '</form>' +
+          '</div>' +
+        '</div>' +
+        '<div class="layout-2col-main">' +
+          '<h3>Current Balance <span class="muted" style="font-weight:normal;">— weight on hand</span></h3>' +
+          '<div id="scrap-balance" class="card"><div class="muted">Loading…</div></div>' +
+          '<div class="card">' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+              '<div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="scrap-f-search" placeholder="Source, notes…"></div>' +
+              '<div class="field"><label>Metal</label><select id="scrap-f-metal"><option value="all">All</option><option>Gold</option><option>Silver</option></select></div>' +
+              '<div class="field"><label>Type</label><select id="scrap-f-type"><option value="all">All</option><option>In</option><option>Out</option></select></div>' +
+              '<button type="button" class="btn small secondary" id="scrap-f-clear">Clear Filters</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="scrap-list"><div class="muted">Loading…</div></div>' +
+        '</div>' +
+      '</div>';
+
+    renderBranchButtons();
+
+    document.getElementById('sub-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      try {
+        await createSubastaItem({
+          branchId: selectedBranch, itemDescription: f.itemDescription.value.trim(),
+          pawnReference: f.pawnReference.value.trim(), pawnDate: f.pawnDate.value || null,
+          auctionEligibleDate: f.auctionEligibleDate.value || null, notes: f.notes.value.trim(),
+        });
+        toast('br-msg', 'Item added.', false);
+        f.reset();
+        await loadSubasta();
+      } catch (err) {
+        toast('br-msg', String(err.message || err), true);
+      }
+    });
+
+    document.getElementById('scrap-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      try {
+        await createScrapEntry({
+          branchId: selectedBranch, entryDate: f.entryDate.value, entryType: f.entryType.value, metalType: f.metalType.value,
+          karat: f.karat.value.trim(), weightGrams: Number(f.weightGrams.value),
+          pricePerGram: f.pricePerGram.value ? Number(f.pricePerGram.value) : null,
+          totalAmount: f.totalAmount.value ? Number(f.totalAmount.value) : null,
+          source: f.source.value.trim(), notes: f.notes.value.trim(),
+        });
+        toast('br-msg', 'Entry added.', false);
+        f.reset();
+        f.entryDate.value = new Date().toISOString().slice(0, 10);
+        await loadScrap();
+      } catch (err) {
+        toast('br-msg', String(err.message || err), true);
+      }
+    });
+
+    let allSubasta = [], allScrap = [];
+    await Promise.all([loadSubasta(), loadScrap()]);
+
+    document.getElementById('sub-f-search').addEventListener('input', renderSubasta);
+    document.getElementById('sub-f-status').addEventListener('change', renderSubasta);
+    document.getElementById('sub-f-clear').addEventListener('click', () => {
+      document.getElementById('sub-f-search').value = '';
+      document.getElementById('sub-f-status').value = 'all';
+      renderSubasta();
+    });
+    document.getElementById('scrap-f-search').addEventListener('input', renderScrap);
+    document.getElementById('scrap-f-metal').addEventListener('change', renderScrap);
+    document.getElementById('scrap-f-type').addEventListener('change', renderScrap);
+    document.getElementById('scrap-f-clear').addEventListener('click', () => {
+      document.getElementById('scrap-f-search').value = '';
+      document.getElementById('scrap-f-metal').value = 'all';
+      document.getElementById('scrap-f-type').value = 'all';
+      renderScrap();
+    });
+
+    function renderBranchButtons() {
+      const box = document.getElementById('branch-buttons');
+      const options = isScoped ? branches.filter((b) => b.id === employee.branch_id) : branches;
+      box.innerHTML = options.map((b) =>
+        '<button type="button" class="btn ' + (b.id === selectedBranch ? '' : 'secondary') + '" data-id="' + b.id + '">' + esc(b.name) + '</button>'
+      ).join('');
+      box.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', async () => {
+        selectedBranch = Number(btn.dataset.id);
+        renderBranchButtons();
+        await Promise.all([loadSubasta(), loadScrap()]);
+      }));
+      const label = ' — ' + branchName(selectedBranch);
+      document.getElementById('sub-branch-label').textContent = label;
+      document.getElementById('scrap-branch-label').textContent = label;
+    }
+
+    async function loadSubasta() {
+      const list = document.getElementById('sub-list');
+      list.innerHTML = '<div class="muted">Loading…</div>';
+      try {
+        allSubasta = (await listSubastaItems()).filter((r) => r.branch_id === selectedBranch);
+        renderSubasta();
+      } catch (err) {
+        list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+      }
+    }
+
+    function renderSubasta() {
+      let rows = allSubasta;
+      const fSearch = document.getElementById('sub-f-search').value.trim().toLowerCase();
+      const fStatus = document.getElementById('sub-f-status').value;
+      if (fSearch) rows = rows.filter((r) =>
+        r.item_description.toLowerCase().includes(fSearch) ||
+        (r.pawn_reference || '').toLowerCase().includes(fSearch) ||
+        (r.buyer_name || '').toLowerCase().includes(fSearch));
+      if (fStatus !== 'all') rows = rows.filter((r) => r.status === fStatus);
+
+      const counts = SUB_STATUSES.reduce((acc, s) => { acc[s] = rows.filter((r) => r.status === s).length; return acc; }, {});
+      const soldTotal = rows.filter((r) => r.status === 'Sold').reduce((s, r) => s + Number(r.sale_price || 0), 0);
+      document.getElementById('sub-tiles').innerHTML =
+        tile(counts.Pending, 'Pending') + tile(counts.Listed, 'Listed') + tile(counts.Sold, 'Sold') + tile(money(soldTotal), 'Sold Total');
+
+      const list = document.getElementById('sub-list');
+      if (!rows.length) { list.innerHTML = '<p class="muted">No subasta items for this filter.</p>'; return; }
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Item</th><th>Pawn Ref</th><th>Pawn Date</th><th>Eligible Date</th><th>Status</th><th>Sale Date</th><th>Sale Price</th><th>Buyer</th><th>Notes</th><th></th></tr>' +
+        rows.map((r) =>
+          '<tr data-row-id="' + r.id + '">' +
+            '<td data-label="Item">' + esc(r.item_description) +
+              (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
+            '</td>' +
+            '<td data-label="Pawn Ref">' + esc(r.pawn_reference || '') + '</td>' +
+            '<td data-label="Pawn Date">' + (r.pawn_date || '—') + '</td>' +
+            '<td data-label="Eligible Date">' + (r.auction_eligible_date || '—') + '</td>' +
+            '<td data-label="Status"><span class="badge ' + (SUB_STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
+            '<td data-label="Sale Date">' + (r.sale_date || '—') + '</td>' +
+            '<td data-label="Sale Price">' + money(r.sale_price) + '</td>' +
+            '<td data-label="Buyer">' + esc(r.buyer_name || '') + '</td>' +
+            '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
+            '<td data-label="Actions" style="white-space:nowrap;">' +
+              '<button class="btn small secondary" data-id="' + r.id + '" data-act="edit">Edit</button> ' +
+              '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' +
+            '</td>' +
+          '</tr>' +
+          '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="10"></td></tr>'
+        ).join('') + '</table></div>';
+
+      list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        try {
+          if (btn.dataset.act === 'delete') { if (!confirm('Delete this item?')) return; await deleteSubastaItem(id); toast('br-msg', 'Deleted.', false); await loadSubasta(); }
+          else if (btn.dataset.act === 'edit') openSubEdit(id, rows);
+        } catch (err) {
+          toast('br-msg', String(err.message || err), true);
+        }
+      }));
+    }
+
+    function openSubEdit(id, rows) {
+      const r = rows.find((x) => String(x.id) === String(id));
+      const cell = document.querySelector('tr[data-edit-for="' + id + '"]');
+      const isOpen = cell.style.display !== 'none';
+      document.querySelectorAll('.edit-row').forEach((row) => { row.style.display = 'none'; row.querySelector('td').innerHTML = ''; });
+      if (isOpen) return;
+      cell.style.display = '';
+      cell.querySelector('td').innerHTML =
+        '<form class="edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+          '<div class="field"><label>Branch</label><select name="branchId"' + (isScoped ? ' disabled' : '') + '>' + branchOptions(r.branch_id) + '</select></div>' +
+          '<div class="field" style="min-width:200px;"><label>Item Description</label><input type="text" name="itemDescription" value="' + esc(r.item_description) + '" required></div>' +
+          '<div class="field"><label>Pawn Reference</label><input type="text" name="pawnReference" value="' + esc(r.pawn_reference || '') + '"></div>' +
+          '<div class="field"><label>Pawn Date</label><input type="date" name="pawnDate" value="' + (r.pawn_date || '') + '"></div>' +
+          '<div class="field"><label>Auction Eligible Date</label><input type="date" name="auctionEligibleDate" value="' + (r.auction_eligible_date || '') + '"></div>' +
+          '<div class="field"><label>Status</label><select name="status">' + SUB_STATUS_OPTIONS(r.status) + '</select></div>' +
+          '<div class="field"><label>Sale Date</label><input type="date" name="saleDate" value="' + (r.sale_date || '') + '"></div>' +
+          '<div class="field"><label>Sale Price (PHP)</label><input type="number" name="salePrice" step="0.01" min="0" value="' + (r.sale_price ?? '') + '"></div>' +
+          '<div class="field"><label>Buyer</label><input type="text" name="buyerName" value="' + esc(r.buyer_name || '') + '"></div>' +
+          '<div class="field" style="min-width:180px;"><label>Notes</label><input type="text" name="notes" value="' + esc(r.notes || '') + '"></div>' +
+          '<button class="btn small" type="submit">Save</button> ' +
+          '<button class="btn small secondary" type="button" data-cancel="1">Cancel</button>' +
+        '</form>';
+      const form = cell.querySelector('.edit-form');
+      form.querySelector('[data-cancel]').addEventListener('click', () => { cell.style.display = 'none'; form.remove(); });
+      form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        try {
+          await updateSubastaItem(id, {
+            branchId: isScoped ? employee.branch_id : Number(f.branchId.value),
+            itemDescription: f.itemDescription.value.trim(), pawnReference: f.pawnReference.value.trim(),
+            pawnDate: f.pawnDate.value || null, auctionEligibleDate: f.auctionEligibleDate.value || null,
+            status: f.status.value, saleDate: f.saleDate.value || null,
+            salePrice: f.salePrice.value ? Number(f.salePrice.value) : null,
+            buyerName: f.buyerName.value.trim(), notes: f.notes.value.trim(),
+          });
+          toast('br-msg', 'Item updated.', false);
+          await loadSubasta();
+        } catch (err) {
+          toast('br-msg', String(err.message || err), true);
+        }
+      });
+    }
+
+    async function loadScrap() {
+      const list = document.getElementById('scrap-list');
+      list.innerHTML = '<div class="muted">Loading…</div>';
+      try {
+        const [entries, balances] = await Promise.all([listScrapEntries(), getScrapBalances()]);
+        allScrap = entries.filter((r) => r.branch_id === selectedBranch);
+        renderScrapBalance(balances.filter((b) => b.branch_id === selectedBranch));
+        renderScrap();
+      } catch (err) {
+        list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+      }
+    }
+
+    function renderScrapBalance(rows) {
+      const box = document.getElementById('scrap-balance');
+      if (!rows.length) { box.innerHTML = '<p class="muted">No scrap recorded yet.</p>'; return; }
+      box.innerHTML = '<div class="table-scroll"><table><tr><th>Metal</th><th>Balance</th></tr>' +
+        rows.map((b) => '<tr><td data-label="Metal">' + esc(b.metal_type) + '</td><td data-label="Balance">' + weight(b.balance_grams) + '</td></tr>').join('') +
+        '</table></div>';
+    }
+
+    function renderScrap() {
+      let rows = allScrap;
+      const fSearch = document.getElementById('scrap-f-search').value.trim().toLowerCase();
+      const fMetal = document.getElementById('scrap-f-metal').value;
+      const fType = document.getElementById('scrap-f-type').value;
+      if (fSearch) rows = rows.filter((r) => (r.source || '').toLowerCase().includes(fSearch) || (r.notes || '').toLowerCase().includes(fSearch));
+      if (fMetal !== 'all') rows = rows.filter((r) => r.metal_type === fMetal);
+      if (fType !== 'all') rows = rows.filter((r) => r.entry_type === fType);
+
+      const list = document.getElementById('scrap-list');
+      if (!rows.length) { list.innerHTML = '<p class="muted">No scrap entries for this filter.</p>'; return; }
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Date</th><th>Type</th><th>Metal</th><th>Karat</th><th>Weight</th><th>Price/g</th><th>Total</th><th>Source</th><th>Notes</th><th></th></tr>' +
+        rows.map((r) =>
+          '<tr>' +
+            '<td data-label="Date">' + (r.entry_date || '—') + '</td>' +
+            '<td data-label="Type"><span class="badge ' + (r.entry_type === 'In' ? 'ok' : 'pending') + '">' + esc(r.entry_type) + '</span></td>' +
+            '<td data-label="Metal">' + esc(r.metal_type) + '</td>' +
+            '<td data-label="Karat">' + esc(r.karat || '') + '</td>' +
+            '<td data-label="Weight">' + weight(r.weight_grams) +
+              (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
+            '</td>' +
+            '<td data-label="Price/g">' + money(r.price_per_gram) + '</td>' +
+            '<td data-label="Total">' + money(r.total_amount) + '</td>' +
+            '<td data-label="Source">' + esc(r.source || '') + '</td>' +
+            '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
+            '<td data-label="Actions" style="white-space:nowrap;"><button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button></td>' +
+          '</tr>'
+        ).join('') + '</table></div>';
+
+      list.querySelectorAll('[data-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
+        if (!confirm('Delete this scrap entry?')) return;
+        try { await deleteScrapEntry(btn.dataset.id); toast('br-msg', 'Deleted.', false); await loadScrap(); }
+        catch (err) { toast('br-msg', String(err.message || err), true); }
+      }));
+    }
+
+    function tile(num, label) { return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>'; }
+  }
+}
+</script>
+</body>
+</html>

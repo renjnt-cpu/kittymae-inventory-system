@@ -27,8 +27,7 @@ export async function initShell(activePage) {
     { id: 'bills', label: 'Bills', href: 'bills.html' },
   ];
   if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role)) {
-    pages.push({ id: 'subasta', label: 'Subasta', href: 'subasta.html' });
-    pages.push({ id: 'scrap', label: 'Scrap', href: 'scrap.html' });
+    pages.push({ id: 'branches', label: 'Branches', href: 'branches.html' });
   }
   if (employee.role === 'Admin') {
     pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });
