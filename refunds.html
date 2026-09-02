@@ -19,31 +19,107 @@ import { listRefunds, createRefund, setRefundStatus, deleteRefund, addRefundAtta
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const STATUS_BADGE = { 'Pending Approval': 'pending', 'Approved': 'transit', 'Completed': 'ok' };
 
+/** Any active employee lands here to request a refund. Only the named approval group
+ * (Admin, or the refund_approval_access flag — mirrors has_refund_approval_access() in
+ * 27_refund_request_any_employee.sql) gets the full approve/manage view; everyone else
+ * gets just the request form plus a read-only list of their own submissions. */
+const canApprove = (emp) => emp.role === 'Admin' || !!emp.refund_approval_access;
+
+const REFUND_FORM_FIELDS =
+  '<div class="field"><label>Name *</label><input type="text" name="customerName" required></div>' +
+  '<div class="field"><label>Order ID</label><input type="text" name="orderReference"></div>' +
+  '<div class="field"><label>Date Purchased</label><input type="date" name="purchaseDate"></div>' +
+  '<div class="field"><label>Item</label><input type="text" name="itemDescription"></div>' +
+  '<div class="field"><label>Reason</label><input type="text" name="reason"></div>' +
+  '<div class="field"><label>Refund Method *</label><select name="refundMethod" required><option>GCash</option><option>BDO</option><option>Maya</option><option>BPI</option></select></div>' +
+  '<div class="field"><label>Account Name</label><input type="text" name="accountName" placeholder="Payout account name"></div>' +
+  '<div class="field"><label>Account Number</label><input type="text" name="accountNumber" placeholder="Payout account number"></div>' +
+  '<div class="field"><label>Amount to Refund (PHP) *</label><input type="number" name="refundAmount" step="0.01" min="0.01" required></div>' +
+  '<div class="field"><label>Notes</label><input type="text" name="notes"></div>';
+
+function readRefundForm(f) {
+  return {
+    customerName: f.customerName.value.trim(), orderReference: f.orderReference.value.trim(),
+    purchaseDate: f.purchaseDate.value || null, itemDescription: f.itemDescription.value.trim(),
+    reason: f.reason.value.trim(), refundMethod: f.refundMethod.value,
+    accountName: f.accountName.value.trim(), accountNumber: f.accountNumber.value.trim(),
+    refundAmount: Number(f.refundAmount.value), notes: f.notes.value.trim(),
+  };
+}
+
 const employee = await initShell('refunds');
 if (employee) {
   const root = document.getElementById('refunds-root');
 
-  if (!['Admin', 'Manager'].includes(employee.role)) {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Refund monitoring is restricted to Admin and Manager.</p></div></div>';
+  if (canApprove(employee)) {
+    renderApproverView();
   } else {
+    renderRequesterView();
+  }
+
+  function renderRequesterView() {
     root.innerHTML =
       '<div class="layout-2col">' +
         '<div class="layout-2col-side">' +
           '<div class="card">' +
             '<h3>Add Refund Request</h3>' +
-            '<p class="muted" style="margin-top:-4px;">No photo here — proof-of-payment gets attached after Manager/Admin approval, once it\'s actually paid out.</p>' +
-            '<form id="ref-form" style="flex-direction:column;align-items:stretch;">' +
-              '<div class="field"><label>Name *</label><input type="text" name="customerName" required></div>' +
-              '<div class="field"><label>Order ID</label><input type="text" name="orderReference"></div>' +
-              '<div class="field"><label>Date Purchased</label><input type="date" name="purchaseDate"></div>' +
-              '<div class="field"><label>Item</label><input type="text" name="itemDescription"></div>' +
-              '<div class="field"><label>Reason</label><input type="text" name="reason"></div>' +
-              '<div class="field"><label>Refund Method *</label><select name="refundMethod" required><option>GCash</option><option>BDO</option><option>Maya</option><option>BPI</option></select></div>' +
-              '<div class="field"><label>Account Name</label><input type="text" name="accountName" placeholder="Payout account name"></div>' +
-              '<div class="field"><label>Account Number</label><input type="text" name="accountNumber" placeholder="Payout account number"></div>' +
-              '<div class="field"><label>Amount to Refund (PHP) *</label><input type="number" name="refundAmount" step="0.01" min="0.01" required></div>' +
-              '<div class="field"><label>Refund Date</label><input type="date" name="refundDate"></div>' +
-              '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+            '<p class="muted" style="margin-top:-4px;">Submit here — an approver will review it. No photo needed yet, that comes after approval.</p>' +
+            '<form id="ref-form" style="flex-direction:column;align-items:stretch;">' + REFUND_FORM_FIELDS +
+              '<button class="btn" type="submit">Add Refund Request</button>' +
+            '</form>' +
+          '</div>' +
+        '</div>' +
+        '<div class="layout-2col-main">' +
+          '<h3>My Refund Requests</h3>' +
+          '<div id="ref-list"><div class="muted">Loading…</div></div>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById('ref-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      try {
+        await createRefund(readRefundForm(f));
+        toast('ref-msg', 'Refund request added — pending approval.', false);
+        f.reset();
+        await loadMine();
+      } catch (err) {
+        toast('ref-msg', String(err.message || err), true);
+      }
+    });
+
+    loadMine();
+
+    async function loadMine() {
+      const list = document.getElementById('ref-list');
+      list.innerHTML = '<div class="muted">Loading…</div>';
+      try {
+        const rows = await listRefunds(); // RLS already limits this to the caller's own rows
+        if (!rows.length) { list.innerHTML = '<p class="muted">No refund requests yet.</p>'; return; }
+        list.innerHTML = '<div class="table-scroll"><table><tr><th>Order ID</th><th>Item</th><th>Amount</th><th>Method</th><th>Status</th></tr>' +
+          rows.map((r) =>
+            '<tr>' +
+              '<td data-label="Order ID">' + esc(r.order_reference || '') + '</td>' +
+              '<td data-label="Item">' + esc(r.item_description || '') + '</td>' +
+              '<td data-label="Amount">' + money(r.refund_amount) + '</td>' +
+              '<td data-label="Method">' + esc(r.refund_method) + '</td>' +
+              '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
+            '</tr>'
+          ).join('') + '</table></div>';
+      } catch (err) {
+        list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+      }
+    }
+  }
+
+  function renderApproverView() {
+    root.innerHTML =
+      '<div class="layout-2col">' +
+        '<div class="layout-2col-side">' +
+          '<div class="card">' +
+            '<h3>Add Refund Request</h3>' +
+            '<p class="muted" style="margin-top:-4px;">No photo here — proof-of-payment gets attached after approval, once it\'s actually paid out.</p>' +
+            '<form id="ref-form" style="flex-direction:column;align-items:stretch;">' + REFUND_FORM_FIELDS +
               '<button class="btn" type="submit">Add Refund Request</button>' +
             '</form>' +
           '</div>' +
@@ -65,13 +141,7 @@ if (employee) {
       ev.preventDefault();
       const f = ev.target;
       try {
-        await createRefund({
-          customerName: f.customerName.value.trim(), orderReference: f.orderReference.value.trim(),
-          purchaseDate: f.purchaseDate.value || null, itemDescription: f.itemDescription.value.trim(),
-          reason: f.reason.value.trim(), refundMethod: f.refundMethod.value,
-          accountName: f.accountName.value.trim(), accountNumber: f.accountNumber.value.trim(),
-          refundAmount: Number(f.refundAmount.value), refundDate: f.refundDate.value || null, notes: f.notes.value.trim(),
-        });
+        await createRefund(readRefundForm(f));
         toast('ref-msg', 'Refund request added — pending approval.', false);
         f.reset();
         await load();
@@ -82,7 +152,7 @@ if (employee) {
 
     let allRefunds = [];
     let openAddProofFor = null;
-    await load();
+    load();
 
     document.getElementById('f-search').addEventListener('input', render);
     document.getElementById('f-status').addEventListener('change', render);
@@ -130,7 +200,7 @@ if (employee) {
           const canComplete = r.status === 'Approved' && remaining <= 0;
           return '<tr>' +
             '<td data-label="Customer">' + esc(r.customer_name) +
-              (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
+              (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Requested by ' + esc(r.creator.full_name) + '</div>' : '') +
             '</td>' +
             '<td data-label="Order ID">' + esc(r.order_reference || '') + '</td>' +
             '<td data-label="Date Purchased">' + (r.purchase_date || '—') + '</td>' +

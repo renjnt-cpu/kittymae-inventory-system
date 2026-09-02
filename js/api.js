@@ -330,7 +330,7 @@ export async function listRefunds() {
 /** No photo field here on purpose — a refund starts as a request awaiting Manager/Admin
  * approval, and proof-of-payment photos only make sense once it's actually been paid
  * out, which can't happen before approval. */
-export async function createRefund({ customerName, orderReference, itemDescription, purchaseDate, refundAmount, refundMethod, accountName, accountNumber, reason, refundDate, notes }) {
+export async function createRefund({ customerName, orderReference, itemDescription, purchaseDate, refundAmount, refundMethod, accountName, accountNumber, reason, notes }) {
   const { data: auth } = await supabase.auth.getUser();
   const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
   const { data, error } = await supabase.from('refunds').insert({
@@ -338,7 +338,7 @@ export async function createRefund({ customerName, orderReference, itemDescripti
     item_description: itemDescription || null, purchase_date: purchaseDate || null,
     refund_amount: refundAmount, refund_method: refundMethod || 'GCash',
     account_name: accountName || null, account_number: accountNumber || null,
-    reason: reason || null, refund_date: refundDate || null, notes: notes || null, created_by: emp ? emp.id : null,
+    reason: reason || null, notes: notes || null, created_by: emp ? emp.id : null,
   }).select('id').single();
   if (error) throw new Error(error.message);
   return data.id;
@@ -427,7 +427,7 @@ export async function deleteBranchCapitalEntry(id) {
  * here immediately -- the checklist tracks today's roster, not a snapshot. */
 export async function getEmployeesForChecklist() {
   const { data, error } = await supabase.from('employees')
-    .select('id, full_name, role, position, bills_access, branches(name)')
+    .select('id, full_name, role, position, bills_access, refund_approval_access, branches(name)')
     .neq('role', 'Admin')
     .eq('status', 'Active')
     .order('full_name');

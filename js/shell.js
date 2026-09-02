@@ -31,11 +31,14 @@ export async function initShell(activePage) {
     { id: 'transfers', label: 'Transfers', href: 'transfers.html' },
     { id: 'bills', label: 'Bills', href: 'bills.html' },
   );
+  // Refunds: anyone can request one, so it's not role-gated like the rest of this
+  // block — refunds.html itself shows a simple request form to most people, and the
+  // full approve/manage view only to has_refund_approval_access() accounts.
+  pages.push({ id: 'refunds', label: 'Refunds', href: 'refunds.html' });
   if (['Admin', 'Manager'].includes(employee.role)) {
-    // Payments/Refunds don't fit the per-branch model (a different process, per Ren) —
-    // flat company-wide logs, Admin + Manager only.
+    // Payments doesn't fit the per-branch model (a different process, per Ren) —
+    // flat company-wide log, Admin + Manager only.
     pages.push({ id: 'payments', label: 'Payments', href: 'payments.html' });
-    pages.push({ id: 'refunds', label: 'Refunds', href: 'refunds.html' });
   }
   if (employee.role === 'Admin') {
     pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });

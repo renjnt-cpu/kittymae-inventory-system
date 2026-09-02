@@ -36,7 +36,6 @@ function itemsForEmployee(emp) {
     items.push({ id: 'transfers', label: 'Can approve, ship, and receive transfers anywhere', expect: true });
     items.push({ id: 'branches', label: 'Can see and manage Subasta and Scrap for every branch', expect: true });
     items.push({ id: 'payments', label: 'Can see and add Payments (GCash/Bank Transfer)', expect: true });
-    items.push({ id: 'refunds', label: 'Can see and add Refunds', expect: true });
   } else if (emp.role === 'Branch Supervisor') {
     items.push({ id: 'inventory-own', label: 'Sees inventory for ' + branch, expect: true });
     items.push({ id: 'inventory-other', label: 'Cannot see inventory for other branches', expect: false });
@@ -45,21 +44,28 @@ function itemsForEmployee(emp) {
     items.push({ id: 'transfers', label: 'Can request, ship, and receive transfers involving ' + branch, expect: true });
     items.push({ id: 'branches-own', label: 'Can see and manage Subasta and Scrap for ' + branch, expect: true });
     items.push({ id: 'branches-other', label: 'Cannot see Subasta/Scrap for other branches', expect: false });
-    items.push({ id: 'payments', label: 'Cannot see Payments or Refunds (Admin/Manager only)', expect: false });
+    items.push({ id: 'payments', label: 'Cannot see Payments (Admin/Manager only)', expect: false });
   } else if (emp.role === 'Staff') {
     items.push({ id: 'inventory-own', label: 'Sees inventory for ' + branch, expect: true });
     items.push({ id: 'inventory-other', label: 'Cannot see inventory for other branches', expect: false });
     items.push({ id: 'movement', label: 'Can record Stock In/Out, Damage, Missing at ' + branch, expect: true });
     items.push({ id: 'transfers-view', label: 'Can view transfers involving ' + branch + ', but cannot request or approve them', expect: true });
     items.push({ id: 'branches', label: 'Cannot see Branches (Subasta/Scrap)', expect: false });
-    items.push({ id: 'payments', label: 'Cannot see Payments or Refunds', expect: false });
+    items.push({ id: 'payments', label: 'Cannot see Payments', expect: false });
   } else if (emp.role === 'None') {
     items.push({ id: 'inventory', label: 'Cannot see any branch’s inventory', expect: false });
     items.push({ id: 'movement', label: 'Cannot record any stock movement', expect: false });
     items.push({ id: 'transfers', label: 'Cannot see or act on transfers', expect: false });
     items.push({ id: 'branches', label: 'Cannot see Branches (Subasta/Scrap)', expect: false });
-    items.push({ id: 'payments', label: 'Cannot see Payments or Refunds', expect: false });
+    items.push({ id: 'payments', label: 'Cannot see Payments', expect: false });
   }
+  items.push({
+    id: 'refund-approval',
+    label: emp.refund_approval_access
+      ? 'Can approve and process refund requests (not just submit them)'
+      : 'Can only submit refund requests, cannot approve or process them',
+    expect: true, // either outcome is correct as long as it matches today's refund_approval_access flag
+  });
   items.push({
     id: 'bills',
     label: emp.bills_access ? 'Can see and add Bills' : 'Cannot see the Bills tracker',
