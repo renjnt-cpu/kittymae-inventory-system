@@ -51,6 +51,15 @@ button.btn.small { padding:4px 10px; font-size:12px; }
   .bills-col-recurring { flex:0 0 260px; }
 }
 
+/* Generic 2-column reuse of the same pattern (Add form + main content) for Subasta/Scrap. */
+.layout-2col { display:flex; flex-direction:column; gap:16px; }
+.layout-2col-side, .layout-2col-main { flex:1 1 auto; min-width:0; }
+@media (min-width:960px) {
+  .layout-2col { flex-direction:row; flex-wrap:nowrap; align-items:flex-start; }
+  .layout-2col-side { flex:0 0 300px; }
+  .layout-2col-main { flex:1 1 auto; min-width:0; }
+}
+
 /* Mobile: turn wide data tables into one-field-per-line cards (using each
    <td>'s data-label) instead of forcing horizontal scroll — a scrollbar is easy
    to miss and hides columns like Status or the action buttons entirely on a phone. */

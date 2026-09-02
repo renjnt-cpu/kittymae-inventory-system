@@ -216,6 +216,79 @@ export async function removeBillAttachment(billId, path) {
   if (error) throw new Error(error.message);
 }
 
+// ---- Subasta (auction of unredeemed pawned items) — per branch, Admin/Manager see
+// everything, Branch Supervisor sees/manages only their own branch (RLS-enforced). ----
+
+export async function listSubastaItems() {
+  const { data, error } = await supabase.from('subasta_items')
+    .select('*, creator:employees!subasta_items_created_by_fkey(full_name), branches(name)')
+    .order('auction_eligible_date', { ascending: true, nullsFirst: false });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createSubastaItem({ branchId, itemDescription, pawnReference, pawnDate, auctionEligibleDate, notes }) {
+  const { data: auth } = await supabase.auth.getUser();
+  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const { error } = await supabase.from('subasta_items').insert({
+    branch_id: branchId, item_description: itemDescription,
+    pawn_reference: pawnReference || null, pawn_date: pawnDate || null,
+    auction_eligible_date: auctionEligibleDate || null, notes: notes || null,
+    created_by: emp ? emp.id : null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function updateSubastaItem(id, { branchId, itemDescription, pawnReference, pawnDate, auctionEligibleDate, status, saleDate, salePrice, buyerName, notes }) {
+  const { error } = await supabase.from('subasta_items').update({
+    branch_id: branchId, item_description: itemDescription,
+    pawn_reference: pawnReference || null, pawn_date: pawnDate || null,
+    auction_eligible_date: auctionEligibleDate || null, status,
+    sale_date: saleDate || null, sale_price: salePrice || null, buyer_name: buyerName || null,
+    notes: notes || null, updated_at: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteSubastaItem(id) {
+  const { error } = await supabase.from('subasta_items').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+// ---- Scrap (scrap gold/silver bought in or sold on) — per branch, same access pattern
+// as Subasta. v_scrap_balance sums each branch+metal's running weight on hand. ----
+
+export async function listScrapEntries() {
+  const { data, error } = await supabase.from('scrap_entries')
+    .select('*, creator:employees!scrap_entries_created_by_fkey(full_name), branches(name)')
+    .order('entry_date', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function getScrapBalances() {
+  const { data, error } = await supabase.from('v_scrap_balance').select('*');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createScrapEntry({ branchId, entryDate, entryType, metalType, karat, weightGrams, pricePerGram, totalAmount, source, notes }) {
+  const { data: auth } = await supabase.auth.getUser();
+  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const { error } = await supabase.from('scrap_entries').insert({
+    branch_id: branchId, entry_date: entryDate || new Date().toISOString().slice(0, 10),
+    entry_type: entryType || 'In', metal_type: metalType, karat: karat || null,
+    weight_grams: weightGrams, price_per_gram: pricePerGram || null, total_amount: totalAmount || null,
+    source: source || null, notes: notes || null, created_by: emp ? emp.id : null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteScrapEntry(id) {
+  const { error } = await supabase.from('scrap_entries').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 // ---- Access checklist (Admin-only sign-off record — see access-checklist.html) ----
 
 /** Everyone except Admin, since Admin has full access by definition and isn't

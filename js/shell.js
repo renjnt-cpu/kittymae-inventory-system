@@ -26,6 +26,10 @@ export async function initShell(activePage) {
     { id: 'transfers', label: 'Transfers', href: 'transfers.html' },
     { id: 'bills', label: 'Bills', href: 'bills.html' },
   ];
+  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role)) {
+    pages.push({ id: 'subasta', label: 'Subasta', href: 'subasta.html' });
+    pages.push({ id: 'scrap', label: 'Scrap', href: 'scrap.html' });
+  }
   if (employee.role === 'Admin') {
     pages.push({ id: 'access-checklist', label: 'Access Checklist', href: 'access-checklist.html' });
   }
