@@ -166,6 +166,16 @@ if (employee) {
       }));
     }
 
+    /** Pastel red if any bill due that month is still Unpaid/Overdue, pastel green if
+     * every bill due that month is Paid/Auto-debited, no color if the month has no
+     * bills at all — a quick "does this month still need attention" glance. */
+    function monthOptionStyle(m) {
+      const bills = allBills.filter((b) => b.due_date && b.due_date.slice(0, 7) === m);
+      if (!bills.length) return '';
+      const hasUnpaid = bills.some((b) => b.status === 'Unpaid' || b.status === 'Overdue');
+      return hasUnpaid ? ' style="background:#fdecea;"' : ' style="background:#eaf6ec;"';
+    }
+
     function populateMonthFilter() {
       const sel = document.getElementById('month-filter');
       const current = sel.value;
@@ -174,7 +184,7 @@ if (employee) {
       months.add(now);
       const sorted = Array.from(months).sort();
       sel.innerHTML = '<option value="all">All months</option>' +
-        sorted.map((m) => '<option value="' + m + '"' + (m === now ? ' selected' : '') + '>' + monthLabel(m) + '</option>').join('');
+        sorted.map((m) => '<option value="' + m + '"' + (m === now ? ' selected' : '') + monthOptionStyle(m) + '>' + monthLabel(m) + '</option>').join('');
       if (current && sorted.concat('all').includes(current)) sel.value = current;
     }
 
