@@ -219,13 +219,17 @@ if (employee) {
       list.innerHTML = '<div class="table-scroll"><table><tr><th>Name</th><th>Account Name</th><th>Account Number</th><th>Category</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Recurring</th><th>Notes</th><th>Photo</th><th></th></tr>' +
         rows.map((b) =>
           '<tr data-row-id="' + b.id + '">' +
-            '<td data-label="Name">' + esc(b.name) + '</td>' +
+            '<td data-label="Name">' + esc(b.name) +
+              (b.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(b.creator.full_name) + '</div>' : '') +
+            '</td>' +
             '<td data-label="Account Name">' + esc(b.account_name || '') + '</td>' +
             '<td data-label="Account Number">' + esc(b.account_number || '') + '</td>' +
             '<td data-label="Category">' + esc(b.category) + '</td>' +
             '<td data-label="Amount">' + money(b.amount) + '</td>' +
             '<td data-label="Due Date">' + (b.due_date || '—') + '</td>' +
-            '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[b.status] || 'pending') + '">' + esc(b.status) + '</span></td>' +
+            '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[b.status] || 'pending') + '">' + esc(b.status) + '</span>' +
+              (b.payer ? '<div class="muted" style="font-size:10px;margin-top:2px;">Paid by ' + esc(b.payer.full_name) + '</div>' : '') +
+            '</td>' +
             '<td data-label="Recurring">' + (b.is_recurring ? 'Monthly' : '—') + '</td>' +
             '<td data-label="Notes">' + esc(b.notes || '') + '</td>' +
             '<td data-label="Photo">' + (b.attachment_path ? '<button class="btn small secondary" data-id="' + b.id + '" data-act="view-photo">View Photo</button>' : '—') + '</td>' +

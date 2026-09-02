@@ -129,7 +129,9 @@ export async function cancelTransfer(transferId, reason) {
 // Admin-only, plain CRUD since there's no concurrency to protect against here) ----
 
 export async function listBills() {
-  const { data, error } = await supabase.from('bills').select('*').order('due_date', { ascending: true, nullsFirst: false });
+  const { data, error } = await supabase.from('bills')
+    .select('*, creator:employees!bills_created_by_fkey(full_name), payer:employees!bills_paid_by_fkey(full_name)')
+    .order('due_date', { ascending: true, nullsFirst: false });
   if (error) throw new Error(error.message);
   return data;
 }
@@ -152,6 +154,13 @@ export async function createBill({ name, category, accountName, accountNumber, a
 export async function setBillStatus(id, status) {
   const patch = { status, updated_at: new Date().toISOString() };
   patch.paid_date = status === 'Paid' ? new Date().toISOString().slice(0, 10) : null;
+  if (status === 'Paid') {
+    const { data: auth } = await supabase.auth.getUser();
+    const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+    patch.paid_by = emp ? emp.id : null;
+  } else {
+    patch.paid_by = null;
+  }
   const { error } = await supabase.from('bills').update(patch).eq('id', id);
   if (error) throw new Error(error.message);
 }
