@@ -29,11 +29,13 @@ export async function initShell(activePage) {
   if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role)) {
     pages.push({ id: 'branches', label: 'Branches', href: 'branches.html' });
   }
-  if (employee.role === 'Admin') {
+  if (['Admin', 'Manager'].includes(employee.role)) {
     // Payments/Refunds don't fit the per-branch model (a different process, per Ren) —
-    // Admin-only for now, pending Ren's call on whether Manager should also see these.
+    // flat company-wide logs, Admin + Manager only.
     pages.push({ id: 'payments', label: 'Payments', href: 'payments.html' });
     pages.push({ id: 'refunds', label: 'Refunds', href: 'refunds.html' });
+  }
+  if (employee.role === 'Admin') {
     pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });
     pages.push({ id: 'access-checklist', label: 'Access Checklist', href: 'access-checklist.html' });
   }

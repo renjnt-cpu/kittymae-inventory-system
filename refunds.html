@@ -23,8 +23,8 @@ const employee = await initShell('refunds');
 if (employee) {
   const root = document.getElementById('refunds-root');
 
-  if (employee.role !== 'Admin') {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Refund monitoring is restricted to Admin.</p></div></div>';
+  if (!['Admin', 'Manager'].includes(employee.role)) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Refund monitoring is restricted to Admin and Manager.</p></div></div>';
   } else {
     root.innerHTML =
       '<div class="layout-2col">' +
