@@ -32,14 +32,20 @@ if (employee) {
     const branchOptions = (selected) => branches.map((b) =>
       '<option value="' + b.id + '"' + (b.id === selected ? ' selected' : '') + '>' + esc(b.name) + '</option>'
     ).join('');
+    // null = All Branches (Admin/Manager only — Branch Supervisor is always locked to their own).
+    let selectedBranch = isScoped ? employee.branch_id : null;
 
     root.innerHTML =
+      '<div class="card">' +
+        '<h3>Branch</h3>' +
+        '<div id="branch-buttons" style="display:flex;gap:8px;flex-wrap:wrap;"></div>' +
+      '</div>' +
       '<div class="layout-2col">' +
         '<div class="layout-2col-side">' +
           '<div class="card">' +
             '<h3>Add Scrap Entry</h3>' +
             '<form id="scrap-form" style="flex-direction:column;align-items:stretch;">' +
-              '<div class="field"><label>Branch *</label><select name="branchId" required' + (isScoped ? ' disabled' : '') + '>' + branchOptions(isScoped ? employee.branch_id : null) + '</select></div>' +
+              '<div class="field"><label>Branch *</label><select name="branchId" required>' + branchOptions(isScoped ? employee.branch_id : null) + '</select></div>' +
               '<div class="field"><label>Date</label><input type="date" name="entryDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
               '<div class="field"><label>Type *</label><select name="entryType"><option value="In">In (bought from customer)</option><option value="Out">Out (sold to refiner)</option></select></div>' +
               '<div class="field"><label>Metal *</label><select name="metalType" required><option>Gold</option><option>Silver</option></select></div>' +
@@ -59,7 +65,6 @@ if (employee) {
           '<div class="card">' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
               '<div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="f-search" placeholder="Source, notes…"></div>' +
-              (isScoped ? '' : '<div class="field"><label>Branch</label><select id="f-branch"><option value="all">All Branches</option>' + branchOptions() + '</select></div>') +
               '<div class="field"><label>Metal</label><select id="f-metal"><option value="all">All</option><option>Gold</option><option>Silver</option></select></div>' +
               '<div class="field"><label>Type</label><select id="f-type"><option value="all">All</option><option>In</option><option>Out</option></select></div>' +
               '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
@@ -69,12 +74,16 @@ if (employee) {
         '</div>' +
       '</div>';
 
+    const branchForm = document.getElementById('scrap-form');
+    renderBranchButtons();
+    syncFormBranch();
+
     document.getElementById('scrap-form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const f = ev.target;
       try {
         await createScrapEntry({
-          branchId: isScoped ? employee.branch_id : Number(f.branchId.value),
+          branchId: Number(f.branchId.value),
           entryDate: f.entryDate.value, entryType: f.entryType.value, metalType: f.metalType.value,
           karat: f.karat.value.trim(), weightGrams: Number(f.weightGrams.value),
           pricePerGram: f.pricePerGram.value ? Number(f.pricePerGram.value) : null,
@@ -84,6 +93,7 @@ if (employee) {
         toast('scrap-msg', 'Entry added.', false);
         f.reset();
         f.entryDate.value = new Date().toISOString().slice(0, 10);
+        syncFormBranch();
         await load();
       } catch (err) {
         toast('scrap-msg', String(err.message || err), true);
@@ -93,15 +103,37 @@ if (employee) {
     let allEntries = [];
     await load();
 
-    ['f-search'].forEach((id) => document.getElementById(id).addEventListener('input', render));
-    ['f-branch', 'f-metal', 'f-type'].forEach((id) => { const el = document.getElementById(id); if (el) el.addEventListener('change', render); });
+    document.getElementById('f-search').addEventListener('input', render);
+    document.getElementById('f-metal').addEventListener('change', render);
+    document.getElementById('f-type').addEventListener('change', render);
     document.getElementById('f-clear').addEventListener('click', () => {
       document.getElementById('f-search').value = '';
-      if (document.getElementById('f-branch')) document.getElementById('f-branch').value = 'all';
       document.getElementById('f-metal').value = 'all';
       document.getElementById('f-type').value = 'all';
       render();
     });
+
+    function renderBranchButtons() {
+      const box = document.getElementById('branch-buttons');
+      const options = isScoped ? branches.filter((b) => b.id === employee.branch_id) : [{ id: null, name: 'All Branches' }, ...branches];
+      box.innerHTML = options.map((b) =>
+        '<button type="button" class="btn ' + (b.id === selectedBranch ? '' : 'secondary') + '" data-id="' + b.id + '">' + esc(b.name) + '</button>'
+      ).join('');
+      box.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', async () => {
+        selectedBranch = btn.dataset.id === 'null' ? null : Number(btn.dataset.id);
+        renderBranchButtons();
+        syncFormBranch();
+        await load();
+      }));
+    }
+
+    /** Add-form's branch always follows the active tab — picking "All Branches" leaves
+     * it free to choose; picking one branch locks the form to that branch. */
+    function syncFormBranch() {
+      const sel = branchForm.branchId;
+      if (selectedBranch !== null) { sel.value = String(selectedBranch); sel.disabled = true; }
+      else { sel.disabled = isScoped; if (isScoped) sel.value = String(employee.branch_id); }
+    }
 
     async function load() {
       const list = document.getElementById('scrap-list');
@@ -118,32 +150,29 @@ if (employee) {
 
     function renderBalance(balances) {
       const box = document.getElementById('scrap-balance');
-      if (!balances.length) { box.innerHTML = '<p class="muted">No scrap recorded yet.</p>'; return; }
-      const rows = isScoped ? balances.filter((b) => b.branch_id === employee.branch_id) : balances;
-      box.innerHTML = '<div class="table-scroll"><table><tr><th>Branch</th><th>Metal</th><th>Balance</th></tr>' +
-        rows.map((b) => '<tr><td data-label="Branch">' + esc(branchById[b.branch_id] || '') + '</td><td data-label="Metal">' + esc(b.metal_type) + '</td><td data-label="Balance">' + weight(b.balance_grams) + '</td></tr>').join('') +
+      const rows = selectedBranch === null ? balances : balances.filter((b) => b.branch_id === selectedBranch);
+      if (!rows.length) { box.innerHTML = '<p class="muted">No scrap recorded yet.</p>'; return; }
+      box.innerHTML = '<div class="table-scroll"><table><tr>' + (selectedBranch === null ? '<th>Branch</th>' : '') + '<th>Metal</th><th>Balance</th></tr>' +
+        rows.map((b) => '<tr>' + (selectedBranch === null ? '<td data-label="Branch">' + esc(branchById[b.branch_id] || '') + '</td>' : '') + '<td data-label="Metal">' + esc(b.metal_type) + '</td><td data-label="Balance">' + weight(b.balance_grams) + '</td></tr>').join('') +
         '</table></div>';
     }
 
     function render() {
-      let rows = allEntries;
+      let rows = selectedBranch === null ? allEntries : allEntries.filter((r) => r.branch_id === selectedBranch);
       const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
-      const fBranchEl = document.getElementById('f-branch');
-      const fBranch = fBranchEl ? fBranchEl.value : 'all';
       const fMetal = document.getElementById('f-metal').value;
       const fType = document.getElementById('f-type').value;
 
       if (fSearch) rows = rows.filter((r) => (r.source || '').toLowerCase().includes(fSearch) || (r.notes || '').toLowerCase().includes(fSearch));
-      if (fBranch !== 'all') rows = rows.filter((r) => String(r.branch_id) === fBranch);
       if (fMetal !== 'all') rows = rows.filter((r) => r.metal_type === fMetal);
       if (fType !== 'all') rows = rows.filter((r) => r.entry_type === fType);
 
       const list = document.getElementById('scrap-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No scrap entries for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Branch</th><th>Date</th><th>Type</th><th>Metal</th><th>Karat</th><th>Weight</th><th>Price/g</th><th>Total</th><th>Source</th><th>Notes</th><th></th></tr>' +
+      list.innerHTML = '<div class="table-scroll"><table><tr>' + (selectedBranch === null ? '<th>Branch</th>' : '') + '<th>Date</th><th>Type</th><th>Metal</th><th>Karat</th><th>Weight</th><th>Price/g</th><th>Total</th><th>Source</th><th>Notes</th><th></th></tr>' +
         rows.map((r) =>
           '<tr>' +
-            '<td data-label="Branch">' + esc(r.branches?.name || '') + '</td>' +
+            (selectedBranch === null ? '<td data-label="Branch">' + esc(r.branches?.name || '') + '</td>' : '') +
             '<td data-label="Date">' + (r.entry_date || '—') + '</td>' +
             '<td data-label="Type"><span class="badge ' + (r.entry_type === 'In' ? 'ok' : 'pending') + '">' + esc(r.entry_type) + '</span></td>' +
             '<td data-label="Metal">' + esc(r.metal_type) + '</td>' +
