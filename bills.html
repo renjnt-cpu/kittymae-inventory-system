@@ -226,9 +226,9 @@ if (employee) {
 
       const list = document.getElementById('bill-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No bills for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Name</th><th>Account Name</th><th>Account Number</th><th>Category</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Recurring</th><th>Notes</th><th>Photo</th><th></th></tr>' +
-        rows.map((b) =>
-          '<tr data-row-id="' + b.id + '">' +
+
+      function rowHtml(b) {
+        return '<tr data-row-id="' + b.id + '">' +
             '<td data-label="Name">' + esc(b.name) +
               (b.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(b.creator.full_name) + '</div>' : '') +
             '</td>' +
@@ -249,8 +249,24 @@ if (employee) {
               '<button class="btn small secondary" data-id="' + b.id + '" data-act="delete">Delete</button>' +
             '</td>' +
           '</tr>' +
-          '<tr class="edit-row" data-edit-for="' + b.id + '" style="display:none;"><td colspan="11"></td></tr>'
-        ).join('') + '</table></div>';
+          '<tr class="edit-row" data-edit-for="' + b.id + '" style="display:none;"><td colspan="11"></td></tr>';
+      }
+
+      function sectionHtml(sectionRows) {
+        if (!sectionRows.length) return '<p class="muted">None.</p>';
+        return '<div class="table-scroll"><table><tr><th>Name</th><th>Account Name</th><th>Account Number</th><th>Category</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Recurring</th><th>Notes</th><th>Photo</th><th></th></tr>' +
+          sectionRows.map(rowHtml).join('') + '</table></div>';
+      }
+
+      // Split into two clearly separate sections so unpaid bills never get lost among
+      // already-settled ones — that was the whole point of the request.
+      const unpaidRows = rows.filter((b) => b.status === 'Unpaid' || b.status === 'Overdue');
+      const paidRows = rows.filter((b) => b.status === 'Paid' || b.status === 'Auto-debited');
+      list.innerHTML =
+        '<h3 style="color:var(--warn);">Unpaid / Overdue (' + unpaidRows.length + ')</h3>' +
+        sectionHtml(unpaidRows) +
+        '<h3 style="color:var(--ok);margin-top:22px;">Paid / Auto-debited (' + paidRows.length + ')</h3>' +
+        sectionHtml(paidRows);
 
       list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
         const id = btn.dataset.id;
