@@ -31,6 +31,7 @@ export async function initShell(activePage) {
     pages.push({ id: 'scrap', label: 'Scrap', href: 'scrap.html' });
   }
   if (employee.role === 'Admin') {
+    pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });
     pages.push({ id: 'access-checklist', label: 'Access Checklist', href: 'access-checklist.html' });
   }
 

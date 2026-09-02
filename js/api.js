@@ -289,6 +289,38 @@ export async function deleteScrapEntry(id) {
   if (error) throw new Error(error.message);
 }
 
+// ---- Branch Capital (money Ren injects into a branch — the inverse of Bills) ----
+// Admin-only, same access model as Bills.
+
+export async function listBranchCapitalEntries() {
+  const { data, error } = await supabase.from('branch_capital_entries')
+    .select('*, creator:employees!branch_capital_entries_created_by_fkey(full_name), branches(name)')
+    .order('entry_date', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function getBranchCapitalBalances() {
+  const { data, error } = await supabase.from('v_branch_capital_balance').select('*');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createBranchCapitalEntry({ branchId, entryDate, amount, purpose, notes }) {
+  const { data: auth } = await supabase.auth.getUser();
+  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const { error } = await supabase.from('branch_capital_entries').insert({
+    branch_id: branchId, entry_date: entryDate || new Date().toISOString().slice(0, 10),
+    amount, purpose: purpose || null, notes: notes || null, created_by: emp ? emp.id : null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteBranchCapitalEntry(id) {
+  const { error } = await supabase.from('branch_capital_entries').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 // ---- Access checklist (Admin-only sign-off record — see access-checklist.html) ----
 
 /** Everyone except Admin, since Admin has full access by definition and isn't

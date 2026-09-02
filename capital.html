@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Branch Capital — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main>
+  <div id="cap-msg"></div>
+  <div id="capital-root"></div>
+</main>
+
+<script type="module">
+import { initShell, toast, esc } from './js/shell.js';
+import { getBranches, listBranchCapitalEntries, getBranchCapitalBalances, createBranchCapitalEntry, deleteBranchCapitalEntry } from './js/api.js';
+
+const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+
+const employee = await initShell('capital');
+if (employee) {
+  const root = document.getElementById('capital-root');
+
+  if (employee.role !== 'Admin') {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Capital tracking is restricted to Admin.</p></div></div>';
+  } else {
+    const branches = await getBranches();
+    const branchById = Object.fromEntries(branches.map((b) => [b.id, b.name]));
+    const branchOptions = (selected) => branches.map((b) =>
+      '<option value="' + b.id + '"' + (b.id === selected ? ' selected' : '') + '>' + esc(b.name) + '</option>'
+    ).join('');
+
+    root.innerHTML =
+      '<div class="layout-2col">' +
+        '<div class="layout-2col-side">' +
+          '<div class="card">' +
+            '<h3>Add Capital Entry</h3>' +
+            '<p class="muted" style="margin-top:-4px;">Money put into a branch — working capital, float, or other funding.</p>' +
+            '<form id="cap-form" style="flex-direction:column;align-items:stretch;">' +
+              '<div class="field"><label>Branch *</label><select name="branchId" required>' + branchOptions() + '</select></div>' +
+              '<div class="field"><label>Date</label><input type="date" name="entryDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
+              '<div class="field"><label>Amount (PHP) *</label><input type="number" name="amount" step="0.01" required></div>' +
+              '<div class="field"><label>Purpose</label><input type="text" name="purpose" placeholder="Working capital, float, restock…"></div>' +
+              '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+              '<button class="btn" type="submit">Add Entry</button>' +
+            '</form>' +
+          '</div>' +
+        '</div>' +
+        '<div class="layout-2col-main">' +
+          '<h3>Total Capital <span class="muted" style="font-weight:normal;">— per branch</span></h3>' +
+          '<div class="tiles" id="cap-tiles"></div>' +
+          '<div class="card">' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+              '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Purpose, notes…"></div>' +
+              '<div class="field"><label>Branch</label><select id="f-branch"><option value="all">All Branches</option>' + branchOptions() + '</select></div>' +
+              '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="cap-list"><div class="muted">Loading…</div></div>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById('cap-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      try {
+        await createBranchCapitalEntry({
+          branchId: Number(f.branchId.value), entryDate: f.entryDate.value,
+          amount: Number(f.amount.value), purpose: f.purpose.value.trim(), notes: f.notes.value.trim(),
+        });
+        toast('cap-msg', 'Entry added.', false);
+        f.reset();
+        f.entryDate.value = new Date().toISOString().slice(0, 10);
+        await load();
+      } catch (err) {
+        toast('cap-msg', String(err.message || err), true);
+      }
+    });
+
+    let allEntries = [];
+    await load();
+
+    document.getElementById('f-search').addEventListener('input', render);
+    document.getElementById('f-branch').addEventListener('change', render);
+    document.getElementById('f-clear').addEventListener('click', () => {
+      document.getElementById('f-search').value = '';
+      document.getElementById('f-branch').value = 'all';
+      render();
+    });
+
+    async function load() {
+      const list = document.getElementById('cap-list');
+      list.innerHTML = '<div class="muted">Loading…</div>';
+      try {
+        const [entries, balances] = await Promise.all([listBranchCapitalEntries(), getBranchCapitalBalances()]);
+        allEntries = entries;
+        renderTiles(balances);
+        render();
+      } catch (err) {
+        list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+      }
+    }
+
+    function renderTiles(balances) {
+      const box = document.getElementById('cap-tiles');
+      if (!balances.length) { box.innerHTML = '<p class="muted">No capital entries yet.</p>'; return; }
+      box.innerHTML = balances.map((b) => tile(money(b.total_capital), branchById[b.branch_id] || 'Branch #' + b.branch_id)).join('');
+    }
+
+    function render() {
+      let rows = allEntries;
+      const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
+      const fBranch = document.getElementById('f-branch').value;
+
+      if (fSearch) rows = rows.filter((r) => (r.purpose || '').toLowerCase().includes(fSearch) || (r.notes || '').toLowerCase().includes(fSearch));
+      if (fBranch !== 'all') rows = rows.filter((r) => String(r.branch_id) === fBranch);
+
+      const list = document.getElementById('cap-list');
+      if (!rows.length) { list.innerHTML = '<p class="muted">No capital entries for this filter.</p>'; return; }
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Branch</th><th>Date</th><th>Amount</th><th>Purpose</th><th>Notes</th><th></th></tr>' +
+        rows.map((r) =>
+          '<tr>' +
+            '<td data-label="Branch">' + esc(r.branches?.name || '') + '</td>' +
+            '<td data-label="Date">' + (r.entry_date || '—') + '</td>' +
+            '<td data-label="Amount">' + money(r.amount) +
+              (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
+            '</td>' +
+            '<td data-label="Purpose">' + esc(r.purpose || '') + '</td>' +
+            '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
+            '<td data-label="Actions" style="white-space:nowrap;"><button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button></td>' +
+          '</tr>'
+        ).join('') + '</table></div>';
+
+      list.querySelectorAll('[data-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
+        if (!confirm('Delete this capital entry?')) return;
+        try { await deleteBranchCapitalEntry(btn.dataset.id); toast('cap-msg', 'Deleted.', false); await load(); }
+        catch (err) { toast('cap-msg', String(err.message || err), true); }
+      }));
+    }
+
+    function tile(num, label) { return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>'; }
+  }
+}
+</script>
+</body>
+</html>
