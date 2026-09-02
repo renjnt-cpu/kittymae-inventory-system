@@ -14,7 +14,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { getBranches, listRefunds, createRefund, setRefundStatus, deleteRefund, uploadRefundAttachment, getRefundAttachmentUrl } from './js/api.js';
+import { listRefunds, createRefund, setRefundStatus, deleteRefund, uploadRefundAttachment, getRefundAttachmentUrl } from './js/api.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const STATUS_BADGE = { Pending: 'pending', Completed: 'ok' };
@@ -23,18 +23,10 @@ const employee = await initShell('refunds');
 if (employee) {
   const root = document.getElementById('refunds-root');
 
-  if (!['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role)) {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Refund monitoring is restricted to Admin, Manager, or Branch Supervisor accounts.</p></div></div>';
+  if (employee.role !== 'Admin') {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Refund monitoring is restricted to Admin.</p></div></div>';
   } else {
-    const isScoped = employee.role === 'Branch Supervisor';
-    const branches = await getBranches();
-    let selectedBranch = isScoped ? employee.branch_id : null; // null = All Branches
-
     root.innerHTML =
-      '<div class="card">' +
-        '<h3>Branch</h3>' +
-        '<div id="branch-buttons" style="display:flex;gap:8px;flex-wrap:wrap;"></div>' +
-      '</div>' +
       '<div class="layout-2col">' +
         '<div class="layout-2col-side">' +
           '<div class="card">' +
@@ -66,20 +58,17 @@ if (employee) {
         '</div>' +
       '</div>';
 
-    renderBranchButtons();
-
     document.getElementById('ref-form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const f = ev.target;
-      if (selectedBranch === null) { toast('ref-msg', 'Pick a branch first.', true); return; }
       try {
         const newId = await createRefund({
-          branchId: selectedBranch, customerName: f.customerName.value.trim(),
-          orderReference: f.orderReference.value.trim(), itemDescription: f.itemDescription.value.trim(),
-          refundAmount: Number(f.refundAmount.value), refundMethod: f.refundMethod.value,
-          reason: f.reason.value.trim(), refundDate: f.refundDate.value || null, notes: f.notes.value.trim(),
+          customerName: f.customerName.value.trim(), orderReference: f.orderReference.value.trim(),
+          itemDescription: f.itemDescription.value.trim(), refundAmount: Number(f.refundAmount.value),
+          refundMethod: f.refundMethod.value, reason: f.reason.value.trim(),
+          refundDate: f.refundDate.value || null, notes: f.notes.value.trim(),
         });
-        if (f.attachment.files[0]) await uploadRefundAttachment(selectedBranch, newId, f.attachment.files[0]);
+        if (f.attachment.files[0]) await uploadRefundAttachment(newId, f.attachment.files[0]);
         toast('ref-msg', 'Refund added.', false);
         f.reset();
         await load();
@@ -99,19 +88,6 @@ if (employee) {
       render();
     });
 
-    function renderBranchButtons() {
-      const box = document.getElementById('branch-buttons');
-      const options = isScoped ? branches.filter((b) => b.id === employee.branch_id) : [{ id: null, name: 'All Branches' }, ...branches];
-      box.innerHTML = options.map((b) =>
-        '<button type="button" class="btn ' + (b.id === selectedBranch ? '' : 'secondary') + '" data-id="' + b.id + '">' + esc(b.name) + '</button>'
-      ).join('');
-      box.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', async () => {
-        selectedBranch = btn.dataset.id === 'null' ? null : Number(btn.dataset.id);
-        renderBranchButtons();
-        await load();
-      }));
-    }
-
     async function load() {
       const list = document.getElementById('ref-list');
       list.innerHTML = '<div class="muted">Loading…</div>';
@@ -124,7 +100,7 @@ if (employee) {
     }
 
     function render() {
-      let rows = selectedBranch === null ? allRefunds : allRefunds.filter((r) => r.branch_id === selectedBranch);
+      let rows = allRefunds;
       const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
       const fStatus = document.getElementById('f-status').value;
       if (fSearch) rows = rows.filter((r) =>
@@ -140,10 +116,9 @@ if (employee) {
 
       const list = document.getElementById('ref-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No refunds for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr>' + (selectedBranch === null ? '<th>Branch</th>' : '') + '<th>Customer</th><th>Order Ref</th><th>Item</th><th>Amount</th><th>Method</th><th>Reason</th><th>Status</th><th>Date</th><th>Photo</th><th></th></tr>' +
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Customer</th><th>Order Ref</th><th>Item</th><th>Amount</th><th>Method</th><th>Reason</th><th>Status</th><th>Date</th><th>Photo</th><th></th></tr>' +
         rows.map((r) =>
           '<tr>' +
-            (selectedBranch === null ? '<td data-label="Branch">' + esc(r.branches?.name || '') + '</td>' : '') +
             '<td data-label="Customer">' + esc(r.customer_name) +
               (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
             '</td>' +

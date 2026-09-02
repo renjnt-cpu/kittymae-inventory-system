@@ -294,17 +294,17 @@ export async function deleteScrapEntry(id) {
 
 export async function listPayments() {
   const { data, error } = await supabase.from('payment_transactions')
-    .select('*, creator:employees!payment_transactions_created_by_fkey(full_name), branches(name)')
+    .select('*, creator:employees!payment_transactions_created_by_fkey(full_name)')
     .order('transaction_date', { ascending: false });
   if (error) throw new Error(error.message);
   return data;
 }
 
-export async function createPayment({ branchId, method, transactionDate, amount, referenceNumber, payerName, notes }) {
+export async function createPayment({ method, transactionDate, amount, referenceNumber, payerName, notes }) {
   const { data: auth } = await supabase.auth.getUser();
   const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
   const { error } = await supabase.from('payment_transactions').insert({
-    branch_id: branchId, method, transaction_date: transactionDate || new Date().toISOString().slice(0, 10),
+    method, transaction_date: transactionDate || new Date().toISOString().slice(0, 10),
     amount, reference_number: referenceNumber || null, payer_name: payerName || null,
     notes: notes || null, created_by: emp ? emp.id : null,
   });
@@ -321,17 +321,17 @@ export async function deletePayment(id) {
 
 export async function listRefunds() {
   const { data, error } = await supabase.from('refunds')
-    .select('*, creator:employees!refunds_created_by_fkey(full_name), branches(name)')
+    .select('*, creator:employees!refunds_created_by_fkey(full_name)')
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return data;
 }
 
-export async function createRefund({ branchId, customerName, orderReference, itemDescription, refundAmount, refundMethod, reason, refundDate, notes }) {
+export async function createRefund({ customerName, orderReference, itemDescription, refundAmount, refundMethod, reason, refundDate, notes }) {
   const { data: auth } = await supabase.auth.getUser();
   const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
   const { data, error } = await supabase.from('refunds').insert({
-    branch_id: branchId, customer_name: customerName, order_reference: orderReference || null,
+    customer_name: customerName, order_reference: orderReference || null,
     item_description: itemDescription || null, refund_amount: refundAmount, refund_method: refundMethod || 'Cash',
     reason: reason || null, refund_date: refundDate || null, notes: notes || null, created_by: emp ? emp.id : null,
   }).select('id').single();
@@ -353,8 +353,8 @@ export async function deleteRefund(id) {
   if (error) throw new Error(error.message);
 }
 
-export async function uploadRefundAttachment(branchId, refundId, file) {
-  const path = branchId + '/' + refundId + '/' + Date.now() + '_' + file.name;
+export async function uploadRefundAttachment(refundId, file) {
+  const path = refundId + '/' + Date.now() + '_' + file.name;
   const { error: upErr } = await supabase.storage.from('refund-attachments').upload(path, file, { upsert: true });
   if (upErr) throw new Error(upErr.message);
   const { error: updErr } = await supabase.from('refunds')

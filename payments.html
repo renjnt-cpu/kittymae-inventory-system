@@ -14,7 +14,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { getBranches, listPayments, createPayment, deletePayment } from './js/api.js';
+import { listPayments, createPayment, deletePayment } from './js/api.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
@@ -22,18 +22,10 @@ const employee = await initShell('payments');
 if (employee) {
   const root = document.getElementById('payments-root');
 
-  if (!['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role)) {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Payments monitoring is restricted to Admin, Manager, or Branch Supervisor accounts.</p></div></div>';
+  if (employee.role !== 'Admin') {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Payments monitoring is restricted to Admin.</p></div></div>';
   } else {
-    const isScoped = employee.role === 'Branch Supervisor';
-    const branches = await getBranches();
-    let selectedBranch = isScoped ? employee.branch_id : null; // null = All Branches
-
     root.innerHTML =
-      '<div class="card">' +
-        '<h3>Branch</h3>' +
-        '<div id="branch-buttons" style="display:flex;gap:8px;flex-wrap:wrap;"></div>' +
-      '</div>' +
       '<div class="layout-2col">' +
         '<div class="layout-2col-side">' +
           '<div class="card">' +
@@ -62,16 +54,12 @@ if (employee) {
         '</div>' +
       '</div>';
 
-    const payForm = document.getElementById('pay-form');
-    renderBranchButtons();
-
     document.getElementById('pay-form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const f = ev.target;
-      if (selectedBranch === null) { toast('pay-msg', 'Pick a branch first.', true); return; }
       try {
         await createPayment({
-          branchId: selectedBranch, method: f.method.value, transactionDate: f.transactionDate.value,
+          method: f.method.value, transactionDate: f.transactionDate.value,
           amount: Number(f.amount.value), referenceNumber: f.referenceNumber.value.trim(),
           payerName: f.payerName.value.trim(), notes: f.notes.value.trim(),
         });
@@ -95,19 +83,6 @@ if (employee) {
       render();
     });
 
-    function renderBranchButtons() {
-      const box = document.getElementById('branch-buttons');
-      const options = isScoped ? branches.filter((b) => b.id === employee.branch_id) : [{ id: null, name: 'All Branches' }, ...branches];
-      box.innerHTML = options.map((b) =>
-        '<button type="button" class="btn ' + (b.id === selectedBranch ? '' : 'secondary') + '" data-id="' + b.id + '">' + esc(b.name) + '</button>'
-      ).join('');
-      box.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', async () => {
-        selectedBranch = btn.dataset.id === 'null' ? null : Number(btn.dataset.id);
-        renderBranchButtons();
-        await load();
-      }));
-    }
-
     async function load() {
       const list = document.getElementById('pay-list');
       list.innerHTML = '<div class="muted">Loading…</div>';
@@ -120,7 +95,7 @@ if (employee) {
     }
 
     function render() {
-      let rows = selectedBranch === null ? allPayments : allPayments.filter((p) => p.branch_id === selectedBranch);
+      let rows = allPayments;
       const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
       const fMethod = document.getElementById('f-method').value;
       if (fSearch) rows = rows.filter((p) =>
@@ -137,10 +112,9 @@ if (employee) {
 
       const list = document.getElementById('pay-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No payments for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr>' + (selectedBranch === null ? '<th>Branch</th>' : '') + '<th>Date</th><th>Method</th><th>Amount</th><th>Reference</th><th>Payer</th><th>Notes</th><th></th></tr>' +
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Date</th><th>Method</th><th>Amount</th><th>Reference</th><th>Payer</th><th>Notes</th><th></th></tr>' +
         rows.map((p) =>
           '<tr>' +
-            (selectedBranch === null ? '<td data-label="Branch">' + esc(p.branches?.name || '') + '</td>' : '') +
             '<td data-label="Date">' + (p.transaction_date || '—') + '</td>' +
             '<td data-label="Method"><span class="badge ' + (p.method === 'GCash' ? 'transit' : 'ok') + '">' + esc(p.method) + '</span></td>' +
             '<td data-label="Amount">' + money(p.amount) +
