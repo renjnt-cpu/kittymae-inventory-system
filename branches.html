@@ -165,7 +165,7 @@ if (employee) {
       }
     });
 
-    let allSubasta = [], allScrap = [];
+    let allSubasta = [], allScrap = [], branchBalances = [];
     await Promise.all([loadSubasta(), loadScrap()]);
     subscribeToChanges('subasta_items', loadSubasta);
     subscribeToChanges('scrap_entries', loadScrap);
@@ -331,7 +331,7 @@ if (employee) {
       try {
         const [entries, balances] = await Promise.all([listScrapEntries(), getScrapBalances()]);
         allScrap = entries.filter((r) => r.branch_id === selectedBranch);
-        renderScrapBalance(balances.filter((b) => b.branch_id === selectedBranch));
+        branchBalances = balances.filter((b) => b.branch_id === selectedBranch);
         renderScrap();
       } catch (err) {
         list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
@@ -340,7 +340,7 @@ if (employee) {
 
     function renderScrapBalance(rows) {
       const box = document.getElementById('scrap-balance');
-      if (!rows.length) { box.innerHTML = '<p class="muted">No scrap recorded yet.</p>'; return; }
+      if (!rows.length) { box.innerHTML = '<p class="muted">No scrap recorded for this filter.</p>'; return; }
       box.innerHTML = '<div class="table-scroll"><table><tr><th>Metal</th><th>Balance</th></tr>' +
         rows.map((b) => '<tr><td data-label="Metal">' + esc(b.metal_type) + '</td><td data-label="Balance">' + weight(b.balance_grams) + '</td></tr>').join('') +
         '</table></div>';
@@ -355,10 +355,18 @@ if (employee) {
       if (fMetal !== 'all') rows = rows.filter((r) => r.metal_type === fMetal);
       if (fType !== 'all') rows = rows.filter((r) => r.entry_type === fType);
 
+      renderScrapBalance(fMetal === 'all' ? branchBalances : branchBalances.filter((b) => b.metal_type === fMetal));
+
+      // Always broken out by metal (Gold/Silver) regardless of the Metal filter above,
+      // which is for the entries list below -- this tile row is its own always-visible
+      // side-by-side breakdown, unaffected by the filter's else-hides-the-other-metal
+      // behavior.
       const todayStr = new Date().toISOString().slice(0, 10);
-      const purchasedToday = rows.filter((r) => r.entry_type === 'In' && r.entry_date === todayStr)
-        .reduce((s, r) => s + Number(r.total_amount || 0), 0);
-      document.getElementById('scrap-tiles').innerHTML = tile(money(purchasedToday), 'Purchased Today');
+      document.getElementById('scrap-tiles').innerHTML = ['Gold', 'Silver'].map((m) => {
+        const total = allScrap.filter((r) => r.entry_type === 'In' && r.entry_date === todayStr && r.metal_type === m)
+          .reduce((s, r) => s + Number(r.total_amount || 0), 0);
+        return tile(money(total), 'Purchased Today (' + m + ')');
+      }).join('');
 
       const list = document.getElementById('scrap-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No scrap entries for this filter.</p>'; return; }
