@@ -295,6 +295,14 @@ export async function getScrapBalances() {
   return data;
 }
 
+/** Scrap-purpose Branch Capital minus net cash spent/received on Scrap -- see
+ * v_scrap_cash_balance (43_scrap_cash_balance.sql) for the running-balance formula. */
+export async function getScrapCashBalances() {
+  const { data, error } = await supabase.from('v_scrap_cash_balance').select('*');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 /** Returns the new entry's id so a photo picked in the same Add form submit can be
  * uploaded and linked right after it's created (mirrors bills' attachment flow). */
 export async function createScrapEntry({ branchId, entryDate, entryType, metalType, karat, weightGrams, pricePerGram, totalAmount, customerName, contactNumber, paymentMethod, source, notes }) {

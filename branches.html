@@ -17,7 +17,7 @@ import { initShell, toast, esc } from './js/shell.js';
 import {
   getBranches,
   listSubastaItems, createSubastaItem, updateSubastaItem, deleteSubastaItem,
-  listScrapEntries, getScrapBalances, createScrapEntry, deleteScrapEntry, uploadScrapAttachment, getScrapAttachmentUrl,
+  listScrapEntries, getScrapBalances, getScrapCashBalances, createScrapEntry, deleteScrapEntry, uploadScrapAttachment, getScrapAttachmentUrl,
   subscribeToChanges,
 } from './js/api.js';
 
@@ -185,10 +185,10 @@ if (employee) {
       }
     });
 
-    let allSubasta = [], allScrap = [], branchBalances = [];
+    let allSubasta = [], allScrap = [], branchBalances = [], scrapCashBalances = [];
     await Promise.all([loadSubasta(), loadScrap()]);
     subscribeToChanges('subasta_items', loadSubasta);
-    subscribeToChanges('scrap_entries', loadScrap);
+    subscribeToChanges(['scrap_entries', 'branch_capital_entries'], loadScrap);
 
     document.getElementById('sub-f-search').addEventListener('input', renderSubasta);
     document.getElementById('sub-f-status').addEventListener('change', renderSubasta);
@@ -361,9 +361,10 @@ if (employee) {
       const list = document.getElementById('scrap-list');
       list.innerHTML = '<div class="muted">Loading…</div>';
       try {
-        const [entries, balances] = await Promise.all([listScrapEntries(), getScrapBalances()]);
+        const [entries, balances, cashBalances] = await Promise.all([listScrapEntries(), getScrapBalances(), getScrapCashBalances()]);
         allScrap = entries.filter((r) => r.branch_id === selectedBranch);
         branchBalances = balances.filter((b) => b.branch_id === selectedBranch);
+        scrapCashBalances = cashBalances;
         renderScrap();
       } catch (err) {
         list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
@@ -405,9 +406,21 @@ if (employee) {
         byMetalKarat[key] = (byMetalKarat[key] || 0) + Number(r.total_amount || 0);
       });
       const keys = Object.keys(byMetalKarat).sort();
-      document.getElementById('scrap-tiles').innerHTML = keys.length
+      let tilesHtml = keys.length
         ? keys.map((k) => tile(money(byMetalKarat[k]), 'Purchased Today (' + k + ')')).join('')
         : tile(money(0), 'Purchased Today');
+
+      // Branch Capital's "Scrap" purpose entries minus net cash spent/received buying
+      // scrap -- only meaningful where the viewer actually has Branch Capital visibility
+      // for this branch (Admin/Manager/Sales Executive see every branch; Branch
+      // Supervisor only their own), so it's hidden rather than shown wrong for anyone else.
+      const canSeeScrapCash = ['Admin', 'Manager'].includes(employee.role) || employee.position === 'Sales Executive' ||
+        (isScoped && selectedBranch === employee.branch_id);
+      if (canSeeScrapCash) {
+        const cashRow = scrapCashBalances.find((b) => b.branch_id === selectedBranch);
+        tilesHtml += tile(money(cashRow ? cashRow.remaining_scrap_cash : 0), 'Remaining Scrap Cash');
+      }
+      document.getElementById('scrap-tiles').innerHTML = tilesHtml;
 
       const list = document.getElementById('scrap-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No scrap entries for this filter.</p>'; return; }
