@@ -484,11 +484,16 @@ if (employee) {
             // above the transaction table, not in any individual row.
             headerText = text.slice(0, 2000);
           }
-          parsedRows = parsed;
-          parsedSkipped = skipped;
+          // Only credit rows (money received) ever need FB Name/Customer/Order ID --
+          // debit rows (bills, outgoing transfers) aren't tied to a customer order, so
+          // they're excluded from import rather than importing something reconciliation
+          // will never touch. Detection still looks at the FULL parsed set, though,
+          // since a debit row's "Transfer from X" can be part of the owner-number signal.
           const creditCount = parsed.filter((r) => r.credit != null).length;
           const debitCount = parsed.filter((r) => r.debit != null).length;
           const unclear = parsed.filter((r) => r.credit == null && r.debit == null).length;
+          parsedRows = parsed.filter((r) => r.credit != null);
+          parsedSkipped = skipped;
 
           let detectNote = '';
           const detectedId = detectAccountId(headerText, parsed, allAccounts);
@@ -499,11 +504,11 @@ if (employee) {
           }
 
           preview.innerHTML = detectNote +
-            '<p class="muted">Parsed ' + parsed.length + ' row(s) — ' + creditCount + ' credit, ' + debitCount + ' debit' +
-            (unclear ? ', ' + unclear + ' unclear (check these after import)' : '') +
-            (skipped ? ', ' + skipped + ' skipped (blank)' : '') + '.</p>' +
+            '<p class="muted">Parsed ' + parsed.length + ' row(s) — ' + creditCount + ' credit, ' + debitCount + ' debit (excluded)' +
+            (unclear ? ', ' + unclear + ' unclear (excluded)' : '') +
+            (skipped ? ', ' + skipped + ' skipped (blank)' : '') + '. Only the ' + creditCount + ' credit row(s) will be imported.</p>' +
             (isDocx ? '<p class="muted" style="font-size:11px;">Debit/Credit inferred from the balance for Word imports — worth spot-checking a few rows.</p>' : '') +
-            '<button class="btn small" type="button" id="import-confirm">Import ' + parsed.length + ' Row(s)</button>';
+            '<button class="btn small" type="button" id="import-confirm"' + (parsedRows.length ? '' : ' disabled') + '>Import ' + parsedRows.length + ' Row(s)</button>';
           document.getElementById('import-confirm').addEventListener('click', async () => {
             try {
               const count = await importTransactions(Number(document.getElementById('import-account').value), parsedRows);
