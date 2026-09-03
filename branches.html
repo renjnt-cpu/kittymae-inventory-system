@@ -56,6 +56,7 @@ if (employee) {
         '<div class="layout-2col-side">' +
           '<div class="card">' +
             '<h3>Add Subasta Item</h3>' +
+            '<div id="sub-write-note"></div>' +
             '<form id="sub-form" style="flex-direction:column;align-items:stretch;">' +
               '<div class="field"><label>Item Description *</label><input type="text" name="itemDescription" required></div>' +
               '<div class="field"><label>Pawn Reference</label><input type="text" name="pawnReference"></div>' +
@@ -84,6 +85,7 @@ if (employee) {
         '<div class="layout-2col-side">' +
           '<div class="card">' +
             '<h3>Add Scrap Entry</h3>' +
+            '<div id="scrap-write-note"></div>' +
             '<form id="scrap-form" style="flex-direction:column;align-items:stretch;">' +
               '<div class="field"><label>Date</label><input type="date" name="entryDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
               '<div class="field"><label>Type *</label><select name="entryType"><option value="In">In (bought from customer)</option><option value="Out">Out (sold to refiner)</option></select></div>' +
@@ -176,8 +178,10 @@ if (employee) {
 
     function renderBranchButtons() {
       const box = document.getElementById('branch-buttons');
-      const options = isScoped ? branches.filter((b) => b.id === employee.branch_id) : branches;
-      box.innerHTML = options.map((b) =>
+      // Everyone can now VIEW every branch here — Branch Supervisor just can't ADD for
+      // a branch that isn't theirs (the write RLS policy already rejects that; this just
+      // disables the form instead of letting them hit a confusing error).
+      box.innerHTML = branches.map((b) =>
         '<button type="button" class="btn ' + (b.id === selectedBranch ? '' : 'secondary') + '" data-id="' + b.id + '">' + esc(b.name) + '</button>'
       ).join('');
       box.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', async () => {
@@ -188,6 +192,11 @@ if (employee) {
       const label = ' — ' + branchName(selectedBranch);
       document.getElementById('sub-branch-label').textContent = label;
       document.getElementById('scrap-branch-label').textContent = label;
+
+      const canWriteHere = !isScoped || selectedBranch === employee.branch_id;
+      document.querySelectorAll('#sub-form button[type="submit"], #scrap-form button[type="submit"]').forEach((btn) => { btn.disabled = !canWriteHere; });
+      const note = canWriteHere ? '' : '<p class="muted" style="font-size:11px;">View only — you can only add items for ' + esc(branchName(employee.branch_id)) + '.</p>';
+      document.querySelectorAll('#sub-write-note, #scrap-write-note').forEach((el) => { el.innerHTML = note; });
     }
 
     async function loadSubasta() {

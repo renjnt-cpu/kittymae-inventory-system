@@ -27,8 +27,10 @@ import { getBranches, getInventory, subscribeToChanges } from './js/api.js';
 const employee = await initShell('dashboard');
 if (employee) {
   const branches = await getBranches();
-  // Branch Supervisor/Staff are locked to their own branch (RLS enforces this server-side
-  // too — this is just so the UI doesn't even offer branches they can't see).
+  // Everyone can now VIEW every branch (read access is open on the underlying tables) —
+  // Branch Supervisor/Staff just default to their own branch first since that's most
+  // relevant to them day to day. Recording a movement still only works at your own
+  // branch (movement.html / record_inventory_transaction() enforce that separately).
   const isScoped = employee.role === 'Branch Supervisor' || employee.role === 'Staff';
   let selectedBranch = isScoped ? employee.branch_id : null; // null = All Branches
 
@@ -40,7 +42,7 @@ if (employee) {
 
   function renderBranchButtons() {
     const box = document.getElementById('branch-buttons');
-    const options = isScoped ? branches.filter((b) => b.id === employee.branch_id) : [{ id: null, name: 'All Branches' }, ...branches];
+    const options = [{ id: null, name: 'All Branches' }, ...branches];
     box.innerHTML = options.map((b) =>
       '<button class="btn ' + (b.id === selectedBranch ? '' : 'secondary') + '" data-id="' + b.id + '">' + esc(b.name) + '</button>'
     ).join('');

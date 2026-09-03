@@ -46,13 +46,25 @@ export async function initShell(activePage) {
     pages.push({ id: 'access-checklist', label: 'Access Checklist', href: 'access-checklist.html' });
   }
 
+  // 2-month cooldown between name changes (mirrors update_my_name()'s own server-side
+  // check — this is just so the button doesn't invite a click that's just going to be
+  // rejected).
+  let nameEditLocked = false, nameEditUnlockDate = null;
+  if (employee.name_changed_at) {
+    const unlock = new Date(employee.name_changed_at);
+    unlock.setMonth(unlock.getMonth() + 2);
+    if (unlock > new Date()) { nameEditLocked = true; nameEditUnlockDate = unlock; }
+  }
+
   const header = document.createElement('header');
   header.innerHTML = '<h1>💎 Kittymae Jewels System</h1>' +
     '<div class="who">' +
       '<span id="who-display">' + esc(employee.full_name) + ' · ' + esc(employee.role) +
         (employee.branch_id ? ' · Branch #' + employee.branch_id : ' · All Branches') +
       '</span>' +
-      ' <button class="btn small secondary" id="edit-name-btn">Edit Name</button>' +
+      (nameEditLocked
+        ? ' <span class="muted" style="font-size:11px;">(can rename ' + nameEditUnlockDate.toISOString().slice(0, 10) + ')</span>'
+        : ' <button class="btn small secondary" id="edit-name-btn">Edit Name</button>') +
       ' <button class="btn small secondary" id="signout-btn">Sign out</button>' +
     '</div>';
 
@@ -66,7 +78,7 @@ export async function initShell(activePage) {
   header.querySelector('#signout-btn').addEventListener('click', signOut);
 
   const whoEl = header.querySelector('.who');
-  header.querySelector('#edit-name-btn').addEventListener('click', () => {
+  if (header.querySelector('#edit-name-btn')) header.querySelector('#edit-name-btn').addEventListener('click', () => {
     const display = header.querySelector('#who-display');
     const editBtn = header.querySelector('#edit-name-btn');
     display.style.display = 'none';
@@ -87,7 +99,17 @@ export async function initShell(activePage) {
         await updateMyName(newName);
         employee.full_name = newName;
         display.textContent = newName + ' · ' + employee.role + (employee.branch_id ? ' · Branch #' + employee.branch_id : ' · All Branches');
-        cleanup();
+        // Locked for the next 2 months now — replace the button with that note instead
+        // of restoring it, so the header matches what a fresh page load would show.
+        const unlock = new Date();
+        unlock.setMonth(unlock.getMonth() + 2);
+        const lockedNote = document.createElement('span');
+        lockedNote.className = 'muted';
+        lockedNote.style.fontSize = '11px';
+        lockedNote.textContent = '(can rename ' + unlock.toISOString().slice(0, 10) + ')';
+        editBtn.replaceWith(lockedNote);
+        form.remove();
+        display.style.display = '';
       } catch (err) {
         alert(String(err.message || err));
       }
