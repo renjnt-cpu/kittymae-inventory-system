@@ -157,37 +157,44 @@ async function parseDocxStatement(file) {
 
   const candidateRows = [];
 
-  // Every table row anywhere in the document, including inside a floating text box.
-  const tables = doc.getElementsByTagNameNS(W_NS, 'tbl');
-  for (const tbl of tables) {
-    const trs = tbl.getElementsByTagNameNS(W_NS, 'tr');
-    for (const tr of trs) {
-      const tcs = Array.from(tr.childNodes).filter((n) => n.localName === 'tc');
-      candidateRows.push(tcs.map(docxCellText));
-    }
-  }
-
-  // Body-level paragraphs (not inside any table cell) that use tab stops to fake
-  // columns -- a conversion artifact seen for at least one row in every real sample.
-  const allParagraphs = doc.getElementsByTagNameNS(W_NS, 'p');
-  for (const p of allParagraphs) {
-    let insideCell = false;
-    for (let anc = p.parentNode; anc; anc = anc.parentNode) {
-      if (anc.localName === 'tc') { insideCell = true; break; }
-    }
-    if (insideCell) continue;
-    if (p.getElementsByTagNameNS(W_NS, 'tab').length === 0) continue;
-
-    const segments = [''];
-    for (const child of p.childNodes) {
-      if (child.localName !== 'r') continue;
-      for (const rChild of child.childNodes) {
-        if (rChild.localName === 'tab') segments.push('');
-        else if (rChild.localName === 't') segments[segments.length - 1] += rChild.textContent;
+  // Single depth-first walk in true document order -- rows must be collected in the
+  // order they actually occur, not "every table row, then every paragraph row",
+  // otherwise a tab-separated row sitting between two tables gets compared against
+  // the wrong prior balance when inferring debit vs credit.
+  function walkForRows(node) {
+    for (const child of node.childNodes) {
+      if (child.nodeType !== 1) continue;
+      if (child.localName === 'tbl') {
+        const trs = child.getElementsByTagNameNS(W_NS, 'tr');
+        for (const tr of trs) {
+          const tcs = Array.from(tr.childNodes).filter((n) => n.localName === 'tc');
+          candidateRows.push(tcs.map(docxCellText));
+        }
+        continue; // cells' own paragraphs never contain a loose transaction row
       }
+      if (child.localName === 'p') {
+        if (child.getElementsByTagNameNS(W_NS, 'tbl').length > 0) {
+          walkForRows(child); // a floating table anchored inside this paragraph's runs
+          continue;
+        }
+        if (child.getElementsByTagNameNS(W_NS, 'tab').length > 0) {
+          const segments = [''];
+          for (const rNode of child.childNodes) {
+            if (rNode.localName !== 'r') continue;
+            for (const rChild of rNode.childNodes) {
+              if (rChild.localName === 'tab') segments.push('');
+              else if (rChild.localName === 't') segments[segments.length - 1] += rChild.textContent;
+            }
+          }
+          candidateRows.push(segments.map((s) => s.trim()));
+        }
+        continue;
+      }
+      walkForRows(child);
     }
-    candidateRows.push(segments.map((s) => s.trim()));
   }
+  const body = doc.getElementsByTagNameNS(W_NS, 'body')[0];
+  if (body) walkForRows(body);
 
   // Seed the running balance from "STARTING BALANCE ... 35,929.58" wherever it appears.
   const flatText = xmlText.replace(/<[^>]+>/g, ' ');
