@@ -19,6 +19,24 @@ import { listRefunds, createRefund, setRefundStatus, deleteRefund, addRefundAtta
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const STATUS_BADGE = { 'Pending Approval': 'pending', 'Approved': 'transit', 'Completed': 'ok' };
 
+/** Same customer name + same Order ID appearing on more than one refund is almost
+ * always either an accidental double-submission or someone trying to claim a refund
+ * twice — flag it in red wherever that name shows up, across every status, so an
+ * approver notices before paying it out twice. */
+function duplicateKeySet(rows) {
+  const counts = {};
+  rows.forEach((r) => {
+    const key = r.customer_name.trim().toLowerCase() + '|' + (r.order_reference || '').trim().toLowerCase();
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  return new Set(Object.keys(counts).filter((k) => counts[k] > 1));
+}
+function nameOrderLabel(r, dupKeys) {
+  const key = r.customer_name.trim().toLowerCase() + '|' + (r.order_reference || '').trim().toLowerCase();
+  const text = esc(r.customer_name) + ' — ' + esc(r.order_reference || '(no Order ID)');
+  return dupKeys.has(key) ? '<span style="color:var(--warn);font-weight:bold;" title="Possible duplicate: same name + Order ID appears more than once">' + text + ' ⚠</span>' : text;
+}
+
 /** Any active employee lands here to request a refund. Only the named approval group
  * (Admin, or the refund_approval_access flag — mirrors has_refund_approval_access() in
  * 27_refund_request_any_employee.sql) gets the full approve/manage view; everyone else
@@ -109,11 +127,12 @@ if (employee) {
     function renderMine() {
       const list = document.getElementById('ref-list');
       if (!myRows.length) { list.innerHTML = '<p class="muted">No refund requests yet.</p>'; return; }
+      const dupKeys = duplicateKeySet(myRows);
       list.innerHTML = myRows.map((r) => {
         const isOpen = openMineId === r.id;
         return '<div class="completed-item">' +
           '<button type="button" class="completed-orderid" data-toggle-mine="' + r.id + '">' +
-            esc(r.customer_name) + ' — ' + esc(r.order_reference || '(no Order ID)') +
+            nameOrderLabel(r, dupKeys) +
             ' <span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '" style="font-weight:normal;">' + esc(r.status) + '</span>' +
           '</button>' +
           (isOpen ? '<div class="completed-detail">' +
@@ -215,11 +234,12 @@ if (employee) {
       if (q) completed = completed.filter((r) => (r.order_reference || '').toLowerCase().includes(q));
       if (!completed.length) { box.innerHTML = '<p class="muted">No completed refunds yet.</p>'; return; }
 
+      const dupKeys = duplicateKeySet(allRefunds);
       box.innerHTML = completed.map((r) => {
         const photos = r.refund_attachments || [];
         const isOpen = openCompletedId === r.id;
         return '<div class="completed-item">' +
-          '<button type="button" class="completed-orderid" data-toggle-completed="' + r.id + '">' + esc(r.customer_name) + ' — ' + esc(r.order_reference || '(no Order ID)') + '</button>' +
+          '<button type="button" class="completed-orderid" data-toggle-completed="' + r.id + '">' + nameOrderLabel(r, dupKeys) + '</button>' +
           (isOpen ? '<div class="completed-detail">' +
             '<div><b>Customer:</b> ' + esc(r.customer_name) + '</div>' +
             '<div><b>Item:</b> ' + esc(r.item_description || '—') + '</div>' +
@@ -281,6 +301,7 @@ if (employee) {
       // just Name + Order ID up front on both mobile and desktop, full details only
       // once you click in, instead of a wide table of columns most of which you don't
       // need at a glance.
+      const dupKeys = duplicateKeySet(allRefunds);
       list.innerHTML = rows.map((r) => {
         const photos = r.refund_attachments || [];
         const paidSoFar = photos.reduce((s, a) => s + Number(a.amount || 0), 0);
@@ -290,7 +311,7 @@ if (employee) {
         const isOpen = openActiveId === r.id;
         return '<div class="completed-item">' +
           '<button type="button" class="completed-orderid" data-toggle-active="' + r.id + '">' +
-            esc(r.customer_name) + ' — ' + esc(r.order_reference || '(no Order ID)') +
+            nameOrderLabel(r, dupKeys) +
             ' <span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '" style="font-weight:normal;">' + esc(r.status) + '</span>' +
           '</button>' +
           (isOpen ? '<div class="completed-detail">' +

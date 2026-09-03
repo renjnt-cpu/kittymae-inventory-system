@@ -41,8 +41,12 @@ export async function initShell(activePage) {
     pages.push({ id: 'payments', label: 'Payments', href: 'payments.html' });
     pages.push({ id: 'assets', label: 'Asset & Supplies Custodian', href: 'assets.html' });
   }
-  if (employee.role === 'Admin') {
+  if (['Admin', 'Branch Supervisor'].includes(employee.role)) {
+    // Branch Supervisor gets a view-only version of their own branch's balance (see
+    // capital.html's isAdmin split) — so they can check funds before buying scrap.
     pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });
+  }
+  if (employee.role === 'Admin') {
     pages.push({ id: 'access-checklist', label: 'Access Checklist', href: 'access-checklist.html' });
   }
 

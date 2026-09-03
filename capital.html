@@ -22,9 +22,10 @@ const employee = await initShell('capital');
 if (employee) {
   const root = document.getElementById('capital-root');
 
-  if (employee.role !== 'Admin') {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Capital tracking is restricted to Admin.</p></div></div>';
+  if (!['Admin', 'Branch Supervisor'].includes(employee.role)) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Capital tracking is restricted to Admin (full) and Branch Supervisor (view own branch only).</p></div></div>';
   } else {
+    const isAdmin = employee.role === 'Admin';
     const branches = await getBranches();
     const branchById = Object.fromEntries(branches.map((b) => [b.id, b.name]));
     const branchOptions = (selected) => branches.map((b) =>
@@ -33,27 +34,29 @@ if (employee) {
 
     root.innerHTML =
       '<div class="layout-2col">' +
-        '<div class="layout-2col-side">' +
-          '<div class="card">' +
-            '<h3>Add Capital Entry</h3>' +
-            '<p class="muted" style="margin-top:-4px;">Money put into a branch — working capital, float, or other funding.</p>' +
-            '<form id="cap-form" style="flex-direction:column;align-items:stretch;">' +
-              '<div class="field"><label>Branch *</label><select name="branchId" required>' + branchOptions() + '</select></div>' +
-              '<div class="field"><label>Date</label><input type="date" name="entryDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
-              '<div class="field"><label>Amount (PHP) *</label><input type="number" name="amount" step="0.01" required></div>' +
-              '<div class="field"><label>Purpose</label><input type="text" name="purpose" placeholder="Working capital, float, restock…"></div>' +
-              '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
-              '<button class="btn" type="submit">Add Entry</button>' +
-            '</form>' +
-          '</div>' +
-        '</div>' +
+        (isAdmin ?
+          '<div class="layout-2col-side">' +
+            '<div class="card">' +
+              '<h3>Add Capital Entry</h3>' +
+              '<p class="muted" style="margin-top:-4px;">Money put into a branch — working capital, float, or other funding.</p>' +
+              '<form id="cap-form" style="flex-direction:column;align-items:stretch;">' +
+                '<div class="field"><label>Branch *</label><select name="branchId" required>' + branchOptions() + '</select></div>' +
+                '<div class="field"><label>Date</label><input type="date" name="entryDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
+                '<div class="field"><label>Amount (PHP) *</label><input type="number" name="amount" step="0.01" required></div>' +
+                '<div class="field"><label>Purpose</label><input type="text" name="purpose" placeholder="Working capital, float, restock…"></div>' +
+                '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+                '<button class="btn" type="submit">Add Entry</button>' +
+              '</form>' +
+            '</div>' +
+          '</div>'
+        : '') +
         '<div class="layout-2col-main">' +
           '<h3>Total Capital <span class="muted" style="font-weight:normal;">— per branch</span></h3>' +
           '<div class="tiles" id="cap-tiles"></div>' +
           '<div class="card">' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
               '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Purpose, notes…"></div>' +
-              '<div class="field"><label>Branch</label><select id="f-branch"><option value="all">All Branches</option>' + branchOptions() + '</select></div>' +
+              (isAdmin ? '<div class="field"><label>Branch</label><select id="f-branch"><option value="all">All Branches</option>' + branchOptions() + '</select></div>' : '') +
               '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
             '</div>' +
           '</div>' +
@@ -61,7 +64,7 @@ if (employee) {
         '</div>' +
       '</div>';
 
-    document.getElementById('cap-form').addEventListener('submit', async (ev) => {
+    if (isAdmin) document.getElementById('cap-form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const f = ev.target;
       try {
@@ -83,10 +86,10 @@ if (employee) {
     subscribeToChanges('branch_capital_entries', load);
 
     document.getElementById('f-search').addEventListener('input', render);
-    document.getElementById('f-branch').addEventListener('change', render);
+    if (isAdmin) document.getElementById('f-branch').addEventListener('change', render);
     document.getElementById('f-clear').addEventListener('click', () => {
       document.getElementById('f-search').value = '';
-      document.getElementById('f-branch').value = 'all';
+      if (isAdmin) document.getElementById('f-branch').value = 'all';
       render();
     });
 
@@ -112,14 +115,14 @@ if (employee) {
     function render() {
       let rows = allEntries;
       const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
-      const fBranch = document.getElementById('f-branch').value;
+      const fBranch = isAdmin ? document.getElementById('f-branch').value : 'all';
 
       if (fSearch) rows = rows.filter((r) => (r.purpose || '').toLowerCase().includes(fSearch) || (r.notes || '').toLowerCase().includes(fSearch));
       if (fBranch !== 'all') rows = rows.filter((r) => String(r.branch_id) === fBranch);
 
       const list = document.getElementById('cap-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No capital entries for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Branch</th><th>Date</th><th>Amount</th><th>Purpose</th><th>Notes</th><th></th></tr>' +
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Branch</th><th>Date</th><th>Amount</th><th>Purpose</th><th>Notes</th>' + (isAdmin ? '<th></th>' : '') + '</tr>' +
         rows.map((r) =>
           '<tr>' +
             '<td data-label="Branch">' + esc(r.branches?.name || '') + '</td>' +
@@ -129,7 +132,7 @@ if (employee) {
             '</td>' +
             '<td data-label="Purpose">' + esc(r.purpose || '') + '</td>' +
             '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
-            '<td data-label="Actions" style="white-space:nowrap;"><button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button></td>' +
+            (isAdmin ? '<td data-label="Actions" style="white-space:nowrap;"><button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button></td>' : '') +
           '</tr>'
         ).join('') + '</table></div>';
 

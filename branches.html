@@ -58,7 +58,9 @@ if (employee) {
             '<h3>Add Subasta Item</h3>' +
             '<div id="sub-write-note"></div>' +
             '<form id="sub-form" style="flex-direction:column;align-items:stretch;">' +
+              '<div class="field"><label>Customer Name</label><input type="text" name="customerName"></div>' +
               '<div class="field"><label>Item Description *</label><input type="text" name="itemDescription" required></div>' +
+              '<div class="field"><label>Weight (grams)</label><input type="number" name="weightGrams" step="0.001" min="0"></div>' +
               '<div class="field"><label>Pawn Reference</label><input type="text" name="pawnReference"></div>' +
               '<div class="field"><label>Pawn Date</label><input type="date" name="pawnDate"></div>' +
               '<div class="field"><label>Auction Eligible Date</label><input type="date" name="auctionEligibleDate"></div>' +
@@ -122,7 +124,8 @@ if (employee) {
       const f = ev.target;
       try {
         await createSubastaItem({
-          branchId: selectedBranch, itemDescription: f.itemDescription.value.trim(),
+          branchId: selectedBranch, customerName: f.customerName.value.trim(),
+          itemDescription: f.itemDescription.value.trim(), weightGrams: f.weightGrams.value ? Number(f.weightGrams.value) : null,
           pawnReference: f.pawnReference.value.trim(), pawnDate: f.pawnDate.value || null,
           auctionEligibleDate: f.auctionEligibleDate.value || null, notes: f.notes.value.trim(),
         });
@@ -227,12 +230,14 @@ if (employee) {
 
       const list = document.getElementById('sub-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No subasta items for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Item</th><th>Pawn Ref</th><th>Pawn Date</th><th>Eligible Date</th><th>Status</th><th>Sale Date</th><th>Sale Price</th><th>Buyer</th><th>Notes</th><th></th></tr>' +
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Customer</th><th>Item</th><th>Weight</th><th>Pawn Ref</th><th>Pawn Date</th><th>Eligible Date</th><th>Status</th><th>Sale Date</th><th>Sale Price</th><th>Buyer</th><th>Notes</th><th></th></tr>' +
         rows.map((r) =>
           '<tr data-row-id="' + r.id + '">' +
+            '<td data-label="Customer">' + esc(r.customer_name || '') + '</td>' +
             '<td data-label="Item">' + esc(r.item_description) +
               (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
             '</td>' +
+            '<td data-label="Weight">' + (r.weight_grams ? Number(r.weight_grams).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g' : '—') + '</td>' +
             '<td data-label="Pawn Ref">' + esc(r.pawn_reference || '') + '</td>' +
             '<td data-label="Pawn Date">' + (r.pawn_date || '—') + '</td>' +
             '<td data-label="Eligible Date">' + (r.auction_eligible_date || '—') + '</td>' +
@@ -246,7 +251,7 @@ if (employee) {
               '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' +
             '</td>' +
           '</tr>' +
-          '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="10"></td></tr>'
+          '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="12"></td></tr>'
         ).join('') + '</table></div>';
 
       list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
@@ -270,7 +275,9 @@ if (employee) {
       cell.querySelector('td').innerHTML =
         '<form class="edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
           '<div class="field"><label>Branch</label><select name="branchId"' + (isScoped ? ' disabled' : '') + '>' + branchOptions(r.branch_id) + '</select></div>' +
+          '<div class="field"><label>Customer Name</label><input type="text" name="customerName" value="' + esc(r.customer_name || '') + '"></div>' +
           '<div class="field" style="min-width:200px;"><label>Item Description</label><input type="text" name="itemDescription" value="' + esc(r.item_description) + '" required></div>' +
+          '<div class="field"><label>Weight (grams)</label><input type="number" name="weightGrams" step="0.001" min="0" value="' + (r.weight_grams ?? '') + '"></div>' +
           '<div class="field"><label>Pawn Reference</label><input type="text" name="pawnReference" value="' + esc(r.pawn_reference || '') + '"></div>' +
           '<div class="field"><label>Pawn Date</label><input type="date" name="pawnDate" value="' + (r.pawn_date || '') + '"></div>' +
           '<div class="field"><label>Auction Eligible Date</label><input type="date" name="auctionEligibleDate" value="' + (r.auction_eligible_date || '') + '"></div>' +
@@ -290,7 +297,9 @@ if (employee) {
         try {
           await updateSubastaItem(id, {
             branchId: isScoped ? employee.branch_id : Number(f.branchId.value),
-            itemDescription: f.itemDescription.value.trim(), pawnReference: f.pawnReference.value.trim(),
+            customerName: f.customerName.value.trim(),
+            itemDescription: f.itemDescription.value.trim(), weightGrams: f.weightGrams.value ? Number(f.weightGrams.value) : null,
+            pawnReference: f.pawnReference.value.trim(),
             pawnDate: f.pawnDate.value || null, auctionEligibleDate: f.auctionEligibleDate.value || null,
             status: f.status.value, saleDate: f.saleDate.value || null,
             salePrice: f.salePrice.value ? Number(f.salePrice.value) : null,

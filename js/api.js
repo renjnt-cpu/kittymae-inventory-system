@@ -244,22 +244,22 @@ export async function listSubastaItems() {
   return data;
 }
 
-export async function createSubastaItem({ branchId, itemDescription, pawnReference, pawnDate, auctionEligibleDate, notes }) {
+export async function createSubastaItem({ branchId, customerName, itemDescription, weightGrams, pawnReference, pawnDate, auctionEligibleDate, notes }) {
   const { data: auth } = await supabase.auth.getUser();
   const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
   const { error } = await supabase.from('subasta_items').insert({
-    branch_id: branchId, item_description: itemDescription,
-    pawn_reference: pawnReference || null, pawn_date: pawnDate || null,
+    branch_id: branchId, customer_name: customerName || null, item_description: itemDescription,
+    weight_grams: weightGrams || null, pawn_reference: pawnReference || null, pawn_date: pawnDate || null,
     auction_eligible_date: auctionEligibleDate || null, notes: notes || null,
     created_by: emp ? emp.id : null,
   });
   if (error) throw new Error(error.message);
 }
 
-export async function updateSubastaItem(id, { branchId, itemDescription, pawnReference, pawnDate, auctionEligibleDate, status, saleDate, salePrice, buyerName, notes }) {
+export async function updateSubastaItem(id, { branchId, customerName, itemDescription, weightGrams, pawnReference, pawnDate, auctionEligibleDate, status, saleDate, salePrice, buyerName, notes }) {
   const { error } = await supabase.from('subasta_items').update({
-    branch_id: branchId, item_description: itemDescription,
-    pawn_reference: pawnReference || null, pawn_date: pawnDate || null,
+    branch_id: branchId, customer_name: customerName || null, item_description: itemDescription,
+    weight_grams: weightGrams || null, pawn_reference: pawnReference || null, pawn_date: pawnDate || null,
     auction_eligible_date: auctionEligibleDate || null, status,
     sale_date: saleDate || null, sale_price: salePrice || null, buyer_name: buyerName || null,
     notes: notes || null, updated_at: new Date().toISOString(),
