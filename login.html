@@ -12,17 +12,39 @@
     <h2>💎 Kittymae Jewels System</h2>
     <p class="muted">Sign in with your Google account to continue.</p>
     <button class="btn" id="google-btn">Sign in with Google</button>
+
+    <p class="muted" style="margin:16px 0 8px;">— or —</p>
+    <form id="id-form" style="flex-direction:column;align-items:stretch;gap:8px;max-width:220px;margin:0 auto;">
+      <div class="field"><label>ID Number</label><input type="text" id="id-number" placeholder="e.g. MK24006" required></div>
+      <div class="field"><label>Password</label><input type="password" id="id-password" required></div>
+      <button class="btn secondary" type="submit">Sign In</button>
+    </form>
+
     <div id="msg" style="margin-top:16px;"></div>
   </div>
 </div>
 
 <script type="module">
 import { supabase } from './js/supabaseClient.js';
-import { signInWithGoogle, linkEmployee } from './js/auth.js';
+import { signInWithGoogle, signInWithIdPassword, linkEmployee } from './js/auth.js';
 
 document.getElementById('google-btn').addEventListener('click', async () => {
   try { await signInWithGoogle(); }
   catch (err) { showError(String(err.message || err)); }
+});
+
+document.getElementById('id-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const idNumber = document.getElementById('id-number').value;
+  const password = document.getElementById('id-password').value;
+  try {
+    await signInWithIdPassword(idNumber, password);
+    await linkEmployee();
+    window.location.href = 'dashboard.html';
+  } catch (err) {
+    const msg = String(err.message || err);
+    showError(msg.startsWith('NOT_REGISTERED') ? 'That ID number isn\'t registered.' : msg.startsWith('INACTIVE') ? 'This account is inactive.' : msg.includes('Invalid login credentials') ? 'Incorrect ID number or password.' : msg);
+  }
 });
 
 function showError(text) {

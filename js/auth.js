@@ -10,6 +10,17 @@ export async function signInWithGoogle() {
   if (error) throw error;
 }
 
+/** ID+password sign-in, added alongside Google (not instead of it) for employees who
+ * don't sign in with a personal Gmail. The ID number maps to a synthetic
+ * "<code>@kittymaeid.com" email under the hood — see link_my_employee_record() in
+ * 33_multi_auth_identity.sql, which recognizes that domain and matches by
+ * employee_code instead of a real email. */
+export async function signInWithIdPassword(idNumber, password) {
+  const email = idNumber.trim().toLowerCase() + '@kittymaeid.com';
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+}
+
 export async function signOut() {
   await supabase.auth.signOut();
   window.location.href = 'login.html';
