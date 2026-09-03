@@ -584,10 +584,10 @@ if (employee) {
       const list = document.getElementById('tx-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No transactions for this filter.</p>'; return; }
 
-      // Every field shows directly in its own row -- no click-to-expand -- since a
-      // second click just to reveal data already needed on screen wastes the time of
-      // whoever is reconciling dozens of these. Wide, so it scrolls horizontally as one
-      // table (same shape as the bank's own statement export), not per-row.
+      // Every field shows directly in its own row -- no click-to-expand. table-layout:
+      // fixed with percentage widths makes long content (a 13-digit ref number, a long
+      // description) wrap inside its own cell instead of forcing the table wider than
+      // the screen -- that's what was still causing horizontal dragging.
       const inputStyle = 'padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;width:100%;box-sizing:border-box;';
       function txRowHtml(t) {
         const when = t.transaction_datetime ? t.transaction_datetime.replace('T', ' ').slice(0, 16) : '—';
@@ -596,30 +596,34 @@ if (employee) {
           ? '<span style="color:var(--ok);">+' + money(t.credit) + '</span>'
           : (t.debit != null ? '<span class="muted">-' + money(t.debit) + '</span>' : '—');
         return '<tr data-id="' + t.id + '"' + (missing ? ' style="background:#fdecea;"' : '') + '>' +
-          '<td style="white-space:nowrap;">' + when + '</td>' +
+          '<td>' + when + '</td>' +
           '<td>' + esc(t.description || '—') +
             (t.notes || t.creator ? '<div class="muted" style="font-size:10px;">' + esc(t.source) + (t.creator ? ' · ' + esc(t.creator.full_name) : '') + (t.notes ? ' · ' + esc(t.notes) : '') + '</div>' : '') +
           '</td>' +
-          '<td style="white-space:nowrap;">' + esc(t.reference_number || '—') + '</td>' +
-          '<td style="white-space:nowrap;text-align:right;">' + amountLbl + '</td>' +
-          '<td><input type="text" name="fbName" value="' + esc(t.fb_name || '') + '" placeholder="FB Name" style="' + inputStyle + 'min-width:90px;"></td>' +
-          '<td><input type="text" name="customerName" value="' + esc(t.customer_name || '') + '" placeholder="Customer Name" style="' + inputStyle + 'min-width:110px;"></td>' +
-          '<td><input type="text" name="orderId" value="' + esc(t.order_id || '') + '" placeholder="Order ID" style="' + inputStyle + 'min-width:80px;">' +
+          '<td>' + esc(t.reference_number || '—') + '</td>' +
+          '<td style="text-align:right;">' + amountLbl + '</td>' +
+          '<td><input type="text" name="fbName" value="' + esc(t.fb_name || '') + '" placeholder="FB Name" style="' + inputStyle + '"></td>' +
+          '<td><input type="text" name="customerName" value="' + esc(t.customer_name || '') + '" placeholder="Customer Name" style="' + inputStyle + '"></td>' +
+          '<td><input type="text" name="orderId" value="' + esc(t.order_id || '') + '" placeholder="Order ID" style="' + inputStyle + '">' +
             (missing ? '<div class="badge low" style="margin-top:2px;">No Order ID</div>' : '') +
           '</td>' +
-          '<td style="white-space:nowrap;">' +
-            '<button class="btn small" type="button" data-act="save" data-id="' + t.id + '">Save</button>' +
-            (canManage ? ' <button class="btn small secondary" type="button" data-act="delete" data-id="' + t.id + '">Delete</button>' : '') +
+          '<td>' +
+            '<button class="btn small" type="button" data-act="save" data-id="' + t.id + '" style="display:block;width:100%;margin-bottom:2px;">Save</button>' +
+            (canManage ? '<button class="btn small secondary" type="button" data-act="delete" data-id="' + t.id + '" style="display:block;width:100%;">Delete</button>' : '') +
           '</td>' +
         '</tr>';
       }
-      const theadHtml = '<thead><tr>' +
+      const colgroupHtml = '<colgroup>' +
+        '<col style="width:10%"><col style="width:24%"><col style="width:10%"><col style="width:9%">' +
+        '<col style="width:13%"><col style="width:13%"><col style="width:11%"><col style="width:10%">' +
+      '</colgroup>';
+      const theadHtml = colgroupHtml + '<thead><tr>' +
         '<th>Date &amp; Time</th><th>Description</th><th>Ref No.</th><th>Amount</th>' +
         '<th>FB Name</th><th>Customer Name</th><th>Order ID</th><th></th>' +
       '</tr></thead>';
 
       if (fAccount !== 'all') {
-        list.innerHTML = '<div class="table-scroll"><table>' + theadHtml + '<tbody>' + rows.map(txRowHtml).join('') + '</tbody></table></div>';
+        list.innerHTML = '<div class="table-scroll"><table style="table-layout:fixed;word-break:break-word;">' + theadHtml + '<tbody>' + rows.map(txRowHtml).join('') + '</tbody></table></div>';
       } else {
         const groups = {};
         const order = [];
@@ -636,7 +640,7 @@ if (employee) {
           const label = accountLabel(groupRows[0]);
           return '<h4 style="margin:16px 0 4px;cursor:pointer;display:inline-block;padding:2px 8px;border-radius:10px;' + accountColorStyle(label) + '" data-filter-account="' + key + '" title="Show only ' + esc(label) + '">' + esc(label) +
             ' <span class="muted" style="font-weight:normal;font-size:12px;">— ' + groupRows.length + ' txn, +' + money(groupCredit) + ' / -' + money(groupDebit) + '</span></h4>' +
-            '<div class="table-scroll"><table>' + theadHtml + '<tbody>' + groupRows.map(txRowHtml).join('') + '</tbody></table></div>';
+            '<div class="table-scroll"><table style="table-layout:fixed;word-break:break-word;">' + theadHtml + '<tbody>' + groupRows.map(txRowHtml).join('') + '</tbody></table></div>';
         }).join('');
       }
 
