@@ -278,22 +278,32 @@ function extractOwnerNumber(rows) {
 function detectAccountId(headerText, parsedRows, accounts) {
   const candidates = accounts.filter((a) => a.number);
   if (!candidates.length) return null;
+  // A person can hold the same mobile number on both GCash and Maya -- the file's own
+  // title ("GCash Transaction History" / a Maya export) breaks that tie safely instead
+  // of leaving a genuine ambiguity unresolved.
+  const typeHint = headerText && /gcash/i.test(headerText) ? 'GCash'
+    : headerText && /\bmaya\b/i.test(headerText) ? 'Maya' : null;
+  function matchByNumber(digits) {
+    let found = candidates.filter((a) => normalizeDigits(a.number) === digits);
+    if (found.length > 1 && typeHint) found = found.filter((a) => a.type === typeHint);
+    return found.length === 1 ? found[0].id : null;
+  }
   const ownerNumber = extractOwnerNumber(parsedRows);
   if (ownerNumber) {
-    const found = candidates.filter((a) => normalizeDigits(a.number) === ownerNumber);
-    if (found.length === 1) return found[0].id;
+    const id = matchByNumber(ownerNumber);
+    if (id) return id;
   }
   // Fallback for formats that DO print an explicit number/name near the top (some bank
   // exports do, even though GCash's own export doesn't).
   if (headerText) {
     const mobileMatches = headerText.match(/09\d{2}[\s.-]?\d{3}[\s.-]?\d{4}/g) || [];
     for (const raw of mobileMatches) {
-      const digits = normalizeDigits(raw);
-      const found = candidates.filter((a) => normalizeDigits(a.number) === digits);
-      if (found.length === 1) return found[0].id;
+      const id = matchByNumber(normalizeDigits(raw));
+      if (id) return id;
     }
     const headerDigits = normalizeDigits(headerText);
-    const found2 = candidates.filter((a) => headerDigits.includes(normalizeDigits(a.number)));
+    let found2 = candidates.filter((a) => headerDigits.includes(normalizeDigits(a.number)));
+    if (found2.length > 1 && typeHint) found2 = found2.filter((a) => a.type === typeHint);
     if (found2.length === 1) return found2[0].id;
   }
   return null;
