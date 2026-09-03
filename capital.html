@@ -22,10 +22,11 @@ const employee = await initShell('capital');
 if (employee) {
   const root = document.getElementById('capital-root');
 
-  if (!['Admin', 'Branch Supervisor'].includes(employee.role) && employee.position !== 'Sales Executive') {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Capital tracking is restricted to Admin (full), Branch Supervisor (view own branch), and Sales Executive (view all branches).</p></div></div>';
+  if (!['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) && employee.position !== 'Sales Executive') {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Capital tracking is restricted to Admin (full), Manager (view + delete), Branch Supervisor (view own branch), and Sales Executive (view all branches).</p></div></div>';
   } else {
     const isAdmin = employee.role === 'Admin';
+    const canDelete = ['Admin', 'Manager'].includes(employee.role);
     const branches = await getBranches();
     const branchById = Object.fromEntries(branches.map((b) => [b.id, b.name]));
     const branchOptions = (selected) => branches.map((b) =>
@@ -130,7 +131,7 @@ if (employee) {
 
       const list = document.getElementById('cap-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No capital entries for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Branch</th><th>Date</th><th>Amount</th><th>Purpose</th><th>Notes</th>' + (isAdmin ? '<th></th>' : '') + '</tr>' +
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Branch</th><th>Date</th><th>Amount</th><th>Purpose</th><th>Notes</th>' + (canDelete ? '<th></th>' : '') + '</tr>' +
         rows.map((r) =>
           '<tr>' +
             '<td data-label="Branch">' + esc(r.branches?.name || '') + '</td>' +
@@ -140,7 +141,7 @@ if (employee) {
             '</td>' +
             '<td data-label="Purpose">' + esc(r.purpose || '') + '</td>' +
             '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
-            (isAdmin ? '<td data-label="Actions" style="white-space:nowrap;"><button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button></td>' : '') +
+            (canDelete ? '<td data-label="Actions" style="white-space:nowrap;"><button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button></td>' : '') +
           '</tr>'
         ).join('') + '</table></div>';
 

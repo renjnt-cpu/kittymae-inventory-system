@@ -215,6 +215,14 @@ if (employee) {
       renderScrap();
     });
 
+    // Shared by the Add forms' submit buttons and every row's Edit/Delete buttons --
+    // mirrors the backend RLS exactly (Admin/Manager anywhere, Branch Supervisor only
+    // their own branch, Sales Executive never) so a button is never shown enabled only
+    // to fail with a permission error when clicked.
+    function canWriteHere() {
+      return ['Admin', 'Manager'].includes(employee.role) || (isScoped && selectedBranch === employee.branch_id);
+    }
+
     function renderBranchButtons() {
       const box = document.getElementById('branch-buttons');
       // Everyone can now VIEW every branch here — Branch Supervisor just can't ADD for
@@ -232,9 +240,8 @@ if (employee) {
       document.getElementById('sub-branch-label').textContent = label;
       document.getElementById('scrap-branch-label').textContent = label;
 
-      const canWriteHere = ['Admin', 'Manager'].includes(employee.role) || (isScoped && selectedBranch === employee.branch_id);
-      document.querySelectorAll('#sub-form button[type="submit"], #scrap-form button[type="submit"]').forEach((btn) => { btn.disabled = !canWriteHere; });
-      const note = canWriteHere ? '' : isScoped
+      document.querySelectorAll('#sub-form button[type="submit"], #scrap-form button[type="submit"]').forEach((btn) => { btn.disabled = !canWriteHere(); });
+      const note = canWriteHere() ? '' : isScoped
         ? '<p class="muted" style="font-size:11px;">View only — you can only add items for ' + esc(branchName(employee.branch_id)) + '.</p>'
         : '<p class="muted" style="font-size:11px;">View only.</p>';
       document.querySelectorAll('#sub-write-note, #scrap-write-note').forEach((el) => { el.innerHTML = note; });
@@ -291,8 +298,10 @@ if (employee) {
             '<td data-label="Buyer">' + esc(r.buyer_name || '') + '</td>' +
             '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
             '<td data-label="Actions" style="white-space:nowrap;">' +
-              '<button class="btn small secondary" data-id="' + r.id + '" data-act="edit">Edit</button> ' +
-              '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' +
+              (canWriteHere()
+                ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="edit">Edit</button> ' +
+                  '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>'
+                : '') +
             '</td>' +
           '</tr>' +
           '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="12"></td></tr>'
@@ -442,7 +451,7 @@ if (employee) {
             '<td data-label="Source">' + esc(r.source || '') + '</td>' +
             '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
             '<td data-label="Photo">' + (r.attachment_path ? '<button class="btn small secondary" data-id="' + r.id + '" data-path="' + esc(r.attachment_path) + '" data-act="view-photo">View Photo</button>' : '—') + '</td>' +
-            '<td data-label="Actions" style="white-space:nowrap;"><button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button></td>' +
+            '<td data-label="Actions" style="white-space:nowrap;">' + (canWriteHere() ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' : '') + '</td>' +
           '</tr>'
         ).join('') + '</table></div>';
 

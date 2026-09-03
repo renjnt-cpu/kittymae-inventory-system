@@ -41,10 +41,11 @@ export async function initShell(activePage) {
     pages.push({ id: 'payments', label: 'Payments', href: 'payments.html' });
     pages.push({ id: 'assets', label: 'Asset & Supplies Custodian', href: 'assets.html' });
   }
-  if (['Admin', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Sales Executive') {
-    // Branch Supervisor gets a view-only version of their own branch's balance, and a
-    // Sales Executive a view-only company-wide one (see capital.html's isAdmin split) —
-    // so they can check funds before buying scrap.
+  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Sales Executive') {
+    // Branch Supervisor gets a view-only version of their own branch's balance, and
+    // Manager/Sales Executive a view-only company-wide one (see capital.html's isAdmin
+    // split) — so they can check funds before buying scrap. Manager can also delete
+    // entries (not add/edit) -- see capital.html's canDelete.
     pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });
   }
   if (employee.role === 'Admin') {

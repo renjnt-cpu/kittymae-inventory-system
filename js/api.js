@@ -32,7 +32,7 @@ export function subscribeToChanges(tables, onChange) {
 }
 
 export async function getBranches() {
-  const { data, error } = await supabase.from('branches').select('*').eq('is_active', true).order('id');
+  const { data, error } = await supabase.from('branches').select('*').eq('is_active', true).order('display_order');
   if (error) throw new Error(error.message);
   return data;
 }

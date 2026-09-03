@@ -28,6 +28,7 @@ if (employee) {
   if (employee.role !== 'Admin' && !employee.bills_access) {
     root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Bills tracking is restricted to Admin or accounts granted Bills access.</p></div></div>';
   } else {
+    const canDelete = ['Admin', 'Manager'].includes(employee.role);
     root.innerHTML =
       '<div class="bills-layout">' +
         '<div class="bills-col-add">' +
@@ -247,7 +248,7 @@ if (employee) {
             '<td data-label="Actions" style="white-space:nowrap;">' +
               (b.status !== 'Paid' ? '<button class="btn small" data-id="' + b.id + '" data-act="paid">Mark Paid</button> ' : '<button class="btn small secondary" data-id="' + b.id + '" data-act="unpaid">Mark Unpaid</button> ') +
               '<button class="btn small secondary" data-id="' + b.id + '" data-act="edit">Edit</button> ' +
-              '<button class="btn small secondary" data-id="' + b.id + '" data-act="delete">Delete</button>' +
+              (canDelete ? '<button class="btn small secondary" data-id="' + b.id + '" data-act="delete">Delete</button>' : '') +
             '</td>' +
           '</tr>' +
           '<tr class="edit-row" data-edit-for="' + b.id + '" style="display:none;"><td colspan="11"></td></tr>';
