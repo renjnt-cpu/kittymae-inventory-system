@@ -297,13 +297,14 @@ export async function getScrapBalances() {
 
 /** Returns the new entry's id so a photo picked in the same Add form submit can be
  * uploaded and linked right after it's created (mirrors bills' attachment flow). */
-export async function createScrapEntry({ branchId, entryDate, entryType, metalType, karat, weightGrams, pricePerGram, totalAmount, customerName, contactNumber, source, notes }) {
+export async function createScrapEntry({ branchId, entryDate, entryType, metalType, karat, weightGrams, pricePerGram, totalAmount, customerName, contactNumber, paymentMethod, source, notes }) {
   const empId = await currentEmployeeId();
   const { data, error } = await supabase.from('scrap_entries').insert({
     branch_id: branchId, entry_date: entryDate || new Date().toISOString().slice(0, 10),
     entry_type: entryType || 'In', metal_type: metalType, karat: karat || null,
     weight_grams: weightGrams, price_per_gram: pricePerGram || null, total_amount: totalAmount || null,
     customer_name: customerName || null, contact_number: contactNumber || null,
+    payment_method: paymentMethod || null,
     source: source || null, notes: notes || null, created_by: empId,
   }).select('id').single();
   if (error) throw new Error(error.message);

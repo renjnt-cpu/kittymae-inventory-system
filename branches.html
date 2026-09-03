@@ -98,6 +98,7 @@ if (employee) {
               '<div class="field"><label>Weight (grams) *</label><input type="number" name="weightGrams" step="0.001" min="0" required></div>' +
               '<div class="field"><label>Price per Gram (PHP)</label><input type="number" name="pricePerGram" step="0.01" min="0"></div>' +
               '<div class="field"><label>Total Amount (PHP)</label><input type="number" name="totalAmount" step="0.01" min="0"></div>' +
+              '<div class="field"><label>Payment Method</label><select name="paymentMethod"><option>Cash</option><option>GCash</option><option>Bank Transfer</option><option>Other</option></select></div>' +
               '<div class="field"><label>Source</label><input type="text" name="source" placeholder="Walk-in, buyback, refiner name…"></div>' +
               '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
               '<div class="field"><label>Photo</label><input type="file" name="attachment" accept="image/*"></div>' +
@@ -150,6 +151,7 @@ if (employee) {
           pricePerGram: f.pricePerGram.value ? Number(f.pricePerGram.value) : null,
           totalAmount: f.totalAmount.value ? Number(f.totalAmount.value) : null,
           customerName: f.customerName.value.trim(), contactNumber: f.contactNumber.value.trim(),
+          paymentMethod: f.paymentMethod.value,
           source: f.source.value.trim(), notes: f.notes.value.trim(),
         });
         if (f.attachment.files[0]) await uploadScrapAttachment(selectedBranch, newScrapId, f.attachment.files[0]);
@@ -350,7 +352,7 @@ if (employee) {
 
       const list = document.getElementById('scrap-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No scrap entries for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Date</th><th>Type</th><th>Customer</th><th>Contact</th><th>Metal</th><th>Karat</th><th>Weight</th><th>Price/g</th><th>Total</th><th>Source</th><th>Notes</th><th>Photo</th><th></th></tr>' +
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Date</th><th>Type</th><th>Customer</th><th>Contact</th><th>Metal</th><th>Karat</th><th>Weight</th><th>Price/g</th><th>Total</th><th>Payment</th><th>Source</th><th>Notes</th><th>Photo</th><th></th></tr>' +
         rows.map((r) =>
           '<tr>' +
             '<td data-label="Date">' + (r.entry_date || '—') + '</td>' +
@@ -364,6 +366,7 @@ if (employee) {
             '</td>' +
             '<td data-label="Price/g">' + money(r.price_per_gram) + '</td>' +
             '<td data-label="Total">' + money(r.total_amount) + '</td>' +
+            '<td data-label="Payment">' + esc(r.payment_method || '') + '</td>' +
             '<td data-label="Source">' + esc(r.source || '') + '</td>' +
             '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
             '<td data-label="Photo">' + (r.attachment_path ? '<button class="btn small secondary" data-id="' + r.id + '" data-path="' + esc(r.attachment_path) + '" data-act="view-photo">View Photo</button>' : '—') + '</td>' +
