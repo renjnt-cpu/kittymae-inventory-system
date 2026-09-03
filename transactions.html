@@ -249,23 +249,54 @@ async function parseDocxStatement(file) {
 
 function normalizeDigits(s) { return (s || '').replace(/\D/g, ''); }
 
-// Auto-detects which account a statement belongs to from the mobile/account number
-// printed near the top of the file, so Import doesn't always require picking the
-// account by hand. Only acts when exactly one account matches -- ambiguous or absent
-// matches fall back to the existing manual dropdown, no guessing.
-function detectAccountId(headerText, accounts) {
-  if (!headerText) return null;
+// GCash's own export never states the account holder's number anywhere -- the only
+// place it appears is inside a transaction's own Description, e.g. "Transfer from
+// 09267352377 to 09267277179". Whichever end is the OWN account depends on direction:
+// a credit means the second number received it (that's the own account), a debit means
+// the first number sent it. The number that wins this way across the file is the
+// account's own number.
+function extractOwnerNumber(rows) {
+  const tally = {};
+  const re = /transfer from (\d{10,11}) to (\d{10,11})/i;
+  for (const r of rows) {
+    const m = (r.description || '').match(re);
+    if (!m) continue;
+    let candidate = null;
+    if (r.credit != null) candidate = m[2];
+    else if (r.debit != null) candidate = m[1];
+    if (!candidate) continue;
+    tally[candidate] = (tally[candidate] || 0) + 1;
+  }
+  let best = null, bestCount = 0;
+  for (const num in tally) { if (tally[num] > bestCount) { best = num; bestCount = tally[num]; } }
+  return best;
+}
+
+// Auto-detects which account a statement belongs to, so Import doesn't always require
+// picking the account by hand. Only acts when exactly one account matches -- ambiguous
+// or absent matches fall back to the existing manual dropdown, no guessing.
+function detectAccountId(headerText, parsedRows, accounts) {
   const candidates = accounts.filter((a) => a.number);
   if (!candidates.length) return null;
-  const mobileMatches = headerText.match(/09\d{2}[\s.-]?\d{3}[\s.-]?\d{4}/g) || [];
-  for (const raw of mobileMatches) {
-    const digits = normalizeDigits(raw);
-    const found = candidates.filter((a) => normalizeDigits(a.number) === digits);
+  const ownerNumber = extractOwnerNumber(parsedRows);
+  if (ownerNumber) {
+    const found = candidates.filter((a) => normalizeDigits(a.number) === ownerNumber);
     if (found.length === 1) return found[0].id;
   }
-  const headerDigits = normalizeDigits(headerText);
-  const found = candidates.filter((a) => headerDigits.includes(normalizeDigits(a.number)));
-  return found.length === 1 ? found[0].id : null;
+  // Fallback for formats that DO print an explicit number/name near the top (some bank
+  // exports do, even though GCash's own export doesn't).
+  if (headerText) {
+    const mobileMatches = headerText.match(/09\d{2}[\s.-]?\d{3}[\s.-]?\d{4}/g) || [];
+    for (const raw of mobileMatches) {
+      const digits = normalizeDigits(raw);
+      const found = candidates.filter((a) => normalizeDigits(a.number) === digits);
+      if (found.length === 1) return found[0].id;
+    }
+    const headerDigits = normalizeDigits(headerText);
+    const found2 = candidates.filter((a) => headerDigits.includes(normalizeDigits(a.number)));
+    if (found2.length === 1) return found2[0].id;
+  }
+  return null;
 }
 
 const employee = await initShell('transactions');
@@ -450,7 +481,7 @@ if (employee) {
           const unclear = parsed.filter((r) => r.credit == null && r.debit == null).length;
 
           let detectNote = '';
-          const detectedId = detectAccountId(headerText, allAccounts);
+          const detectedId = detectAccountId(headerText, parsed, allAccounts);
           if (detectedId) {
             document.getElementById('import-account').value = String(detectedId);
             const acc = allAccounts.find((a) => a.id === detectedId);
@@ -551,15 +582,16 @@ if (employee) {
       function txRowHtml(t) {
         const when = t.transaction_datetime ? t.transaction_datetime.replace('T', ' ').slice(0, 16) : '—';
         const missing = t.credit != null && !t.order_id;
+        const amountLbl = t.credit != null
+          ? '<span style="color:var(--ok);">+' + money(t.credit) + '</span>'
+          : (t.debit != null ? '<span class="muted">-' + money(t.debit) + '</span>' : '—');
         return '<tr data-id="' + t.id + '"' + (missing ? ' style="background:#fdecea;"' : '') + '>' +
           '<td style="white-space:nowrap;">' + when + '</td>' +
           '<td>' + esc(t.description || '—') +
             (t.notes || t.creator ? '<div class="muted" style="font-size:10px;">' + esc(t.source) + (t.creator ? ' · ' + esc(t.creator.full_name) : '') + (t.notes ? ' · ' + esc(t.notes) : '') + '</div>' : '') +
           '</td>' +
           '<td style="white-space:nowrap;">' + esc(t.reference_number || '—') + '</td>' +
-          '<td style="white-space:nowrap;text-align:right;">' + money(t.debit) + '</td>' +
-          '<td style="white-space:nowrap;text-align:right;">' + money(t.credit) + '</td>' +
-          '<td style="white-space:nowrap;text-align:right;">' + money(t.balance) + '</td>' +
+          '<td style="white-space:nowrap;text-align:right;">' + amountLbl + '</td>' +
           '<td><input type="text" name="fbName" value="' + esc(t.fb_name || '') + '" placeholder="FB Name" style="' + inputStyle + 'min-width:90px;"></td>' +
           '<td><input type="text" name="customerName" value="' + esc(t.customer_name || '') + '" placeholder="Customer Name" style="' + inputStyle + 'min-width:110px;"></td>' +
           '<td><input type="text" name="orderId" value="' + esc(t.order_id || '') + '" placeholder="Order ID" style="' + inputStyle + 'min-width:80px;">' +
@@ -572,7 +604,7 @@ if (employee) {
         '</tr>';
       }
       const theadHtml = '<thead><tr>' +
-        '<th>Date &amp; Time</th><th>Description</th><th>Ref No.</th><th>Debit</th><th>Credit</th><th>Balance</th>' +
+        '<th>Date &amp; Time</th><th>Description</th><th>Ref No.</th><th>Amount</th>' +
         '<th>FB Name</th><th>Customer Name</th><th>Order ID</th><th></th>' +
       '</tr></thead>';
 
