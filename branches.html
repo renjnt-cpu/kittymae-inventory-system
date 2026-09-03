@@ -122,8 +122,8 @@ if (employee) {
               '<div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="scrap-f-search" placeholder="Source, notes…"></div>' +
               '<div class="field"><label>Metal</label><select id="scrap-f-metal"><option value="all">All</option><option>Gold</option><option>Silver</option></select></div>' +
               '<div class="field"><label>Type</label><select id="scrap-f-type"><option value="all">All</option><option>In</option><option>Out</option></select></div>' +
-              '<div class="field"><label>From</label><input type="date" id="scrap-f-from"></div>' +
-              '<div class="field"><label>To</label><input type="date" id="scrap-f-to"></div>' +
+              '<div class="field"><label>From</label><input type="date" id="scrap-f-from" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
+              '<div class="field"><label>To</label><input type="date" id="scrap-f-to" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
               '<button type="button" class="btn small secondary" id="scrap-f-clear">Clear Filters</button>' +
             '</div>' +
           '</div>' +
@@ -403,21 +403,20 @@ if (employee) {
 
       renderScrapBalance(fMetal === 'all' ? branchBalances : branchBalances.filter((b) => b.metal_type === fMetal));
 
-      // Always broken out by metal + karat regardless of the Metal filter above, which
-      // is for the entries list below -- this tile row is its own always-visible
-      // breakdown. Only shows combos that actually have a purchase today, since listing
-      // every possible karat at ₱0.00 would be more noise than signal.
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const todaysIn = allScrap.filter((r) => r.entry_type === 'In' && r.entry_date === todayStr);
+      // Broken out by metal + karat, from the SAME filtered rows as the list below --
+      // so the From/To range (and Search/Metal/Type) actually changes this number.
+      // Defaults to today (the date fields default to today), but picking a wider
+      // range widens this too, instead of being stuck on literally today's date.
+      const rangeIn = rows.filter((r) => r.entry_type === 'In');
       const byMetalKarat = {};
-      todaysIn.forEach((r) => {
+      rangeIn.forEach((r) => {
         const key = r.metal_type + ' ' + (r.karat || '—');
         byMetalKarat[key] = (byMetalKarat[key] || 0) + Number(r.total_amount || 0);
       });
       const keys = Object.keys(byMetalKarat).sort();
       let tilesHtml = keys.length
-        ? keys.map((k) => tile(money(byMetalKarat[k]), 'Purchased Today (' + k + ')')).join('')
-        : tile(money(0), 'Purchased Today');
+        ? keys.map((k) => tile(money(byMetalKarat[k]), 'Purchased (' + k + ')')).join('')
+        : tile(money(0), 'Purchased');
 
       // Branch Capital's "Scrap" purpose entries minus net cash spent/received buying
       // scrap -- only meaningful where the viewer actually has Branch Capital visibility
