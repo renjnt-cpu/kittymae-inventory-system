@@ -232,7 +232,9 @@ if (employee) {
             }
           });
         } catch (err) {
-          preview.innerHTML = '';
+          // Shown inline (not just the top-of-page toast, which auto-dismisses after
+          // 5s and is easy to miss while scrolled down next to this button).
+          preview.innerHTML = '<p class="msg error">' + esc(err.message || err) + '</p>';
           toast('tx-msg', String(err.message || err), true);
         }
       });
