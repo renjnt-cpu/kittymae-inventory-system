@@ -15,7 +15,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { listTransactions, createTransaction, importTransactions, updateTransactionReconciliation, deleteTransaction, subscribeToChanges } from './js/api.js';
+import { listTransactions, listAccounts, createAccount, createTransaction, importTransactions, updateTransactionReconciliation, deleteTransaction, subscribeToChanges } from './js/api.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
@@ -252,6 +252,11 @@ if (employee) {
   if (!canReconcile) {
     root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Transactions is restricted to Admin, Manager, and Admin Assistant accounts.</p></div></div>';
   } else {
+    let allAccounts = await listAccounts();
+    const accountOptions = () => allAccounts.map((a) => '<option value="' + a.id + '">' + esc(a.name) + ' (' + esc(a.type) + ')</option>').join('');
+    const accountLabel = (t) => t.accounts ? t.accounts.name : '—';
+    const accountBadgeClass = (t) => (t.accounts && t.accounts.type === 'GCash') ? 'transit' : 'ok';
+
     root.innerHTML =
       '<div class="layout-2col">' +
         (canManage ?
@@ -260,7 +265,7 @@ if (employee) {
               '<h3>Add Transaction</h3>' +
               '<p class="muted" style="margin-top:-4px;">A single manual entry — always money received.</p>' +
               '<form id="tx-form" style="flex-direction:column;align-items:stretch;">' +
-                '<div class="field"><label>Method *</label><select name="method" required><option>GCash</option><option>Bank Transfer</option></select></div>' +
+                '<div class="field"><label>Account *</label><select name="accountId" required>' + accountOptions() + '</select></div>' +
                 '<div class="field"><label>Date &amp; Time</label><input type="datetime-local" name="transactionDatetime"></div>' +
                 '<div class="field"><label>Amount (PHP) *</label><input type="number" name="amount" step="0.01" min="0.01" required></div>' +
                 '<div class="field"><label>Reference Number</label><input type="text" name="referenceNumber" placeholder="GCash ref # / bank ref"></div>' +
@@ -274,11 +279,22 @@ if (employee) {
             '<div class="card">' +
               '<h3>Import Statement (CSV or Word)</h3>' +
               '<p class="muted" style="margin-top:-4px;">Upload the exact GCash/bank statement export — Date and Time, Description, Reference No., Debit, Credit, Balance. A .docx statement (converted from PDF) also works — Debit vs Credit is inferred from the running balance, so double-check a few rows after importing.</p>' +
-              '<div class="field"><label>Method *</label><select id="import-method"><option>GCash</option><option>Bank Transfer</option></select></div>' +
+              '<div class="field"><label>Account *</label><select id="import-account">' + accountOptions() + '</select></div>' +
               '<div class="field"><label>File</label><input type="file" id="import-file" accept=".csv,.docx"></div>' +
               '<button class="btn small secondary" type="button" id="import-parse">Parse File</button>' +
               '<div id="import-preview" style="margin-top:8px;"></div>' +
             '</div>' +
+            (employee.role === 'Admin' ?
+              '<div class="card">' +
+                '<h3>Add Account</h3>' +
+                '<p class="muted" style="margin-top:-4px;">Add another GCash/BDO/BPI/Maya account to the list above.</p>' +
+                '<form id="account-form" style="flex-direction:column;align-items:stretch;">' +
+                  '<div class="field"><label>Name *</label><input type="text" name="name" placeholder="e.g. GCash 6" required></div>' +
+                  '<div class="field"><label>Type *</label><select name="type" required><option>GCash</option><option>BDO</option><option>BPI</option><option>Maya</option></select></div>' +
+                  '<button class="btn small secondary" type="submit">Add Account</button>' +
+                '</form>' +
+              '</div>'
+            : '') +
           '</div>'
         : '') +
         '<div class="layout-2col-main">' +
@@ -286,7 +302,7 @@ if (employee) {
           '<div class="card">' +
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
               '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Description, reference, FB name, customer, order ID…"></div>' +
-              '<div class="field"><label>Method</label><select id="f-method"><option value="all">All</option><option>GCash</option><option>Bank Transfer</option></select></div>' +
+              '<div class="field"><label>Account</label><select id="f-account"><option value="all">All</option>' + accountOptions() + '</select></div>' +
               '<div class="field"><label>From</label><input type="date" id="f-from"></div>' +
               '<div class="field"><label>To</label><input type="date" id="f-to"></div>' +
               '<div class="field"><label><input type="checkbox" id="f-unreconciled" style="width:auto;"> Missing Order ID only</label></div>' +
@@ -305,7 +321,7 @@ if (employee) {
         const f = ev.target;
         try {
           await createTransaction({
-            method: f.method.value,
+            accountId: Number(f.accountId.value),
             transactionDatetime: f.transactionDatetime.value ? new Date(f.transactionDatetime.value).toISOString() : null,
             amount: Number(f.amount.value), referenceNumber: f.referenceNumber.value.trim(),
             fbName: f.fbName.value.trim(), customerName: f.customerName.value.trim(), orderId: f.orderId.value.trim(),
@@ -314,6 +330,24 @@ if (employee) {
           toast('tx-msg', 'Transaction added.', false);
           f.reset();
           await load();
+        } catch (err) {
+          toast('tx-msg', String(err.message || err), true);
+        }
+      });
+
+      const accountForm = document.getElementById('account-form');
+      if (accountForm) accountForm.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        try {
+          await createAccount({ name: f.name.value.trim(), type: f.type.value });
+          toast('tx-msg', 'Account added.', false);
+          f.reset();
+          allAccounts = await listAccounts();
+          document.querySelectorAll('#f-account, select[name="accountId"], #import-account').forEach((sel) => {
+            const isFilter = sel.id === 'f-account';
+            sel.innerHTML = (isFilter ? '<option value="all">All</option>' : '') + accountOptions();
+          });
         } catch (err) {
           toast('tx-msg', String(err.message || err), true);
         }
@@ -340,7 +374,7 @@ if (employee) {
             '<button class="btn small" type="button" id="import-confirm">Import ' + parsed.length + ' Row(s)</button>';
           document.getElementById('import-confirm').addEventListener('click', async () => {
             try {
-              const count = await importTransactions(document.getElementById('import-method').value, parsedRows);
+              const count = await importTransactions(Number(document.getElementById('import-account').value), parsedRows);
               toast('tx-msg', 'Imported ' + count + ' transaction(s).', false);
               preview.innerHTML = '';
               fileInput.value = '';
@@ -364,13 +398,13 @@ if (employee) {
     await load();
     subscribeToChanges('transactions', load);
 
-    ['f-search', 'f-method', 'f-from', 'f-to', 'f-unreconciled'].forEach((id) => {
+    ['f-search', 'f-account', 'f-from', 'f-to', 'f-unreconciled'].forEach((id) => {
       const el = document.getElementById(id);
       el.addEventListener(id === 'f-search' ? 'input' : 'change', render);
     });
     document.getElementById('f-clear').addEventListener('click', () => {
       document.getElementById('f-search').value = '';
-      document.getElementById('f-method').value = 'all';
+      document.getElementById('f-account').value = 'all';
       document.getElementById('f-from').value = '';
       document.getElementById('f-to').value = '';
       document.getElementById('f-unreconciled').checked = false;
@@ -391,7 +425,7 @@ if (employee) {
     function render() {
       let rows = allTx;
       const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
-      const fMethod = document.getElementById('f-method').value;
+      const fAccount = document.getElementById('f-account').value;
       const fFrom = document.getElementById('f-from').value;
       const fTo = document.getElementById('f-to').value;
       const fUnreconciled = document.getElementById('f-unreconciled').checked;
@@ -400,8 +434,9 @@ if (employee) {
         (t.reference_number || '').toLowerCase().includes(fSearch) ||
         (t.fb_name || '').toLowerCase().includes(fSearch) ||
         (t.customer_name || '').toLowerCase().includes(fSearch) ||
-        (t.order_id || '').toLowerCase().includes(fSearch));
-      if (fMethod !== 'all') rows = rows.filter((t) => t.method === fMethod);
+        (t.order_id || '').toLowerCase().includes(fSearch) ||
+        (t.accounts && t.accounts.name.toLowerCase().includes(fSearch)));
+      if (fAccount !== 'all') rows = rows.filter((t) => String(t.account_id) === fAccount);
       if (fFrom) rows = rows.filter((t) => t.transaction_datetime && t.transaction_datetime.slice(0, 10) >= fFrom);
       if (fTo) rows = rows.filter((t) => t.transaction_datetime && t.transaction_datetime.slice(0, 10) <= fTo);
       if (fUnreconciled) rows = rows.filter((t) => t.credit != null && !t.order_id);
@@ -426,7 +461,7 @@ if (employee) {
         return '<div class="completed-item">' +
           '<button type="button" class="completed-orderid" data-toggle-tx="' + t.id + '">' +
             when + ' — ' + esc(who) +
-            ' <span class="badge ' + (t.method === 'GCash' ? 'transit' : 'ok') + '" style="font-weight:normal;">' + esc(t.method) + '</span>' +
+            ' <span class="badge ' + accountBadgeClass(t) + '" style="font-weight:normal;">' + esc(accountLabel(t)) + '</span>' +
             ' <span class="muted" style="font-weight:normal;">' + amountLbl + '</span>' +
             (t.credit != null && !t.order_id ? ' <span class="badge low" style="font-weight:normal;">No Order ID</span>' : '') +
           '</button>' +

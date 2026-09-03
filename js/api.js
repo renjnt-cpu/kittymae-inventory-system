@@ -360,19 +360,33 @@ export async function getScrapAttachmentUrl(path) {
 
 export async function listTransactions() {
   const { data, error } = await supabase.from('transactions')
-    .select('*, creator:employees!transactions_created_by_fkey(full_name), branches(name)')
+    .select('*, creator:employees!transactions_created_by_fkey(full_name), branches(name), accounts(name, type)')
     .order('transaction_datetime', { ascending: false });
   if (error) throw new Error(error.message);
   return data;
 }
 
+/** Ren holds 5 separate GCash accounts, 2 BDO, 4 BPI, and 1 Maya -- each transaction
+ * belongs to one specific account, not a generic "GCash"/"Bank Transfer" bucket. */
+export async function listAccounts() {
+  const { data, error } = await supabase.from('accounts')
+    .select('*').eq('is_active', true).order('type').order('name');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createAccount({ name, type }) {
+  const { error } = await supabase.from('accounts').insert({ name, type });
+  if (error) throw new Error(error.message);
+}
+
 /** Manual single-entry add (the original one-at-a-time form) — always a Credit, since
  * this represents money received from a customer, same as before. Bulk statement rows
  * come in through importTransactions() instead, which can be either debit or credit. */
-export async function createTransaction({ method, transactionDatetime, amount, referenceNumber, fbName, customerName, orderId, notes }) {
+export async function createTransaction({ accountId, transactionDatetime, amount, referenceNumber, fbName, customerName, orderId, notes }) {
   const empId = await currentEmployeeId();
   const { error } = await supabase.from('transactions').insert({
-    method, transaction_datetime: transactionDatetime || new Date().toISOString(),
+    account_id: accountId, transaction_datetime: transactionDatetime || new Date().toISOString(),
     credit: amount, reference_number: referenceNumber || null,
     fb_name: fbName || null, customer_name: customerName || null, order_id: orderId || null,
     notes: notes || null, source: 'Manual', created_by: empId,
@@ -380,15 +394,15 @@ export async function createTransaction({ method, transactionDatetime, amount, r
   if (error) throw new Error(error.message);
 }
 
-/** Bulk-inserts parsed CSV statement rows (see transactions.html's CSV parser for the
+/** Bulk-inserts parsed CSV/Word statement rows (see transactions.html's parsers for the
  * expected row shape: datetime/description/referenceNumber/debit/credit/balance, plus
  * optional fbName/customerName/orderId if the uploaded file already had them filled
  * in). Batches of 500 to stay well under PostgREST's payload limits for a large
  * multi-month statement. Returns the number of rows inserted. */
-export async function importTransactions(method, rows) {
+export async function importTransactions(accountId, rows) {
   const empId = await currentEmployeeId();
   const payload = rows.map((r) => ({
-    method, transaction_datetime: r.datetime, description: r.description || null,
+    account_id: accountId, transaction_datetime: r.datetime, description: r.description || null,
     reference_number: r.referenceNumber || null, debit: r.debit ?? null, credit: r.credit ?? null,
     balance: r.balance ?? null, fb_name: r.fbName || null, customer_name: r.customerName || null,
     order_id: r.orderId || null, source: 'CSV Import', created_by: empId,
