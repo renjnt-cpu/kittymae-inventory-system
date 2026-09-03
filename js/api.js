@@ -367,7 +367,7 @@ export async function deletePayment(id) {
 
 export async function listRefunds() {
   const { data, error } = await supabase.from('refunds')
-    .select('*, creator:employees!refunds_created_by_fkey(full_name), refund_attachments(id, attachment_path, amount, reference_number, uploaded_at)')
+    .select('*, creator:employees!refunds_created_by_fkey(full_name), approver:employees!refunds_approved_by_fkey(full_name), refund_attachments(id, attachment_path, amount, reference_number, uploaded_at)')
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return data;
@@ -390,8 +390,15 @@ export async function createRefund({ customerName, orderReference, itemDescripti
   return data.id;
 }
 
+/** Records who clicked Approve (mirrors bills.paid_by) -- once set, later status changes
+ * (Completed, Reopened back to Approved) don't touch it, since the approval already
+ * happened and shouldn't be reattributed to whoever completes/reopens it later. */
 export async function setRefundStatus(id, status) {
-  const { error } = await supabase.from('refunds').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+  const patch = { status, updated_at: new Date().toISOString() };
+  if (status === 'Approved') {
+    patch.approved_by = await currentEmployeeId();
+  }
+  const { error } = await supabase.from('refunds').update(patch).eq('id', id);
   if (error) throw new Error(error.message);
 }
 

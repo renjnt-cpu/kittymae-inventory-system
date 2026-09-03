@@ -253,6 +253,7 @@ if (employee) {
             '<div><b>Method:</b> ' + esc(r.refund_method) + '</div>' +
             '<div><b>Payout Account:</b> ' + (r.account_name || r.account_number ? esc(r.account_name || '') + (r.account_number ? ' · ' + esc(r.account_number) : '') : '—') + '</div>' +
             '<div><b>Requested by:</b> ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div>' +
+            '<div><b>Approved by:</b> ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
             '<div style="margin-top:4px;"><b>Proof of Payment:</b><br>' +
               (photos.length
                 ? photos.map((a) => '<div>' + money(a.amount) + (a.reference_number ? ' · Ref: ' + esc(a.reference_number) : '') + ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button></div>').join('')
@@ -329,6 +330,7 @@ if (employee) {
             '<div><b>Method:</b> ' + esc(r.refund_method) + '</div>' +
             '<div><b>Payout Account:</b> ' + (r.account_name || r.account_number ? esc(r.account_name || '') + (r.account_number ? ' · ' + esc(r.account_number) : '') : '—') + '</div>' +
             '<div><b>Requested by:</b> ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div>' +
+            '<div><b>Approved by:</b> ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
             '<div style="margin-top:4px;"><b>Proof of Payment:</b><br>' +
               (photos.length
                 ? photos.map((a) => '<div style="margin-bottom:2px;">' + money(a.amount) + (a.reference_number ? ' · Ref: ' + esc(a.reference_number) : '') + ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button> <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">✕</button></div>').join('')
