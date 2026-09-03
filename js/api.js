@@ -375,8 +375,13 @@ export async function listAccounts() {
   return data;
 }
 
-export async function createAccount({ name, type }) {
-  const { error } = await supabase.from('accounts').insert({ name, type });
+export async function createAccount({ name, type, number }) {
+  const { error } = await supabase.from('accounts').insert({ name, type, number: number || null });
+  if (error) throw new Error(error.message);
+}
+
+export async function updateAccountNumber(id, number) {
+  const { error } = await supabase.from('accounts').update({ number: number || null }).eq('id', id);
   if (error) throw new Error(error.message);
 }
 
