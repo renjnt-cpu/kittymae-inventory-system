@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Transactions — Kittymae Jewels System</title>
 <link rel="stylesheet" href="css/styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 <main>
@@ -127,6 +128,110 @@ function parseStatementCsv(text) {
   return { parsed, skipped };
 }
 
+// ---- .docx parsing (GCash's PDF statement converted to Word) ----
+// Real samples show this format is genuinely inconsistent: the first page's rows land
+// in a <w:tbl> inside a floating text box, a row in the middle can land as a plain
+// tab-separated paragraph (Debit/Credit collapsed into one tab stop, losing which one
+// it was), and later rows land in an ordinary body-level <w:tbl>. Rather than trust
+// column position for Debit vs Credit (unreliable across these three shapes), this
+// walks every row -- from any table anywhere in the document, or from a non-table
+// paragraph containing tab stops -- and infers debit/credit from whether the running
+// balance went down or up, seeded from the "STARTING BALANCE" figure GCash always
+// prints at the top of the statement.
+const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+function docxCellText(el) {
+  const ts = el.getElementsByTagNameNS(W_NS, 't');
+  let s = '';
+  for (const t of ts) s += t.textContent;
+  return s.trim();
+}
+
+async function parseDocxStatement(file) {
+  if (typeof JSZip === 'undefined') throw new Error('Word file support failed to load -- try again in a moment.');
+  const zip = await JSZip.loadAsync(file);
+  const docXmlFile = zip.file('word/document.xml');
+  if (!docXmlFile) throw new Error('This does not look like a Word (.docx) file -- word/document.xml was not found inside it.');
+  const xmlText = await docXmlFile.async('text');
+  const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+
+  const candidateRows = [];
+
+  // Every table row anywhere in the document, including inside a floating text box.
+  const tables = doc.getElementsByTagNameNS(W_NS, 'tbl');
+  for (const tbl of tables) {
+    const trs = tbl.getElementsByTagNameNS(W_NS, 'tr');
+    for (const tr of trs) {
+      const tcs = Array.from(tr.childNodes).filter((n) => n.localName === 'tc');
+      candidateRows.push(tcs.map(docxCellText));
+    }
+  }
+
+  // Body-level paragraphs (not inside any table cell) that use tab stops to fake
+  // columns -- a conversion artifact seen for at least one row in every real sample.
+  const allParagraphs = doc.getElementsByTagNameNS(W_NS, 'p');
+  for (const p of allParagraphs) {
+    let insideCell = false;
+    for (let anc = p.parentNode; anc; anc = anc.parentNode) {
+      if (anc.localName === 'tc') { insideCell = true; break; }
+    }
+    if (insideCell) continue;
+    if (p.getElementsByTagNameNS(W_NS, 'tab').length === 0) continue;
+
+    const segments = [''];
+    for (const child of p.childNodes) {
+      if (child.localName !== 'r') continue;
+      for (const rChild of child.childNodes) {
+        if (rChild.localName === 'tab') segments.push('');
+        else if (rChild.localName === 't') segments[segments.length - 1] += rChild.textContent;
+      }
+    }
+    candidateRows.push(segments.map((s) => s.trim()));
+  }
+
+  // Seed the running balance from "STARTING BALANCE ... 35,929.58" wherever it appears.
+  const flatText = xmlText.replace(/<[^>]+>/g, ' ');
+  const startMatch = flatText.match(/STARTING\s*BALANCE[^0-9-]*([\d,]+\.\d{2})/i);
+  let runningBalance = startMatch ? parseAmount(startMatch[1]) : null;
+
+  const DATE_RE = /^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i;
+  const parsed = [];
+  for (const cells of candidateRows) {
+    if (!cells.length) continue;
+    const m = cells[0].match(DATE_RE);
+    if (!m) continue; // header / STARTING BALANCE / ENDING BALANCE / Total rows all fail this
+
+    let hour = parseInt(m[2], 10);
+    const isPM = (m[4] || '').toUpperCase() === 'PM';
+    if (isPM && hour < 12) hour += 12;
+    if (!isPM && hour === 12) hour = 0;
+    const datetime = m[1] + 'T' + String(hour).padStart(2, '0') + ':' + m[3] + ':00';
+
+    let lastIdx = cells.length - 1;
+    while (lastIdx > 0 && !cells[lastIdx]) lastIdx--;
+    const balance = parseAmount(cells[lastIdx]);
+
+    let amount = null;
+    for (let i = lastIdx - 1; i >= 3; i--) {
+      const v = parseAmount(cells[i]);
+      if (v !== null) { amount = v; break; }
+    }
+
+    let debit = null, credit = null;
+    if (amount !== null && balance !== null && runningBalance !== null) {
+      if (balance < runningBalance - 0.001) debit = amount;
+      else if (balance > runningBalance + 0.001) credit = amount;
+    }
+    if (balance !== null) runningBalance = balance;
+
+    parsed.push({
+      datetime, description: cells[1] || null, referenceNumber: cells[2] || null,
+      debit, credit, balance,
+    });
+  }
+  return { parsed, skipped: 0 };
+}
+
 const employee = await initShell('transactions');
 if (employee) {
   const root = document.getElementById('transactions-root');
@@ -156,10 +261,10 @@ if (employee) {
               '</form>' +
             '</div>' +
             '<div class="card">' +
-              '<h3>Import Statement (CSV)</h3>' +
-              '<p class="muted" style="margin-top:-4px;">Upload the exact GCash/bank statement export — Date and Time, Description, Reference No., Debit, Credit, Balance.</p>' +
+              '<h3>Import Statement (CSV or Word)</h3>' +
+              '<p class="muted" style="margin-top:-4px;">Upload the exact GCash/bank statement export — Date and Time, Description, Reference No., Debit, Credit, Balance. A .docx statement (converted from PDF) also works — Debit vs Credit is inferred from the running balance, so double-check a few rows after importing.</p>' +
               '<div class="field"><label>Method *</label><select id="import-method"><option>GCash</option><option>Bank Transfer</option></select></div>' +
-              '<div class="field"><label>File</label><input type="file" id="import-file" accept=".csv"></div>' +
+              '<div class="field"><label>File</label><input type="file" id="import-file" accept=".csv,.docx"></div>' +
               '<button class="btn small secondary" type="button" id="import-parse">Parse File</button>' +
               '<div id="import-preview" style="margin-top:8px;"></div>' +
             '</div>' +
@@ -207,17 +312,20 @@ if (employee) {
         const fileInput = document.getElementById('import-file');
         const preview = document.getElementById('import-preview');
         const file = fileInput.files[0];
-        if (!file) { toast('tx-msg', 'Choose a CSV file first.', true); return; }
+        if (!file) { toast('tx-msg', 'Choose a file first.', true); return; }
         try {
-          const text = await file.text();
-          const { parsed, skipped } = parseStatementCsv(text);
+          const isDocx = file.name.toLowerCase().endsWith('.docx');
+          const { parsed, skipped } = isDocx ? await parseDocxStatement(file) : await parseStatementCsv(await file.text());
           parsedRows = parsed;
           parsedSkipped = skipped;
           const creditCount = parsed.filter((r) => r.credit != null).length;
           const debitCount = parsed.filter((r) => r.debit != null).length;
+          const unclear = parsed.filter((r) => r.credit == null && r.debit == null).length;
           preview.innerHTML =
             '<p class="muted">Parsed ' + parsed.length + ' row(s) — ' + creditCount + ' credit, ' + debitCount + ' debit' +
+            (unclear ? ', ' + unclear + ' unclear (check these after import)' : '') +
             (skipped ? ', ' + skipped + ' skipped (blank)' : '') + '.</p>' +
+            (isDocx ? '<p class="muted" style="font-size:11px;">Debit/Credit inferred from the balance for Word imports — worth spot-checking a few rows.</p>' : '') +
             '<button class="btn small" type="button" id="import-confirm">Import ' + parsed.length + ' Row(s)</button>';
           document.getElementById('import-confirm').addEventListener('click', async () => {
             try {
