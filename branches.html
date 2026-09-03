@@ -107,6 +107,7 @@ if (employee) {
           '</div>' +
         '</div>' +
         '<div class="layout-2col-main">' +
+          '<div class="tiles" id="scrap-tiles"></div>' +
           '<h3>Current Balance <span class="muted" style="font-weight:normal;">— weight on hand</span></h3>' +
           '<div id="scrap-balance" class="card"><div class="muted">Loading…</div></div>' +
           '<div class="card">' +
@@ -234,8 +235,10 @@ if (employee) {
 
       const counts = SUB_STATUSES.reduce((acc, s) => { acc[s] = rows.filter((r) => r.status === s).length; return acc; }, {});
       const soldTotal = rows.filter((r) => r.status === 'Sold').reduce((s, r) => s + Number(r.sale_price || 0), 0);
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const soldToday = rows.filter((r) => r.status === 'Sold' && r.sale_date === todayStr).reduce((s, r) => s + Number(r.sale_price || 0), 0);
       document.getElementById('sub-tiles').innerHTML =
-        tile(counts.Pending, 'Pending') + tile(counts.Listed, 'Listed') + tile(counts.Sold, 'Sold') + tile(money(soldTotal), 'Sold Total');
+        tile(counts.Pending, 'Pending') + tile(counts.Listed, 'Listed') + tile(counts.Sold, 'Sold') + tile(money(soldTotal), 'Sold Total') + tile(money(soldToday), 'Sold Today');
 
       const list = document.getElementById('sub-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No subasta items for this filter.</p>'; return; }
@@ -351,6 +354,11 @@ if (employee) {
       if (fSearch) rows = rows.filter((r) => (r.source || '').toLowerCase().includes(fSearch) || (r.notes || '').toLowerCase().includes(fSearch));
       if (fMetal !== 'all') rows = rows.filter((r) => r.metal_type === fMetal);
       if (fType !== 'all') rows = rows.filter((r) => r.entry_type === fType);
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const purchasedToday = rows.filter((r) => r.entry_type === 'In' && r.entry_date === todayStr)
+        .reduce((s, r) => s + Number(r.total_amount || 0), 0);
+      document.getElementById('scrap-tiles').innerHTML = tile(money(purchasedToday), 'Purchased Today');
 
       const list = document.getElementById('scrap-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No scrap entries for this filter.</p>'; return; }
