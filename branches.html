@@ -79,6 +79,8 @@ if (employee) {
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
               '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="sub-f-search" placeholder="Item, pawn ref, buyer…"></div>' +
               '<div class="field"><label>Status</label><select id="sub-f-status"><option value="all">All Statuses</option>' + SUB_STATUS_OPTIONS() + '</select></div>' +
+              '<div class="field"><label>Pawned From</label><input type="date" id="sub-f-from"></div>' +
+              '<div class="field"><label>Pawned To</label><input type="date" id="sub-f-to"></div>' +
               '<button type="button" class="btn small secondary" id="sub-f-clear">Clear Filters</button>' +
             '</div>' +
           '</div>' +
@@ -120,6 +122,8 @@ if (employee) {
               '<div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="scrap-f-search" placeholder="Source, notes…"></div>' +
               '<div class="field"><label>Metal</label><select id="scrap-f-metal"><option value="all">All</option><option>Gold</option><option>Silver</option></select></div>' +
               '<div class="field"><label>Type</label><select id="scrap-f-type"><option value="all">All</option><option>In</option><option>Out</option></select></div>' +
+              '<div class="field"><label>From</label><input type="date" id="scrap-f-from"></div>' +
+              '<div class="field"><label>To</label><input type="date" id="scrap-f-to"></div>' +
               '<button type="button" class="btn small secondary" id="scrap-f-clear">Clear Filters</button>' +
             '</div>' +
           '</div>' +
@@ -188,18 +192,26 @@ if (employee) {
 
     document.getElementById('sub-f-search').addEventListener('input', renderSubasta);
     document.getElementById('sub-f-status').addEventListener('change', renderSubasta);
+    document.getElementById('sub-f-from').addEventListener('change', renderSubasta);
+    document.getElementById('sub-f-to').addEventListener('change', renderSubasta);
     document.getElementById('sub-f-clear').addEventListener('click', () => {
       document.getElementById('sub-f-search').value = '';
       document.getElementById('sub-f-status').value = 'all';
+      document.getElementById('sub-f-from').value = '';
+      document.getElementById('sub-f-to').value = '';
       renderSubasta();
     });
     document.getElementById('scrap-f-search').addEventListener('input', renderScrap);
     document.getElementById('scrap-f-metal').addEventListener('change', renderScrap);
     document.getElementById('scrap-f-type').addEventListener('change', renderScrap);
+    document.getElementById('scrap-f-from').addEventListener('change', renderScrap);
+    document.getElementById('scrap-f-to').addEventListener('change', renderScrap);
     document.getElementById('scrap-f-clear').addEventListener('click', () => {
       document.getElementById('scrap-f-search').value = '';
       document.getElementById('scrap-f-metal').value = 'all';
       document.getElementById('scrap-f-type').value = 'all';
+      document.getElementById('scrap-f-from').value = '';
+      document.getElementById('scrap-f-to').value = '';
       renderScrap();
     });
 
@@ -243,11 +255,15 @@ if (employee) {
       let rows = allSubasta;
       const fSearch = document.getElementById('sub-f-search').value.trim().toLowerCase();
       const fStatus = document.getElementById('sub-f-status').value;
+      const fFrom = document.getElementById('sub-f-from').value;
+      const fTo = document.getElementById('sub-f-to').value;
       if (fSearch) rows = rows.filter((r) =>
         r.item_description.toLowerCase().includes(fSearch) ||
         (r.pawn_reference || '').toLowerCase().includes(fSearch) ||
         (r.buyer_name || '').toLowerCase().includes(fSearch));
       if (fStatus !== 'all') rows = rows.filter((r) => r.status === fStatus);
+      if (fFrom) rows = rows.filter((r) => r.pawn_date && r.pawn_date >= fFrom);
+      if (fTo) rows = rows.filter((r) => r.pawn_date && r.pawn_date <= fTo);
 
       const counts = SUB_STATUSES.reduce((acc, s) => { acc[s] = rows.filter((r) => r.status === s).length; return acc; }, {});
       const soldTotal = rows.filter((r) => r.status === 'Sold').reduce((s, r) => s + Number(r.sale_price || 0), 0);
@@ -367,9 +383,13 @@ if (employee) {
       const fSearch = document.getElementById('scrap-f-search').value.trim().toLowerCase();
       const fMetal = document.getElementById('scrap-f-metal').value;
       const fType = document.getElementById('scrap-f-type').value;
+      const fFrom = document.getElementById('scrap-f-from').value;
+      const fTo = document.getElementById('scrap-f-to').value;
       if (fSearch) rows = rows.filter((r) => (r.source || '').toLowerCase().includes(fSearch) || (r.notes || '').toLowerCase().includes(fSearch));
       if (fMetal !== 'all') rows = rows.filter((r) => r.metal_type === fMetal);
       if (fType !== 'all') rows = rows.filter((r) => r.entry_type === fType);
+      if (fFrom) rows = rows.filter((r) => r.entry_date >= fFrom);
+      if (fTo) rows = rows.filter((r) => r.entry_date <= fTo);
 
       renderScrapBalance(fMetal === 'all' ? branchBalances : branchBalances.filter((b) => b.metal_type === fMetal));
 
