@@ -105,7 +105,7 @@ if (employee) {
               '<div class="field"><label>Weight (grams) *</label><input type="number" name="weightGrams" step="0.001" min="0" required></div>' +
               '<div class="field"><label>Price per Gram (PHP)</label><input type="number" name="pricePerGram" step="0.01" min="0"></div>' +
               '<div class="field"><label>Total Amount (PHP)</label><input type="number" name="totalAmount" step="0.01" min="0"></div>' +
-              '<div class="field"><label>Payment Method</label><select name="paymentMethod"><option>Cash</option><option>GCash</option><option>Bank Transfer</option><option>Other</option></select></div>' +
+              '<div class="field"><label>Payment Method</label><select name="paymentMethod"><option>Cash</option><option>Store Sales Cash</option><option>GCash</option><option>Bank Transfer</option><option>Other</option></select></div>' +
               '<div class="field"><label>Source</label><input type="text" name="source" placeholder="Walk-in, buyback, refiner name…"></div>' +
               '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
               '<div class="field"><label>Photo</label><input type="file" name="attachment" accept="image/*"></div>' +
@@ -251,7 +251,7 @@ if (employee) {
       const list = document.getElementById('sub-list');
       list.innerHTML = '<div class="muted">Loading…</div>';
       try {
-        allSubasta = (await listSubastaItems()).filter((r) => r.branch_id === selectedBranch);
+        allSubasta = await listSubastaItems(selectedBranch);
         renderSubasta();
       } catch (err) {
         list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
@@ -374,8 +374,8 @@ if (employee) {
       const list = document.getElementById('scrap-list');
       list.innerHTML = '<div class="muted">Loading…</div>';
       try {
-        const [entries, balances, cashBalances] = await Promise.all([listScrapEntries(), getScrapBalances(), getScrapCashBalances()]);
-        allScrap = entries.filter((r) => r.branch_id === selectedBranch);
+        const [entries, balances, cashBalances] = await Promise.all([listScrapEntries(selectedBranch), getScrapBalances(), getScrapCashBalances()]);
+        allScrap = entries;
         branchBalances = balances.filter((b) => b.branch_id === selectedBranch);
         scrapCashBalances = cashBalances;
         renderScrap();

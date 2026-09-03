@@ -243,10 +243,15 @@ export async function removeBillAttachment(billId, path) {
 // ---- Subasta (auction of unredeemed pawned items) — per branch, Admin/Manager see
 // everything, Branch Supervisor sees/manages only their own branch (RLS-enforced). ----
 
-export async function listSubastaItems() {
-  const { data, error } = await supabase.from('subasta_items')
+/** branchId narrows the query server-side -- branches.html only ever shows one
+ * branch at a time, so fetching every branch's full history on every load/switch
+ * (and re-filtering it client-side) got slower as the table grew for no reason. */
+export async function listSubastaItems(branchId) {
+  let query = supabase.from('subasta_items')
     .select('*, creator:employees!subasta_items_created_by_fkey(full_name), branches(name)')
     .order('auction_eligible_date', { ascending: true, nullsFirst: false });
+  if (branchId != null) query = query.eq('branch_id', branchId);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data;
 }
@@ -281,10 +286,13 @@ export async function deleteSubastaItem(id) {
 // ---- Scrap (scrap gold/silver bought in or sold on) — per branch, same access pattern
 // as Subasta. v_scrap_balance sums each branch+metal's running weight on hand. ----
 
-export async function listScrapEntries() {
-  const { data, error } = await supabase.from('scrap_entries')
+/** branchId narrows the query server-side -- see listSubastaItems() for why. */
+export async function listScrapEntries(branchId) {
+  let query = supabase.from('scrap_entries')
     .select('*, creator:employees!scrap_entries_created_by_fkey(full_name), branches(name)')
     .order('entry_date', { ascending: false });
+  if (branchId != null) query = query.eq('branch_id', branchId);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data;
 }
