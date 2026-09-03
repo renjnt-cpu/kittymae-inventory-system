@@ -125,12 +125,17 @@ if (employee) {
     }
 
     /** Same compact "Name + Order ID, click to expand" pattern as the approver view —
-     * consistent on mobile and desktop, and across both views. */
+     * consistent on mobile and desktop, and across both views. Shows every field the
+     * approver's own detail panel shows, just view-only for Proof of Payment (no
+     * add/remove controls — only an approver processes the payout). */
     function renderMine() {
       const list = document.getElementById('ref-list');
       if (!myRows.length) { list.innerHTML = '<p class="muted">No refund requests yet.</p>'; return; }
       const dupKeys = duplicateKeySet(myRows);
       list.innerHTML = myRows.map((r) => {
+        const photos = r.refund_attachments || [];
+        const paidSoFar = photos.reduce((s, a) => s + Number(a.amount || 0), 0);
+        const remaining = Number(r.refund_amount || 0) - paidSoFar;
         const isOpen = openMineId === r.id;
         return '<div class="completed-item">' +
           '<button type="button" class="completed-orderid" data-toggle-mine="' + r.id + '">' +
@@ -139,10 +144,21 @@ if (employee) {
           '</button>' +
           (isOpen ? '<div class="completed-detail">' +
             '<div><b>Date Requested:</b> ' + (r.date_requested || '—') + '</div>' +
+            '<div><b>Date Purchased:</b> ' + (r.purchase_date || '—') + '</div>' +
             '<div><b>Item:</b> ' + esc(r.item_description || '—') + '</div>' +
-            '<div><b>Amount:</b> ' + money(r.refund_amount) + '</div>' +
-            '<div><b>Method:</b> ' + esc(r.refund_method) + '</div>' +
             '<div><b>Reason:</b> ' + esc(r.reason || '—') + '</div>' +
+            '<div><b>Amount:</b> ' + money(r.refund_amount) +
+              (photos.length ? ' (' + money(paidSoFar) + (remaining > 0 ? ' paid · ' + money(remaining) + ' left' : ' paid · fully covered') + ')' : '') +
+            '</div>' +
+            '<div><b>Method:</b> ' + esc(r.refund_method) + '</div>' +
+            '<div><b>Payout Account:</b> ' + (r.account_name || r.account_number ? esc(r.account_name || '') + (r.account_number ? ' · ' + esc(r.account_number) : '') : '—') + '</div>' +
+            '<div><b>Notes:</b> ' + esc(r.notes || '—') + '</div>' +
+            '<div><b>Approved by:</b> ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
+            '<div style="margin-top:4px;"><b>Proof of Payment:</b><br>' +
+              (photos.length
+                ? photos.map((a) => '<div>' + money(a.amount) + (a.reference_number ? ' · Ref: ' + esc(a.reference_number) : '') + ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button></div>').join('')
+                : 'None yet') +
+            '</div>' +
           '</div>' : '') +
         '</div>';
       }).join('');
@@ -151,6 +167,11 @@ if (employee) {
         const id = Number(btn.dataset.toggleMine);
         openMineId = openMineId === id ? null : id;
         renderMine();
+      }));
+
+      list.querySelectorAll('[data-view-id]').forEach((btn) => btn.addEventListener('click', async () => {
+        try { window.open(await getRefundAttachmentUrl(btn.dataset.path), '_blank'); }
+        catch (err) { toast('ref-msg', String(err.message || err), true); }
       }));
     }
   }
@@ -252,6 +273,7 @@ if (employee) {
             '<div><b>Amount:</b> ' + money(r.refund_amount) + '</div>' +
             '<div><b>Method:</b> ' + esc(r.refund_method) + '</div>' +
             '<div><b>Payout Account:</b> ' + (r.account_name || r.account_number ? esc(r.account_name || '') + (r.account_number ? ' · ' + esc(r.account_number) : '') : '—') + '</div>' +
+            '<div><b>Notes:</b> ' + esc(r.notes || '—') + '</div>' +
             '<div><b>Requested by:</b> ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div>' +
             '<div><b>Approved by:</b> ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
             '<div style="margin-top:4px;"><b>Proof of Payment:</b><br>' +
@@ -329,6 +351,7 @@ if (employee) {
             '</div>' +
             '<div><b>Method:</b> ' + esc(r.refund_method) + '</div>' +
             '<div><b>Payout Account:</b> ' + (r.account_name || r.account_number ? esc(r.account_name || '') + (r.account_number ? ' · ' + esc(r.account_number) : '') : '—') + '</div>' +
+            '<div><b>Notes:</b> ' + esc(r.notes || '—') + '</div>' +
             '<div><b>Requested by:</b> ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div>' +
             '<div><b>Approved by:</b> ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
             '<div style="margin-top:4px;"><b>Proof of Payment:</b><br>' +
