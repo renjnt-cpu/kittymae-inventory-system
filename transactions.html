@@ -164,6 +164,10 @@ async function parseDocxStatement(file) {
   function walkForRows(node) {
     for (const child of node.childNodes) {
       if (child.nodeType !== 1) continue;
+      // mc:AlternateContent provides the SAME content twice -- mc:Choice for modern
+      // Word, mc:Fallback (legacy VML) for old versions. Skip Fallback entirely or
+      // every row inside it gets processed a second time.
+      if (child.localName === 'Fallback') continue;
       if (child.localName === 'tbl') {
         const trs = child.getElementsByTagNameNS(W_NS, 'tr');
         for (const tr of trs) {
