@@ -255,7 +255,21 @@ if (employee) {
     let allAccounts = await listAccounts();
     const accountOptions = () => allAccounts.map((a) => '<option value="' + a.id + '">' + esc(a.name) + ' (' + esc(a.type) + ')</option>').join('');
     const accountLabel = (t) => t.accounts ? t.accounts.name : '—';
-    const accountBadgeClass = (t) => (t.accounts && t.accounts.type === 'GCash') ? 'transit' : 'ok';
+    // Each account gets its own consistent color derived from its name (not its type) --
+    // otherwise all 4 GCash accounts render identically and look like one combined
+    // account instead of 4 separate ones.
+    const ACCOUNT_PALETTE = [
+      { bg: '#e3edfd', fg: '#1a56b0' }, { bg: '#eaf6ec', fg: '#1e7d34' },
+      { bg: '#fdecea', fg: '#b0301a' }, { bg: '#fff4e0', fg: '#a15c00' },
+      { bg: '#f3e8fd', fg: '#6b21a8' }, { bg: '#e0f7fa', fg: '#00707a' },
+      { bg: '#fce4ec', fg: '#ad1457' }, { bg: '#eef2ff', fg: '#3730a3' },
+    ];
+    function accountColorStyle(name) {
+      let hash = 0;
+      for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+      const c = ACCOUNT_PALETTE[hash % ACCOUNT_PALETTE.length];
+      return 'background:' + c.bg + ';color:' + c.fg + ';';
+    }
 
     root.innerHTML =
       '<div class="layout-2col">' +
@@ -462,12 +476,14 @@ if (employee) {
         const who = t.fb_name || t.customer_name || '—';
         const amountLbl = t.credit != null ? '+' + money(t.credit) : (t.debit != null ? '-' + money(t.debit) : '—');
         return '<div class="completed-item">' +
-          '<button type="button" class="completed-orderid" data-toggle-tx="' + t.id + '">' +
-            when + ' — ' + esc(who) +
-            ' <span class="badge ' + accountBadgeClass(t) + '" style="font-weight:normal;">' + esc(accountLabel(t)) + '</span>' +
-            ' <span class="muted" style="font-weight:normal;">' + amountLbl + '</span>' +
-            (t.credit != null && !t.order_id ? ' <span class="badge low" style="font-weight:normal;">No Order ID</span>' : '') +
-          '</button>' +
+          '<div style="display:flex;align-items:center;gap:6px;">' +
+            '<button type="button" class="completed-orderid" data-toggle-tx="' + t.id + '" style="flex:1;">' +
+              when + ' — ' + esc(who) +
+              ' <span class="muted" style="font-weight:normal;">' + amountLbl + '</span>' +
+              (t.credit != null && !t.order_id ? ' <span class="badge low" style="font-weight:normal;">No Order ID</span>' : '') +
+            '</button>' +
+            '<button type="button" class="badge" data-filter-account="' + t.account_id + '" title="Show only ' + esc(accountLabel(t)) + '" style="border:none;cursor:pointer;flex-shrink:0;font-weight:normal;' + accountColorStyle(accountLabel(t)) + '">' + esc(accountLabel(t)) + '</button>' +
+          '</div>' +
           (isOpen ? '<div class="completed-detail">' +
             '<div style="overflow-x:auto;">' +
               '<form class="recon-form" data-id="' + t.id + '" style="display:flex;flex-wrap:nowrap;gap:6px 10px;align-items:center;font-size:12px;width:max-content;">' +
@@ -503,7 +519,8 @@ if (employee) {
           const groupRows = groups[key];
           const groupCredit = groupRows.reduce((s, t) => s + Number(t.credit || 0), 0);
           const groupDebit = groupRows.reduce((s, t) => s + Number(t.debit || 0), 0);
-          return '<h4 style="margin:16px 0 4px;">' + esc(accountLabel(groupRows[0])) +
+          const label = accountLabel(groupRows[0]);
+          return '<h4 style="margin:16px 0 4px;cursor:pointer;display:inline-block;padding:2px 8px;border-radius:10px;' + accountColorStyle(label) + '" data-filter-account="' + key + '" title="Show only ' + esc(label) + '">' + esc(label) +
             ' <span class="muted" style="font-weight:normal;font-size:12px;">— ' + groupRows.length + ' txn, +' + money(groupCredit) + ' / -' + money(groupDebit) + '</span></h4>' +
             groupRows.map(txCardHtml).join('');
         }).join('');
@@ -512,6 +529,12 @@ if (employee) {
       list.querySelectorAll('[data-toggle-tx]').forEach((btn) => btn.addEventListener('click', () => {
         const id = Number(btn.dataset.toggleTx);
         openId = openId === id ? null : id;
+        render();
+      }));
+
+      list.querySelectorAll('[data-filter-account]').forEach((el) => el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        document.getElementById('f-account').value = String(el.dataset.filterAccount);
         render();
       }));
 
