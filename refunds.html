@@ -14,7 +14,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { listRefunds, createRefund, setRefundStatus, deleteRefund, addRefundAttachment, removeRefundAttachment, getRefundAttachmentUrl } from './js/api.js';
+import { listRefunds, createRefund, setRefundStatus, deleteRefund, addRefundAttachment, removeRefundAttachment, getRefundAttachmentUrl, subscribeToChanges } from './js/api.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const STATUS_BADGE = { 'Pending Approval': 'pending', 'Approved': 'transit', 'Completed': 'ok' };
@@ -89,6 +89,7 @@ if (employee) {
     });
 
     loadMine();
+    subscribeToChanges('refunds', loadMine);
 
     async function loadMine() {
       const list = document.getElementById('ref-list');
@@ -161,6 +162,7 @@ if (employee) {
     let openAddProofFor = null;
     let openCompletedId = null;
     load();
+    subscribeToChanges(['refunds', 'refund_attachments'], load);
 
     document.getElementById('f-search').addEventListener('input', render);
     document.getElementById('f-status').addEventListener('change', render);

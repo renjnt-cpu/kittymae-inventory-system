@@ -27,6 +27,16 @@ export async function linkEmployee() {
   return data;
 }
 
+/** Self-service name correction — several employees were bulk-added from a roster
+ * screenshot with placeholder/generic names, so anyone can fix their own display name
+ * (and nothing else — see update_my_name() in 30_update_my_name.sql for why this isn't
+ * a general self-edit). */
+export async function updateMyName(fullName) {
+  const { data, error } = await supabase.rpc('update_my_name', { p_full_name: fullName });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 /** Redirects to login.html if there's no active session. Call at the top of every
  * page except login.html itself. */
 export async function requireSession() {

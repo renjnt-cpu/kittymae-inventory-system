@@ -14,7 +14,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { listBills, createBill, setBillStatus, updateBill, deleteBill, uploadBillAttachment, getBillAttachmentUrl, removeBillAttachment } from './js/api.js';
+import { listBills, createBill, setBillStatus, updateBill, deleteBill, uploadBillAttachment, getBillAttachmentUrl, removeBillAttachment, subscribeToChanges } from './js/api.js';
 
 const STATUS_BADGE = { Unpaid: 'pending', Overdue: 'low', 'Auto-debited': 'transit', Paid: 'ok' };
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
@@ -100,6 +100,7 @@ if (employee) {
 
     let allBills = [];
     await load();
+    subscribeToChanges('bills', load);
 
     document.getElementById('month-filter').addEventListener('change', render);
     ['f-search', 'f-amount-min', 'f-amount-max'].forEach((id) =>

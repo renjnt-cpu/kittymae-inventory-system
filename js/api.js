@@ -4,6 +4,23 @@
 // supabase-js's table/RPC calls aren't as uniformly shaped as google.script.run's.
 import { supabase } from './supabaseClient.js';
 
+/** Live cross-user updates — the business is fast-paced (multiple people approving/
+ * editing the same records), so every page subscribes to Postgres changes on the
+ * table(s) it displays and just reloads when anything changes, instead of everyone
+ * having to manually refresh to see someone else's approval/edit. RLS still applies to
+ * realtime the same as any other read, so this never leaks rows a viewer couldn't
+ * otherwise see. Call the returned function to unsubscribe (not currently needed since
+ * these pages never tear down, but kept for correctness). */
+export function subscribeToChanges(tables, onChange) {
+  const list = Array.isArray(tables) ? tables : [tables];
+  const channel = supabase.channel('live-' + list.join('-') + '-' + Math.random().toString(36).slice(2));
+  list.forEach((table) => {
+    channel.on('postgres_changes', { event: '*', schema: 'public', table }, onChange);
+  });
+  channel.subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
 export async function getBranches() {
   const { data, error } = await supabase.from('branches').select('*').eq('is_active', true).order('id');
   if (error) throw new Error(error.message);

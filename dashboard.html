@@ -22,7 +22,7 @@
 
 <script type="module">
 import { initShell, esc, toast } from './js/shell.js';
-import { getBranches, getInventory } from './js/api.js';
+import { getBranches, getInventory, subscribeToChanges } from './js/api.js';
 
 const employee = await initShell('dashboard');
 if (employee) {
@@ -34,6 +34,7 @@ if (employee) {
 
   renderBranchButtons();
   await loadStock();
+  subscribeToChanges(['inventory', 'inventory_transactions'], loadStock);
 
   window.__runSearch = () => renderTable(window.__allRows || []);
 

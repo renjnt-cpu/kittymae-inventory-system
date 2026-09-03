@@ -14,7 +14,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { getBranches, listBranchCapitalEntries, getBranchCapitalBalances, createBranchCapitalEntry, deleteBranchCapitalEntry } from './js/api.js';
+import { getBranches, listBranchCapitalEntries, getBranchCapitalBalances, createBranchCapitalEntry, deleteBranchCapitalEntry, subscribeToChanges } from './js/api.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
@@ -80,6 +80,7 @@ if (employee) {
 
     let allEntries = [];
     await load();
+    subscribeToChanges('branch_capital_entries', load);
 
     document.getElementById('f-search').addEventListener('input', render);
     document.getElementById('f-branch').addEventListener('change', render);

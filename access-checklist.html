@@ -22,7 +22,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem } from './js/api.js';
+import { getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, subscribeToChanges } from './js/api.js';
 
 /** Builds the list of things to verify from the employee's CURRENT role,
  * branch, and bills_access -- not a hardcoded name lookup -- so a role or
@@ -83,15 +83,21 @@ if (employee) {
   } else {
     let people = [];
     let checked = {};
-    try {
-      const [emps, rows] = await Promise.all([getEmployeesForChecklist(), getAccessChecklist()]);
-      people = emps.map((e) => ({ id: e.id, name: e.full_name, role: e.role, position: e.position, items: itemsForEmployee(e) }));
-      rows.forEach((r) => { if (r.checked) checked[r.employee_id + ':' + r.item_key] = true; });
-    } catch (err) {
-      toast('ac-msg', String(err.message || err), true);
+
+    async function load() {
+      try {
+        const [emps, rows] = await Promise.all([getEmployeesForChecklist(), getAccessChecklist()]);
+        people = emps.map((e) => ({ id: e.id, name: e.full_name, role: e.role, position: e.position, items: itemsForEmployee(e) }));
+        checked = {};
+        rows.forEach((r) => { if (r.checked) checked[r.employee_id + ':' + r.item_key] = true; });
+      } catch (err) {
+        toast('ac-msg', String(err.message || err), true);
+      }
+      render();
     }
 
-    render();
+    await load();
+    subscribeToChanges('access_checklist_verifications', load);
 
     function render() {
       let total = 0, done = 0;

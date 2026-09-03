@@ -18,6 +18,7 @@ import {
   getBranches,
   listSubastaItems, createSubastaItem, updateSubastaItem, deleteSubastaItem,
   listScrapEntries, getScrapBalances, createScrapEntry, deleteScrapEntry,
+  subscribeToChanges,
 } from './js/api.js';
 
 const SUB_STATUS_BADGE = { Pending: 'pending', Listed: 'transit', Sold: 'ok', Cancelled: 'low' };
@@ -153,6 +154,8 @@ if (employee) {
 
     let allSubasta = [], allScrap = [];
     await Promise.all([loadSubasta(), loadScrap()]);
+    subscribeToChanges('subasta_items', loadSubasta);
+    subscribeToChanges('scrap_entries', loadScrap);
 
     document.getElementById('sub-f-search').addEventListener('input', renderSubasta);
     document.getElementById('sub-f-status').addEventListener('change', renderSubasta);

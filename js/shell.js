@@ -1,7 +1,7 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, signOut } from './auth.js';
+import { requireSession, linkEmployee, signOut, updateMyName } from './auth.js';
 
 export async function initShell(activePage) {
   const session = await requireSession();
@@ -48,9 +48,13 @@ export async function initShell(activePage) {
 
   const header = document.createElement('header');
   header.innerHTML = '<h1>💎 Kittymae Jewels System</h1>' +
-    '<div class="who">' + employee.full_name + ' · ' + employee.role +
-    (employee.branch_id ? ' · Branch #' + employee.branch_id : ' · All Branches') +
-    ' &nbsp; <button class="btn small secondary" id="signout-btn">Sign out</button></div>';
+    '<div class="who">' +
+      '<span id="who-display">' + esc(employee.full_name) + ' · ' + esc(employee.role) +
+        (employee.branch_id ? ' · Branch #' + employee.branch_id : ' · All Branches') +
+      '</span>' +
+      ' <button class="btn small secondary" id="edit-name-btn">Edit Name</button>' +
+      ' <button class="btn small secondary" id="signout-btn">Sign out</button>' +
+    '</div>';
 
   const nav = document.createElement('nav');
   nav.innerHTML = pages.map((p) =>
@@ -60,6 +64,35 @@ export async function initShell(activePage) {
   document.body.prepend(nav);
   document.body.prepend(header);
   header.querySelector('#signout-btn').addEventListener('click', signOut);
+
+  const whoEl = header.querySelector('.who');
+  header.querySelector('#edit-name-btn').addEventListener('click', () => {
+    const display = header.querySelector('#who-display');
+    const editBtn = header.querySelector('#edit-name-btn');
+    display.style.display = 'none';
+    editBtn.style.display = 'none';
+    const form = document.createElement('span');
+    form.innerHTML =
+      '<input type="text" id="edit-name-input" value="' + esc(employee.full_name) + '" style="padding:4px 6px;border-radius:4px;border:1px solid #ccc;font-size:12px;width:140px;">' +
+      ' <button class="btn small" id="edit-name-save">Save</button>' +
+      ' <button class="btn small secondary" id="edit-name-cancel">Cancel</button>';
+    whoEl.insertBefore(form, editBtn);
+
+    const cleanup = () => { form.remove(); display.style.display = ''; editBtn.style.display = ''; };
+    form.querySelector('#edit-name-cancel').addEventListener('click', cleanup);
+    form.querySelector('#edit-name-save').addEventListener('click', async () => {
+      const newName = form.querySelector('#edit-name-input').value.trim();
+      if (!newName) return;
+      try {
+        await updateMyName(newName);
+        employee.full_name = newName;
+        display.textContent = newName + ' · ' + employee.role + (employee.branch_id ? ' · Branch #' + employee.branch_id : ' · All Branches');
+        cleanup();
+      } catch (err) {
+        alert(String(err.message || err));
+      }
+    });
+  });
 
   return employee;
 }

@@ -14,7 +14,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { getBranches, listActiveEmployees, listAssetCustodianItems, createAssetCustodianItem, updateAssetCustodianItem, deleteAssetCustodianItem } from './js/api.js';
+import { getBranches, listActiveEmployees, listAssetCustodianItems, createAssetCustodianItem, updateAssetCustodianItem, deleteAssetCustodianItem, subscribeToChanges } from './js/api.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const CONDITION_BADGE = { Good: 'ok', Damaged: 'low', Lost: 'low', Returned: 'pending' };
@@ -89,6 +89,7 @@ if (employee) {
 
     let allItems = [];
     await load();
+    subscribeToChanges('asset_custodian_items', load);
 
     document.getElementById('f-search').addEventListener('input', render);
     document.getElementById('f-type').addEventListener('change', render);

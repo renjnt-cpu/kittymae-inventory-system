@@ -14,7 +14,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { listPayments, createPayment, deletePayment } from './js/api.js';
+import { listPayments, createPayment, deletePayment, subscribeToChanges } from './js/api.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
@@ -74,6 +74,7 @@ if (employee) {
 
     let allPayments = [];
     await load();
+    subscribeToChanges('payment_transactions', load);
 
     document.getElementById('f-search').addEventListener('input', render);
     document.getElementById('f-method').addEventListener('change', render);
