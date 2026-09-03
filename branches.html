@@ -186,6 +186,7 @@ if (employee) {
     });
 
     let allSubasta = [], allScrap = [], branchBalances = [], scrapCashBalances = [];
+    let openSubId = null, openSubEditId = null, openScrapId = null;
     await Promise.all([loadSubasta(), loadScrap()]);
     subscribeToChanges('subasta_items', loadSubasta);
     subscribeToChanges(['scrap_entries', 'branch_capital_entries'], loadScrap);
@@ -285,52 +286,82 @@ if (employee) {
 
       const list = document.getElementById('sub-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No subasta items for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>SKU</th><th>Item</th><th>Weight</th><th>Pawn Ref</th><th>Pawn Date</th><th>Eligible Date</th><th>Status</th><th>Sale Date</th><th>Sale Price</th><th>Buyer</th><th>Notes</th><th></th></tr>' +
-        rows.map((r) =>
-          '<tr data-row-id="' + r.id + '">' +
-            '<td data-label="SKU">' + esc(r.sku || '') + '</td>' +
-            '<td data-label="Item">' + esc(r.item_description) +
-              (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
-            '</td>' +
-            '<td data-label="Weight">' + (r.weight_grams ? Number(r.weight_grams).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g' : '—') + '</td>' +
-            '<td data-label="Pawn Ref">' + esc(r.pawn_reference || '') + '</td>' +
-            '<td data-label="Pawn Date">' + (r.pawn_date || '—') + '</td>' +
-            '<td data-label="Eligible Date">' + (r.auction_eligible_date || '—') + '</td>' +
-            '<td data-label="Status"><span class="badge ' + (SUB_STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
-            '<td data-label="Sale Date">' + (r.sale_date || '—') + '</td>' +
-            '<td data-label="Sale Price">' + money(r.sale_price) + '</td>' +
-            '<td data-label="Buyer">' + esc(r.buyer_name || '') + '</td>' +
-            '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
-            '<td data-label="Actions" style="white-space:nowrap;">' +
+
+      // Compact "click to expand" cards (same pattern as Refunds) instead of a wide
+      // table — with every field now shown, the table had grown too wide to view
+      // without horizontal scrolling.
+      list.innerHTML = rows.map((r) => {
+        const isOpen = openSubId === r.id;
+        const isEditing = openSubEditId === r.id;
+        return '<div class="completed-item">' +
+          '<button type="button" class="completed-orderid" data-toggle-sub="' + r.id + '">' +
+            esc(r.item_description) + (r.sku ? ' (' + esc(r.sku) + ')' : '') +
+            ' <span class="badge ' + (SUB_STATUS_BADGE[r.status] || 'pending') + '" style="font-weight:normal;">' + esc(r.status) + '</span>' +
+          '</button>' +
+          (isOpen ? '<div class="completed-detail">' +
+            (isEditing ? subEditFormHtml(r) :
+              '<div><b>Weight:</b> ' + (r.weight_grams ? Number(r.weight_grams).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g' : '—') + '</div>' +
+              '<div><b>Pawn Ref:</b> ' + esc(r.pawn_reference || '—') + '</div>' +
+              '<div><b>Pawn Date:</b> ' + (r.pawn_date || '—') + '</div>' +
+              '<div><b>Eligible Date:</b> ' + (r.auction_eligible_date || '—') + '</div>' +
+              '<div><b>Sale Date:</b> ' + (r.sale_date || '—') + '</div>' +
+              '<div><b>Sale Price:</b> ' + money(r.sale_price) + '</div>' +
+              '<div><b>Buyer:</b> ' + esc(r.buyer_name || '—') + '</div>' +
+              '<div><b>Notes:</b> ' + esc(r.notes || '—') + '</div>' +
+              '<div><b>Added by:</b> ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div>' +
               (canWriteHere()
-                ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="edit">Edit</button> ' +
-                  '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>'
-                : '') +
-            '</td>' +
-          '</tr>' +
-          '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="12"></td></tr>'
-        ).join('') + '</table></div>';
+                ? '<div style="margin-top:8px;"><button class="btn small secondary" data-id="' + r.id + '" data-act="edit">Edit</button> <button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button></div>'
+                : '')) +
+          '</div>' : '') +
+        '</div>';
+      }).join('');
+
+      list.querySelectorAll('[data-toggle-sub]').forEach((btn) => btn.addEventListener('click', () => {
+        const id = Number(btn.dataset.toggleSub);
+        openSubId = openSubId === id ? null : id;
+        openSubEditId = null;
+        renderSubasta();
+      }));
 
       list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
         const id = btn.dataset.id;
         try {
           if (btn.dataset.act === 'delete') { if (!confirm('Delete this item?')) return; await deleteSubastaItem(id); toast('br-msg', 'Deleted.', false); await loadSubasta(); }
-          else if (btn.dataset.act === 'edit') openSubEdit(id, rows);
+          else if (btn.dataset.act === 'edit') { openSubEditId = Number(id); renderSubasta(); }
         } catch (err) {
           toast('br-msg', String(err.message || err), true);
         }
       }));
+
+      list.querySelectorAll('.edit-form').forEach((form) => {
+        form.querySelector('[data-cancel]').addEventListener('click', () => { openSubEditId = null; renderSubasta(); });
+        form.addEventListener('submit', async (ev) => {
+          ev.preventDefault();
+          const f = ev.target;
+          const id = f.dataset.id;
+          try {
+            await updateSubastaItem(id, {
+              branchId: isScoped ? employee.branch_id : Number(f.branchId.value),
+              sku: f.sku.value.trim(),
+              itemDescription: f.itemDescription.value.trim(), weightGrams: f.weightGrams.value ? Number(f.weightGrams.value) : null,
+              pawnReference: f.pawnReference.value.trim(),
+              pawnDate: f.pawnDate.value || null, auctionEligibleDate: f.auctionEligibleDate.value || null,
+              status: f.status.value, saleDate: f.saleDate.value || null,
+              salePrice: f.salePrice.value ? Number(f.salePrice.value) : null,
+              buyerName: f.buyerName.value.trim(), notes: f.notes.value.trim(),
+            });
+            toast('br-msg', 'Item updated.', false);
+            openSubEditId = null;
+            await loadSubasta();
+          } catch (err) {
+            toast('br-msg', String(err.message || err), true);
+          }
+        });
+      });
     }
 
-    function openSubEdit(id, rows) {
-      const r = rows.find((x) => String(x.id) === String(id));
-      const cell = document.querySelector('tr[data-edit-for="' + id + '"]');
-      const isOpen = cell.style.display !== 'none';
-      document.querySelectorAll('.edit-row').forEach((row) => { row.style.display = 'none'; row.querySelector('td').innerHTML = ''; });
-      if (isOpen) return;
-      cell.style.display = '';
-      cell.querySelector('td').innerHTML =
-        '<form class="edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+    function subEditFormHtml(r) {
+      return '<form class="edit-form" data-id="' + r.id + '" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
           '<div class="field"><label>Branch</label><select name="branchId"' + (isScoped ? ' disabled' : '') + '>' + branchOptions(r.branch_id) + '</select></div>' +
           '<div class="field"><label>SKU</label><input type="text" name="sku" value="' + esc(r.sku || '') + '"></div>' +
           '<div class="field" style="min-width:200px;"><label>Item Description</label><input type="text" name="itemDescription" value="' + esc(r.item_description) + '" required></div>' +
@@ -346,28 +377,6 @@ if (employee) {
           '<button class="btn small" type="submit">Save</button> ' +
           '<button class="btn small secondary" type="button" data-cancel="1">Cancel</button>' +
         '</form>';
-      const form = cell.querySelector('.edit-form');
-      form.querySelector('[data-cancel]').addEventListener('click', () => { cell.style.display = 'none'; form.remove(); });
-      form.addEventListener('submit', async (ev) => {
-        ev.preventDefault();
-        const f = ev.target;
-        try {
-          await updateSubastaItem(id, {
-            branchId: isScoped ? employee.branch_id : Number(f.branchId.value),
-            sku: f.sku.value.trim(),
-            itemDescription: f.itemDescription.value.trim(), weightGrams: f.weightGrams.value ? Number(f.weightGrams.value) : null,
-            pawnReference: f.pawnReference.value.trim(),
-            pawnDate: f.pawnDate.value || null, auctionEligibleDate: f.auctionEligibleDate.value || null,
-            status: f.status.value, saleDate: f.saleDate.value || null,
-            salePrice: f.salePrice.value ? Number(f.salePrice.value) : null,
-            buyerName: f.buyerName.value.trim(), notes: f.notes.value.trim(),
-          });
-          toast('br-msg', 'Item updated.', false);
-          await loadSubasta();
-        } catch (err) {
-          toast('br-msg', String(err.message || err), true);
-        }
-      });
     }
 
     async function loadScrap() {
@@ -445,27 +454,42 @@ if (employee) {
 
       const list = document.getElementById('scrap-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No scrap entries for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Date</th><th>Type</th><th>Customer</th><th>Contact</th><th>Metal</th><th>Karat</th><th>Weight</th><th>Price/g</th><th>Total</th><th>Payment</th><th>Source</th><th>Notes</th><th>Photo</th><th></th></tr>' +
-        rows.map((r) =>
-          '<tr>' +
-            '<td data-label="Date">' + (r.entry_date || '—') + '</td>' +
-            '<td data-label="Type"><span class="badge ' + (r.entry_type === 'In' ? 'ok' : 'pending') + '">' + esc(r.entry_type) + '</span></td>' +
-            '<td data-label="Customer">' + esc(r.customer_name || '') + '</td>' +
-            '<td data-label="Contact">' + esc(r.contact_number || '') + '</td>' +
-            '<td data-label="Metal">' + esc(r.metal_type) + '</td>' +
-            '<td data-label="Karat">' + esc(r.karat || '') + '</td>' +
-            '<td data-label="Weight">' + weight(r.weight_grams) +
-              (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
-            '</td>' +
-            '<td data-label="Price/g">' + money(r.price_per_gram) + '</td>' +
-            '<td data-label="Total">' + money(r.total_amount) + '</td>' +
-            '<td data-label="Payment">' + esc(r.payment_method || '') + '</td>' +
-            '<td data-label="Source">' + esc(r.source || '') + '</td>' +
-            '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
-            '<td data-label="Photo">' + (r.attachment_path ? '<button class="btn small secondary" data-id="' + r.id + '" data-path="' + esc(r.attachment_path) + '" data-act="view-photo">View Photo</button>' : '—') + '</td>' +
-            '<td data-label="Actions" style="white-space:nowrap;">' + (canWriteHere() ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' : '') + '</td>' +
-          '</tr>'
-        ).join('') + '</table></div>';
+
+      // Compact "click to expand" cards (same pattern as Refunds/Subasta) instead of
+      // a wide table -- with every field now shown, the table had grown too wide to
+      // view without horizontal scrolling.
+      list.innerHTML = rows.map((r) => {
+        const isOpen = openScrapId === r.id;
+        return '<div class="completed-item">' +
+          '<button type="button" class="completed-orderid" data-toggle-scrap="' + r.id + '">' +
+            (r.entry_date || '—') + ' — ' + esc(r.customer_name || 'Walk-in') +
+            ' <span class="badge ' + (r.entry_type === 'In' ? 'ok' : 'pending') + '" style="font-weight:normal;">' + esc(r.entry_type) + '</span>' +
+            ' <span class="muted" style="font-weight:normal;">' + money(r.total_amount) + '</span>' +
+          '</button>' +
+          (isOpen ? '<div class="completed-detail">' +
+            '<div><b>Contact:</b> ' + esc(r.contact_number || '—') + '</div>' +
+            '<div><b>Metal:</b> ' + esc(r.metal_type) + '</div>' +
+            '<div><b>Karat/Purity:</b> ' + esc(r.karat || '—') + '</div>' +
+            '<div><b>Weight:</b> ' + weight(r.weight_grams) + '</div>' +
+            '<div><b>Price/g:</b> ' + money(r.price_per_gram) + '</div>' +
+            '<div><b>Total:</b> ' + money(r.total_amount) + '</div>' +
+            '<div><b>Payment:</b> ' + esc(r.payment_method || '—') + '</div>' +
+            '<div><b>Source:</b> ' + esc(r.source || '—') + '</div>' +
+            '<div><b>Notes:</b> ' + esc(r.notes || '—') + '</div>' +
+            '<div><b>Added by:</b> ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div>' +
+            '<div style="margin-top:8px;">' +
+              (r.attachment_path ? '<button class="btn small secondary" data-id="' + r.id + '" data-path="' + esc(r.attachment_path) + '" data-act="view-photo">View Photo</button> ' : '') +
+              (canWriteHere() ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' : '') +
+            '</div>' +
+          '</div>' : '') +
+        '</div>';
+      }).join('');
+
+      list.querySelectorAll('[data-toggle-scrap]').forEach((btn) => btn.addEventListener('click', () => {
+        const id = Number(btn.dataset.toggleScrap);
+        openScrapId = openScrapId === id ? null : id;
+        renderScrap();
+      }));
 
       list.querySelectorAll('[data-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
         if (!confirm('Delete this scrap entry?')) return;
