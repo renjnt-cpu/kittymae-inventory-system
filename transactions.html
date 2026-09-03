@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transactions — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main>
+  <div id="tx-msg"></div>
+  <div id="transactions-root"></div>
+</main>
+
+<script type="module">
+import { initShell, toast, esc } from './js/shell.js';
+import { listTransactions, createTransaction, importTransactions, updateTransactionReconciliation, deleteTransaction, subscribeToChanges } from './js/api.js';
+
+const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+
+// ---- CSV parsing (GCash/Bank statement export) ----
+// Handles RFC4180 quoting (commas/newlines inside quoted fields) since a
+// Description like "Transfer from 09xxx to 09xxx, ref: ..." can legitimately
+// contain a comma.
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], next = text[i + 1];
+    if (inQuotes) {
+      if (c === '"' && next === '"') { field += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else { field += c; }
+    } else {
+      if (c === '"') { inQuotes = true; }
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\r') { /* skip, \n below ends the row */ }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else { field += c; }
+    }
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+// GCash's own export (and most bank statements) lead with a few title/date-range
+// rows before the real header -- scan for the row that actually has Description +
+// Reference columns rather than assuming row 0 is the header.
+function findHeaderRow(rows) {
+  for (let i = 0; i < rows.length; i++) {
+    const lower = rows[i].map((c) => c.trim().toLowerCase());
+    if (lower.some((c) => c.includes('description')) && lower.some((c) => c.includes('reference'))) return i;
+  }
+  return -1;
+}
+
+function colIndex(headerRow, patterns) {
+  const lower = headerRow.map((c) => c.trim().toLowerCase());
+  for (const p of patterns) {
+    const idx = lower.findIndex((c) => c === p);
+    if (idx !== -1) return idx;
+  }
+  for (const p of patterns) {
+    const idx = lower.findIndex((c) => c.includes(p));
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
+function parseAmount(s) {
+  if (!s || !s.trim()) return null;
+  const n = Number(s.replace(/,/g, '').trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseDatetime(s) {
+  s = (s || '').trim();
+  if (!s) return null;
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (m) return m[1] + 'T' + String(m[2]).padStart(2, '0') + ':' + m[3] + ':' + (m[4] || '00');
+  const d = new Date(s);
+  return isNaN(d) ? null : d.toISOString();
+}
+
+/** Parses a GCash/bank statement CSV into row objects ready for importTransactions().
+ * FB Name / Customer / Order ID columns are optional -- present if the uploaded file
+ * is an already-partially-reconciled master sheet, absent for a raw GCash export. */
+function parseStatementCsv(text) {
+  const rows = parseCSV(text);
+  const headerIdx = findHeaderRow(rows);
+  if (headerIdx === -1) throw new Error('Could not find the header row -- expected columns like Date and Time, Description, Reference No., Debit, Credit, Balance.');
+  const header = rows[headerIdx];
+  const idx = {
+    datetime: colIndex(header, ['date and time', 'date/time', 'date']),
+    description: colIndex(header, ['description']),
+    reference: colIndex(header, ['reference no.', 'reference number', 'reference']),
+    debit: colIndex(header, ['debit']),
+    credit: colIndex(header, ['credit']),
+    balance: colIndex(header, ['balance']),
+    fbName: colIndex(header, ['fb name', 'facebook name']),
+    customerName: colIndex(header, ['customer']),
+    orderId: colIndex(header, ['order id', 'order']),
+  };
+  if (idx.datetime === -1 || idx.description === -1) {
+    throw new Error('Could not find Date and Time / Description columns in the file header.');
+  }
+  const parsed = [];
+  let skipped = 0;
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r.some((c) => c && c.trim())) continue;
+    const datetime = parseDatetime(r[idx.datetime]);
+    const description = (r[idx.description] || '').trim();
+    if (!datetime && !description) { skipped++; continue; }
+    parsed.push({
+      datetime: datetime || new Date().toISOString(),
+      description: description || null,
+      referenceNumber: idx.reference !== -1 ? (r[idx.reference] || '').trim() || null : null,
+      debit: idx.debit !== -1 ? parseAmount(r[idx.debit]) : null,
+      credit: idx.credit !== -1 ? parseAmount(r[idx.credit]) : null,
+      balance: idx.balance !== -1 ? parseAmount(r[idx.balance]) : null,
+      fbName: idx.fbName !== -1 ? (r[idx.fbName] || '').trim() || null : null,
+      customerName: idx.customerName !== -1 ? (r[idx.customerName] || '').trim() || null : null,
+      orderId: idx.orderId !== -1 ? (r[idx.orderId] || '').trim() || null : null,
+    });
+  }
+  return { parsed, skipped };
+}
+
+const employee = await initShell('transactions');
+if (employee) {
+  const root = document.getElementById('transactions-root');
+  const canManage = ['Admin', 'Manager'].includes(employee.role);
+  const canReconcile = canManage || employee.position === 'Admin Assistant';
+
+  if (!canReconcile) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Transactions is restricted to Admin, Manager, and Admin Assistant accounts.</p></div></div>';
+  } else {
+    root.innerHTML =
+      '<div class="layout-2col">' +
+        (canManage ?
+          '<div class="layout-2col-side">' +
+            '<div class="card">' +
+              '<h3>Add Transaction</h3>' +
+              '<p class="muted" style="margin-top:-4px;">A single manual entry — always money received.</p>' +
+              '<form id="tx-form" style="flex-direction:column;align-items:stretch;">' +
+                '<div class="field"><label>Method *</label><select name="method" required><option>GCash</option><option>Bank Transfer</option></select></div>' +
+                '<div class="field"><label>Date &amp; Time</label><input type="datetime-local" name="transactionDatetime"></div>' +
+                '<div class="field"><label>Amount (PHP) *</label><input type="number" name="amount" step="0.01" min="0.01" required></div>' +
+                '<div class="field"><label>Reference Number</label><input type="text" name="referenceNumber" placeholder="GCash ref # / bank ref"></div>' +
+                '<div class="field"><label>FB Name</label><input type="text" name="fbName"></div>' +
+                '<div class="field"><label>Customer Name</label><input type="text" name="customerName"></div>' +
+                '<div class="field"><label>Order ID</label><input type="text" name="orderId"></div>' +
+                '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+                '<button class="btn" type="submit">Add Transaction</button>' +
+              '</form>' +
+            '</div>' +
+            '<div class="card">' +
+              '<h3>Import Statement (CSV)</h3>' +
+              '<p class="muted" style="margin-top:-4px;">Upload the exact GCash/bank statement export — Date and Time, Description, Reference No., Debit, Credit, Balance.</p>' +
+              '<div class="field"><label>Method *</label><select id="import-method"><option>GCash</option><option>Bank Transfer</option></select></div>' +
+              '<div class="field"><label>File</label><input type="file" id="import-file" accept=".csv"></div>' +
+              '<button class="btn small secondary" type="button" id="import-parse">Parse File</button>' +
+              '<div id="import-preview" style="margin-top:8px;"></div>' +
+            '</div>' +
+          '</div>'
+        : '') +
+        '<div class="layout-2col-main">' +
+          '<div class="tiles" id="tx-tiles"></div>' +
+          '<div class="card">' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+              '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Description, reference, FB name, customer, order ID…"></div>' +
+              '<div class="field"><label>Method</label><select id="f-method"><option value="all">All</option><option>GCash</option><option>Bank Transfer</option></select></div>' +
+              '<div class="field"><label>From</label><input type="date" id="f-from"></div>' +
+              '<div class="field"><label>To</label><input type="date" id="f-to"></div>' +
+              '<div class="field"><label><input type="checkbox" id="f-unreconciled" style="width:auto;"> Missing Order ID only</label></div>' +
+              '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="tx-list"><div class="muted">Loading…</div></div>' +
+        '</div>' +
+      '</div>';
+
+    let parsedRows = null, parsedSkipped = 0;
+
+    if (canManage) {
+      document.getElementById('tx-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        try {
+          await createTransaction({
+            method: f.method.value,
+            transactionDatetime: f.transactionDatetime.value ? new Date(f.transactionDatetime.value).toISOString() : null,
+            amount: Number(f.amount.value), referenceNumber: f.referenceNumber.value.trim(),
+            fbName: f.fbName.value.trim(), customerName: f.customerName.value.trim(), orderId: f.orderId.value.trim(),
+            notes: f.notes.value.trim(),
+          });
+          toast('tx-msg', 'Transaction added.', false);
+          f.reset();
+          await load();
+        } catch (err) {
+          toast('tx-msg', String(err.message || err), true);
+        }
+      });
+
+      document.getElementById('import-parse').addEventListener('click', async () => {
+        const fileInput = document.getElementById('import-file');
+        const preview = document.getElementById('import-preview');
+        const file = fileInput.files[0];
+        if (!file) { toast('tx-msg', 'Choose a CSV file first.', true); return; }
+        try {
+          const text = await file.text();
+          const { parsed, skipped } = parseStatementCsv(text);
+          parsedRows = parsed;
+          parsedSkipped = skipped;
+          const creditCount = parsed.filter((r) => r.credit != null).length;
+          const debitCount = parsed.filter((r) => r.debit != null).length;
+          preview.innerHTML =
+            '<p class="muted">Parsed ' + parsed.length + ' row(s) — ' + creditCount + ' credit, ' + debitCount + ' debit' +
+            (skipped ? ', ' + skipped + ' skipped (blank)' : '') + '.</p>' +
+            '<button class="btn small" type="button" id="import-confirm">Import ' + parsed.length + ' Row(s)</button>';
+          document.getElementById('import-confirm').addEventListener('click', async () => {
+            try {
+              const count = await importTransactions(document.getElementById('import-method').value, parsedRows);
+              toast('tx-msg', 'Imported ' + count + ' transaction(s).', false);
+              preview.innerHTML = '';
+              fileInput.value = '';
+              parsedRows = null;
+              await load();
+            } catch (err) {
+              toast('tx-msg', String(err.message || err), true);
+            }
+          });
+        } catch (err) {
+          preview.innerHTML = '';
+          toast('tx-msg', String(err.message || err), true);
+        }
+      });
+    }
+
+    let allTx = [];
+    let openId = null;
+    await load();
+    subscribeToChanges('transactions', load);
+
+    ['f-search', 'f-method', 'f-from', 'f-to', 'f-unreconciled'].forEach((id) => {
+      const el = document.getElementById(id);
+      el.addEventListener(id === 'f-search' ? 'input' : 'change', render);
+    });
+    document.getElementById('f-clear').addEventListener('click', () => {
+      document.getElementById('f-search').value = '';
+      document.getElementById('f-method').value = 'all';
+      document.getElementById('f-from').value = '';
+      document.getElementById('f-to').value = '';
+      document.getElementById('f-unreconciled').checked = false;
+      render();
+    });
+
+    async function load() {
+      const list = document.getElementById('tx-list');
+      list.innerHTML = '<div class="muted">Loading…</div>';
+      try {
+        allTx = await listTransactions();
+        render();
+      } catch (err) {
+        list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+      }
+    }
+
+    function render() {
+      let rows = allTx;
+      const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
+      const fMethod = document.getElementById('f-method').value;
+      const fFrom = document.getElementById('f-from').value;
+      const fTo = document.getElementById('f-to').value;
+      const fUnreconciled = document.getElementById('f-unreconciled').checked;
+      if (fSearch) rows = rows.filter((t) =>
+        (t.description || '').toLowerCase().includes(fSearch) ||
+        (t.reference_number || '').toLowerCase().includes(fSearch) ||
+        (t.fb_name || '').toLowerCase().includes(fSearch) ||
+        (t.customer_name || '').toLowerCase().includes(fSearch) ||
+        (t.order_id || '').toLowerCase().includes(fSearch));
+      if (fMethod !== 'all') rows = rows.filter((t) => t.method === fMethod);
+      if (fFrom) rows = rows.filter((t) => t.transaction_datetime && t.transaction_datetime.slice(0, 10) >= fFrom);
+      if (fTo) rows = rows.filter((t) => t.transaction_datetime && t.transaction_datetime.slice(0, 10) <= fTo);
+      if (fUnreconciled) rows = rows.filter((t) => t.credit != null && !t.order_id);
+
+      const totalCredit = rows.reduce((s, t) => s + Number(t.credit || 0), 0);
+      const totalDebit = rows.reduce((s, t) => s + Number(t.debit || 0), 0);
+      const missingOrderId = rows.filter((t) => t.credit != null && !t.order_id).length;
+      document.getElementById('tx-tiles').innerHTML =
+        tile(money(totalCredit), 'Total Credit') + tile(money(totalDebit), 'Total Debit') +
+        tile(String(missingOrderId), 'Missing Order ID') + tile(String(rows.length), 'Count');
+
+      const list = document.getElementById('tx-list');
+      if (!rows.length) { list.innerHTML = '<p class="muted">No transactions for this filter.</p>'; return; }
+
+      // Compact "click to expand" cards (same pattern as Refunds/Branches) -- a wide
+      // table with this many columns would need horizontal scrolling to see everything.
+      list.innerHTML = rows.map((t) => {
+        const isOpen = openId === t.id;
+        const when = t.transaction_datetime ? t.transaction_datetime.replace('T', ' ').slice(0, 16) : '—';
+        const who = t.fb_name || t.customer_name || '—';
+        const amountLbl = t.credit != null ? '+' + money(t.credit) : (t.debit != null ? '-' + money(t.debit) : '—');
+        return '<div class="completed-item">' +
+          '<button type="button" class="completed-orderid" data-toggle-tx="' + t.id + '">' +
+            when + ' — ' + esc(who) +
+            ' <span class="badge ' + (t.method === 'GCash' ? 'transit' : 'ok') + '" style="font-weight:normal;">' + esc(t.method) + '</span>' +
+            ' <span class="muted" style="font-weight:normal;">' + amountLbl + '</span>' +
+            (t.credit != null && !t.order_id ? ' <span class="badge low" style="font-weight:normal;">No Order ID</span>' : '') +
+          '</button>' +
+          (isOpen ? '<div class="completed-detail">' +
+            '<div><b>Description:</b> ' + esc(t.description || '—') + '</div>' +
+            '<div><b>Reference No.:</b> ' + esc(t.reference_number || '—') + '</div>' +
+            '<div><b>Debit:</b> ' + money(t.debit) + '</div>' +
+            '<div><b>Credit:</b> ' + money(t.credit) + '</div>' +
+            '<div><b>Balance:</b> ' + money(t.balance) + '</div>' +
+            '<div><b>Branch:</b> ' + (t.branches ? esc(t.branches.name) : '—') + '</div>' +
+            '<div><b>Source:</b> ' + esc(t.source) + '</div>' +
+            '<div><b>Notes:</b> ' + esc(t.notes || '—') + '</div>' +
+            '<div><b>Added by:</b> ' + (t.creator ? esc(t.creator.full_name) : '—') + '</div>' +
+            '<form class="recon-form" data-id="' + t.id + '" style="display:flex;flex-direction:column;gap:4px;margin-top:8px;max-width:240px;">' +
+              '<label class="muted" style="font-size:11px;">FB Name</label>' +
+              '<input type="text" name="fbName" value="' + esc(t.fb_name || '') + '" style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
+              '<label class="muted" style="font-size:11px;">Customer Name</label>' +
+              '<input type="text" name="customerName" value="' + esc(t.customer_name || '') + '" style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
+              '<label class="muted" style="font-size:11px;">Order ID</label>' +
+              '<input type="text" name="orderId" value="' + esc(t.order_id || '') + '" style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
+              '<button class="btn small" type="submit" style="margin-top:2px;">Save</button>' +
+            '</form>' +
+            (canManage ? '<button class="btn small secondary" type="button" data-id="' + t.id + '" data-act="delete" style="margin-top:8px;">Delete</button>' : '') +
+          '</div>' : '') +
+        '</div>';
+      }).join('');
+
+      list.querySelectorAll('[data-toggle-tx]').forEach((btn) => btn.addEventListener('click', () => {
+        const id = Number(btn.dataset.toggleTx);
+        openId = openId === id ? null : id;
+        render();
+      }));
+
+      list.querySelectorAll('.recon-form').forEach((form) => form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        try {
+          await updateTransactionReconciliation(f.dataset.id, {
+            fbName: f.fbName.value.trim(), customerName: f.customerName.value.trim(), orderId: f.orderId.value.trim(),
+          });
+          toast('tx-msg', 'Saved.', false);
+          await load();
+        } catch (err) {
+          toast('tx-msg', String(err.message || err), true);
+        }
+      }));
+
+      if (canManage) {
+        list.querySelectorAll('[data-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
+          if (!confirm('Delete this transaction?')) return;
+          try { await deleteTransaction(btn.dataset.id); toast('tx-msg', 'Deleted.', false); await load(); }
+          catch (err) { toast('tx-msg', String(err.message || err), true); }
+        }));
+      }
+    }
+
+    function tile(num, label) { return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>'; }
+  }
+}
+</script>
+</body>
+</html>

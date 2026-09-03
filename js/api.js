@@ -353,29 +353,64 @@ export async function getScrapAttachmentUrl(path) {
   return data.signedUrl;
 }
 
-// ---- Payments (GCash + Bank Transfer combined — money received from a customer) —
-// per branch, Admin/Manager see everything, Branch Supervisor sees/manages own branch. ----
+// ---- Transactions (GCash + Bank Transfer statement lines) — Admin/Manager see and
+// manage everything (including CSV import); Admin Assistant sees everything too but
+// can only fill in fb_name/customer_name/order_id (the RLS update policy allows the
+// whole row, but transactions.html only exposes those three fields to that position). ----
 
-export async function listPayments() {
-  const { data, error } = await supabase.from('payment_transactions')
-    .select('*, creator:employees!payment_transactions_created_by_fkey(full_name)')
-    .order('transaction_date', { ascending: false });
+export async function listTransactions() {
+  const { data, error } = await supabase.from('transactions')
+    .select('*, creator:employees!transactions_created_by_fkey(full_name), branches(name)')
+    .order('transaction_datetime', { ascending: false });
   if (error) throw new Error(error.message);
   return data;
 }
 
-export async function createPayment({ method, transactionDate, amount, referenceNumber, payerName, notes }) {
+/** Manual single-entry add (the original one-at-a-time form) — always a Credit, since
+ * this represents money received from a customer, same as before. Bulk statement rows
+ * come in through importTransactions() instead, which can be either debit or credit. */
+export async function createTransaction({ method, transactionDatetime, amount, referenceNumber, fbName, customerName, orderId, notes }) {
   const empId = await currentEmployeeId();
-  const { error } = await supabase.from('payment_transactions').insert({
-    method, transaction_date: transactionDate || new Date().toISOString().slice(0, 10),
-    amount, reference_number: referenceNumber || null, payer_name: payerName || null,
-    notes: notes || null, created_by: empId,
+  const { error } = await supabase.from('transactions').insert({
+    method, transaction_datetime: transactionDatetime || new Date().toISOString(),
+    credit: amount, reference_number: referenceNumber || null,
+    fb_name: fbName || null, customer_name: customerName || null, order_id: orderId || null,
+    notes: notes || null, source: 'Manual', created_by: empId,
   });
   if (error) throw new Error(error.message);
 }
 
-export async function deletePayment(id) {
-  const { error } = await supabase.from('payment_transactions').delete().eq('id', id);
+/** Bulk-inserts parsed CSV statement rows (see transactions.html's CSV parser for the
+ * expected row shape: datetime/description/referenceNumber/debit/credit/balance, plus
+ * optional fbName/customerName/orderId if the uploaded file already had them filled
+ * in). Batches of 500 to stay well under PostgREST's payload limits for a large
+ * multi-month statement. Returns the number of rows inserted. */
+export async function importTransactions(method, rows) {
+  const empId = await currentEmployeeId();
+  const payload = rows.map((r) => ({
+    method, transaction_datetime: r.datetime, description: r.description || null,
+    reference_number: r.referenceNumber || null, debit: r.debit ?? null, credit: r.credit ?? null,
+    balance: r.balance ?? null, fb_name: r.fbName || null, customer_name: r.customerName || null,
+    order_id: r.orderId || null, source: 'CSV Import', created_by: empId,
+  }));
+  for (let i = 0; i < payload.length; i += 500) {
+    const { error } = await supabase.from('transactions').insert(payload.slice(i, i + 500));
+    if (error) throw new Error(error.message);
+  }
+  return payload.length;
+}
+
+/** The Admin Assistant reconciliation step — attaches who the payment was from and
+ * which order it belongs to, after the raw statement line has already been imported. */
+export async function updateTransactionReconciliation(id, { fbName, customerName, orderId }) {
+  const { error } = await supabase.from('transactions')
+    .update({ fb_name: fbName || null, customer_name: customerName || null, order_id: orderId || null, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteTransaction(id) {
+  const { error } = await supabase.from('transactions').delete().eq('id', id);
   if (error) throw new Error(error.message);
 }
 
