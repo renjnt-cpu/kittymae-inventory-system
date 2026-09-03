@@ -303,8 +303,8 @@ if (employee) {
             '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
               '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Description, reference, FB name, customer, order ID…"></div>' +
               '<div class="field"><label>Account</label><select id="f-account"><option value="all">All</option>' + accountOptions() + '</select></div>' +
-              '<div class="field"><label>From</label><input type="date" id="f-from"></div>' +
-              '<div class="field"><label>To</label><input type="date" id="f-to"></div>' +
+              '<div class="field"><label>From</label><input type="datetime-local" id="f-from"></div>' +
+              '<div class="field"><label>To</label><input type="datetime-local" id="f-to"></div>' +
               '<div class="field"><label><input type="checkbox" id="f-unreconciled" style="width:auto;"> Missing Order ID only</label></div>' +
               '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
             '</div>' +
@@ -437,8 +437,10 @@ if (employee) {
         (t.order_id || '').toLowerCase().includes(fSearch) ||
         (t.accounts && t.accounts.name.toLowerCase().includes(fSearch)));
       if (fAccount !== 'all') rows = rows.filter((t) => String(t.account_id) === fAccount);
-      if (fFrom) rows = rows.filter((t) => t.transaction_datetime && t.transaction_datetime.slice(0, 10) >= fFrom);
-      if (fTo) rows = rows.filter((t) => t.transaction_datetime && t.transaction_datetime.slice(0, 10) <= fTo);
+      // datetime-local gives "2026-09-01T14:30"; the DB gives "2026-09-01 13:51:00" --
+      // normalize both to "YYYY-MM-DDTHH:MM" so the comparison covers time, not just date.
+      if (fFrom) rows = rows.filter((t) => t.transaction_datetime && t.transaction_datetime.replace(' ', 'T').slice(0, 16) >= fFrom);
+      if (fTo) rows = rows.filter((t) => t.transaction_datetime && t.transaction_datetime.replace(' ', 'T').slice(0, 16) <= fTo);
       if (fUnreconciled) rows = rows.filter((t) => t.credit != null && !t.order_id);
 
       const totalCredit = rows.reduce((s, t) => s + Number(t.credit || 0), 0);
@@ -451,9 +453,10 @@ if (employee) {
       const list = document.getElementById('tx-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No transactions for this filter.</p>'; return; }
 
-      // Compact "click to expand" cards (same pattern as Refunds/Branches) -- a wide
-      // table with this many columns would need horizontal scrolling to see everything.
-      list.innerHTML = rows.map((t) => {
+      // When not already filtered to one account, group the list under a subheader
+      // per account (each account's own running total) instead of one interleaved
+      // timeline -- otherwise (a single account already selected) skip grouping.
+      function txCardHtml(t) {
         const isOpen = openId === t.id;
         const when = t.transaction_datetime ? t.transaction_datetime.replace('T', ' ').slice(0, 16) : '—';
         const who = t.fb_name || t.customer_name || '—';
@@ -466,22 +469,45 @@ if (employee) {
             (t.credit != null && !t.order_id ? ' <span class="badge low" style="font-weight:normal;">No Order ID</span>' : '') +
           '</button>' +
           (isOpen ? '<div class="completed-detail">' +
-            '<form class="recon-form" data-id="' + t.id + '" style="display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:12px;">' +
-              '<span title="Description">' + esc(t.description || '—') + '</span>' +
-              '<span class="muted">Ref: ' + esc(t.reference_number || '—') + '</span>' +
-              '<span class="muted">Debit: ' + money(t.debit) + '</span>' +
-              '<span class="muted">Credit: ' + money(t.credit) + '</span>' +
-              '<span class="muted">Bal: ' + money(t.balance) + '</span>' +
-              '<input type="text" name="fbName" value="' + esc(t.fb_name || '') + '" placeholder="FB Name" style="width:110px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
-              '<input type="text" name="customerName" value="' + esc(t.customer_name || '') + '" placeholder="Customer Name" style="width:130px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
-              '<input type="text" name="orderId" value="' + esc(t.order_id || '') + '" placeholder="Order ID" style="width:100px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
-              '<button class="btn small" type="submit">Save</button>' +
-              (canManage ? '<button class="btn small secondary" type="button" data-id="' + t.id + '" data-act="delete">Delete</button>' : '') +
-            '</form>' +
+            '<div style="overflow-x:auto;">' +
+              '<form class="recon-form" data-id="' + t.id + '" style="display:flex;flex-wrap:nowrap;gap:6px 10px;align-items:center;font-size:12px;width:max-content;">' +
+                '<span title="Description">' + esc(t.description || '—') + '</span>' +
+                '<span class="muted" style="white-space:nowrap;">Ref: ' + esc(t.reference_number || '—') + '</span>' +
+                '<span class="muted" style="white-space:nowrap;">Debit: ' + money(t.debit) + '</span>' +
+                '<span class="muted" style="white-space:nowrap;">Credit: ' + money(t.credit) + '</span>' +
+                '<span class="muted" style="white-space:nowrap;">Bal: ' + money(t.balance) + '</span>' +
+                '<input type="text" name="fbName" value="' + esc(t.fb_name || '') + '" placeholder="FB Name" style="width:100px;flex-shrink:0;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
+                '<input type="text" name="customerName" value="' + esc(t.customer_name || '') + '" placeholder="Customer Name" style="width:120px;flex-shrink:0;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
+                '<input type="text" name="orderId" value="' + esc(t.order_id || '') + '" placeholder="Order ID" style="width:90px;flex-shrink:0;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
+                '<button class="btn small" type="submit" style="flex-shrink:0;">Save</button>' +
+                (canManage ? '<button class="btn small secondary" type="button" data-id="' + t.id + '" data-act="delete" style="flex-shrink:0;">Delete</button>' : '') +
+              '</form>' +
+            '</div>' +
             '<div class="muted" style="font-size:10px;margin-top:4px;">' + esc(t.source) + (t.creator ? ' · Added by ' + esc(t.creator.full_name) : '') + (t.notes ? ' · ' + esc(t.notes) : '') + '</div>' +
           '</div>' : '') +
         '</div>';
-      }).join('');
+      }
+
+      if (fAccount !== 'all') {
+        list.innerHTML = rows.map(txCardHtml).join('');
+      } else {
+        const groups = {};
+        const order = [];
+        rows.forEach((t) => {
+          const key = t.account_id;
+          if (!groups[key]) { groups[key] = []; order.push(key); }
+          groups[key].push(t);
+        });
+        order.sort((a, b) => (accountLabel(groups[a][0]) > accountLabel(groups[b][0]) ? 1 : -1));
+        list.innerHTML = order.map((key) => {
+          const groupRows = groups[key];
+          const groupCredit = groupRows.reduce((s, t) => s + Number(t.credit || 0), 0);
+          const groupDebit = groupRows.reduce((s, t) => s + Number(t.debit || 0), 0);
+          return '<h4 style="margin:16px 0 4px;">' + esc(accountLabel(groupRows[0])) +
+            ' <span class="muted" style="font-weight:normal;font-size:12px;">— ' + groupRows.length + ' txn, +' + money(groupCredit) + ' / -' + money(groupDebit) + '</span></h4>' +
+            groupRows.map(txCardHtml).join('');
+        }).join('');
+      }
 
       list.querySelectorAll('[data-toggle-tx]').forEach((btn) => btn.addEventListener('click', () => {
         const id = Number(btn.dataset.toggleTx);
