@@ -33,8 +33,8 @@ function duplicateKeySet(rows) {
 }
 function nameOrderLabel(r, dupKeys) {
   const key = r.customer_name.trim().toLowerCase() + '|' + (r.order_reference || '').trim().toLowerCase();
-  const text = esc(r.customer_name) + ' — ' + esc(r.order_reference || '(no Order ID)');
-  return dupKeys.has(key) ? '<span style="color:var(--warn);font-weight:bold;" title="Possible duplicate: same name + Order ID appears more than once">' + text + ' ⚠</span>' : text;
+  const text = esc(r.order_reference || '(no Order ID)') + ' — ' + esc(r.customer_name);
+  return dupKeys.has(key) ? '<span style="color:var(--warn);font-weight:bold;" title="Possible duplicate: same Order ID + name appears more than once">' + text + ' ⚠</span>' : text;
 }
 
 /** Any active employee lands here to request a refund. Only the named approval group

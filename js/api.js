@@ -244,11 +244,11 @@ export async function listSubastaItems() {
   return data;
 }
 
-export async function createSubastaItem({ branchId, customerName, itemDescription, weightGrams, pawnReference, pawnDate, auctionEligibleDate, notes }) {
+export async function createSubastaItem({ branchId, sku, itemDescription, weightGrams, pawnReference, pawnDate, auctionEligibleDate, notes }) {
   const { data: auth } = await supabase.auth.getUser();
   const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
   const { error } = await supabase.from('subasta_items').insert({
-    branch_id: branchId, customer_name: customerName || null, item_description: itemDescription,
+    branch_id: branchId, sku: sku || null, item_description: itemDescription,
     weight_grams: weightGrams || null, pawn_reference: pawnReference || null, pawn_date: pawnDate || null,
     auction_eligible_date: auctionEligibleDate || null, notes: notes || null,
     created_by: emp ? emp.id : null,
@@ -256,9 +256,9 @@ export async function createSubastaItem({ branchId, customerName, itemDescriptio
   if (error) throw new Error(error.message);
 }
 
-export async function updateSubastaItem(id, { branchId, customerName, itemDescription, weightGrams, pawnReference, pawnDate, auctionEligibleDate, status, saleDate, salePrice, buyerName, notes }) {
+export async function updateSubastaItem(id, { branchId, sku, itemDescription, weightGrams, pawnReference, pawnDate, auctionEligibleDate, status, saleDate, salePrice, buyerName, notes }) {
   const { error } = await supabase.from('subasta_items').update({
-    branch_id: branchId, customer_name: customerName || null, item_description: itemDescription,
+    branch_id: branchId, sku: sku || null, item_description: itemDescription,
     weight_grams: weightGrams || null, pawn_reference: pawnReference || null, pawn_date: pawnDate || null,
     auction_eligible_date: auctionEligibleDate || null, status,
     sale_date: saleDate || null, sale_price: salePrice || null, buyer_name: buyerName || null,
@@ -289,21 +289,46 @@ export async function getScrapBalances() {
   return data;
 }
 
-export async function createScrapEntry({ branchId, entryDate, entryType, metalType, karat, weightGrams, pricePerGram, totalAmount, source, notes }) {
+/** Returns the new entry's id so a photo picked in the same Add form submit can be
+ * uploaded and linked right after it's created (mirrors bills' attachment flow). */
+export async function createScrapEntry({ branchId, entryDate, entryType, metalType, karat, weightGrams, pricePerGram, totalAmount, customerName, contactNumber, source, notes }) {
   const { data: auth } = await supabase.auth.getUser();
   const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
-  const { error } = await supabase.from('scrap_entries').insert({
+  const { data, error } = await supabase.from('scrap_entries').insert({
     branch_id: branchId, entry_date: entryDate || new Date().toISOString().slice(0, 10),
     entry_type: entryType || 'In', metal_type: metalType, karat: karat || null,
     weight_grams: weightGrams, price_per_gram: pricePerGram || null, total_amount: totalAmount || null,
+    customer_name: customerName || null, contact_number: contactNumber || null,
     source: source || null, notes: notes || null, created_by: emp ? emp.id : null,
-  });
+  }).select('id').single();
   if (error) throw new Error(error.message);
+  return data.id;
 }
 
 export async function deleteScrapEntry(id) {
+  const { data: entry } = await supabase.from('scrap_entries').select('attachment_path').eq('id', id).single();
+  if (entry && entry.attachment_path) {
+    await supabase.storage.from('scrap-attachments').remove([entry.attachment_path]);
+  }
   const { error } = await supabase.from('scrap_entries').delete().eq('id', id);
   if (error) throw new Error(error.message);
+}
+
+/** Path is "<branch_id>/<scrap_entry_id>/<file>" so Branch Supervisor storage access
+ * can be scoped by branch, matching scrap_entries' own RLS. */
+export async function uploadScrapAttachment(branchId, scrapId, file) {
+  const path = branchId + '/' + scrapId + '/' + Date.now() + '_' + file.name;
+  const { error: upErr } = await supabase.storage.from('scrap-attachments').upload(path, file, { upsert: true });
+  if (upErr) throw new Error(upErr.message);
+  const { error: updErr } = await supabase.from('scrap_entries').update({ attachment_path: path }).eq('id', scrapId);
+  if (updErr) throw new Error(updErr.message);
+  return path;
+}
+
+export async function getScrapAttachmentUrl(path) {
+  const { data, error } = await supabase.storage.from('scrap-attachments').createSignedUrl(path, 300);
+  if (error) throw new Error(error.message);
+  return data.signedUrl;
 }
 
 // ---- Payments (GCash + Bank Transfer combined — money received from a customer) —

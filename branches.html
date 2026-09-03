@@ -17,7 +17,7 @@ import { initShell, toast, esc } from './js/shell.js';
 import {
   getBranches,
   listSubastaItems, createSubastaItem, updateSubastaItem, deleteSubastaItem,
-  listScrapEntries, getScrapBalances, createScrapEntry, deleteScrapEntry,
+  listScrapEntries, getScrapBalances, createScrapEntry, deleteScrapEntry, uploadScrapAttachment, getScrapAttachmentUrl,
   subscribeToChanges,
 } from './js/api.js';
 
@@ -58,7 +58,7 @@ if (employee) {
             '<h3>Add Subasta Item</h3>' +
             '<div id="sub-write-note"></div>' +
             '<form id="sub-form" style="flex-direction:column;align-items:stretch;">' +
-              '<div class="field"><label>Customer Name</label><input type="text" name="customerName"></div>' +
+              '<div class="field"><label>SKU</label><input type="text" name="sku"></div>' +
               '<div class="field"><label>Item Description *</label><input type="text" name="itemDescription" required></div>' +
               '<div class="field"><label>Weight (grams)</label><input type="number" name="weightGrams" step="0.001" min="0"></div>' +
               '<div class="field"><label>Pawn Reference</label><input type="text" name="pawnReference"></div>' +
@@ -91,6 +91,8 @@ if (employee) {
             '<form id="scrap-form" style="flex-direction:column;align-items:stretch;">' +
               '<div class="field"><label>Date</label><input type="date" name="entryDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
               '<div class="field"><label>Type *</label><select name="entryType"><option value="In">In (bought from customer)</option><option value="Out">Out (sold to refiner)</option></select></div>' +
+              '<div class="field"><label>Customer Name</label><input type="text" name="customerName"></div>' +
+              '<div class="field"><label>Contact Number</label><input type="text" name="contactNumber"></div>' +
               '<div class="field"><label>Metal *</label><select name="metalType" required><option>Gold</option><option>Silver</option></select></div>' +
               '<div class="field"><label>Karat / Purity</label><input type="text" name="karat" placeholder="e.g. 18K, 925"></div>' +
               '<div class="field"><label>Weight (grams) *</label><input type="number" name="weightGrams" step="0.001" min="0" required></div>' +
@@ -98,6 +100,7 @@ if (employee) {
               '<div class="field"><label>Total Amount (PHP)</label><input type="number" name="totalAmount" step="0.01" min="0"></div>' +
               '<div class="field"><label>Source</label><input type="text" name="source" placeholder="Walk-in, buyback, refiner name…"></div>' +
               '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+              '<div class="field"><label>Photo</label><input type="file" name="attachment" accept="image/*"></div>' +
               '<button class="btn" type="submit">Add Entry</button>' +
             '</form>' +
           '</div>' +
@@ -124,7 +127,7 @@ if (employee) {
       const f = ev.target;
       try {
         await createSubastaItem({
-          branchId: selectedBranch, customerName: f.customerName.value.trim(),
+          branchId: selectedBranch, sku: f.sku.value.trim(),
           itemDescription: f.itemDescription.value.trim(), weightGrams: f.weightGrams.value ? Number(f.weightGrams.value) : null,
           pawnReference: f.pawnReference.value.trim(), pawnDate: f.pawnDate.value || null,
           auctionEligibleDate: f.auctionEligibleDate.value || null, notes: f.notes.value.trim(),
@@ -141,13 +144,15 @@ if (employee) {
       ev.preventDefault();
       const f = ev.target;
       try {
-        await createScrapEntry({
+        const newScrapId = await createScrapEntry({
           branchId: selectedBranch, entryDate: f.entryDate.value, entryType: f.entryType.value, metalType: f.metalType.value,
           karat: f.karat.value.trim(), weightGrams: Number(f.weightGrams.value),
           pricePerGram: f.pricePerGram.value ? Number(f.pricePerGram.value) : null,
           totalAmount: f.totalAmount.value ? Number(f.totalAmount.value) : null,
+          customerName: f.customerName.value.trim(), contactNumber: f.contactNumber.value.trim(),
           source: f.source.value.trim(), notes: f.notes.value.trim(),
         });
+        if (f.attachment.files[0]) await uploadScrapAttachment(selectedBranch, newScrapId, f.attachment.files[0]);
         toast('br-msg', 'Entry added.', false);
         f.reset();
         f.entryDate.value = new Date().toISOString().slice(0, 10);
@@ -230,10 +235,10 @@ if (employee) {
 
       const list = document.getElementById('sub-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No subasta items for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Customer</th><th>Item</th><th>Weight</th><th>Pawn Ref</th><th>Pawn Date</th><th>Eligible Date</th><th>Status</th><th>Sale Date</th><th>Sale Price</th><th>Buyer</th><th>Notes</th><th></th></tr>' +
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>SKU</th><th>Item</th><th>Weight</th><th>Pawn Ref</th><th>Pawn Date</th><th>Eligible Date</th><th>Status</th><th>Sale Date</th><th>Sale Price</th><th>Buyer</th><th>Notes</th><th></th></tr>' +
         rows.map((r) =>
           '<tr data-row-id="' + r.id + '">' +
-            '<td data-label="Customer">' + esc(r.customer_name || '') + '</td>' +
+            '<td data-label="SKU">' + esc(r.sku || '') + '</td>' +
             '<td data-label="Item">' + esc(r.item_description) +
               (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
             '</td>' +
@@ -275,7 +280,7 @@ if (employee) {
       cell.querySelector('td').innerHTML =
         '<form class="edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
           '<div class="field"><label>Branch</label><select name="branchId"' + (isScoped ? ' disabled' : '') + '>' + branchOptions(r.branch_id) + '</select></div>' +
-          '<div class="field"><label>Customer Name</label><input type="text" name="customerName" value="' + esc(r.customer_name || '') + '"></div>' +
+          '<div class="field"><label>SKU</label><input type="text" name="sku" value="' + esc(r.sku || '') + '"></div>' +
           '<div class="field" style="min-width:200px;"><label>Item Description</label><input type="text" name="itemDescription" value="' + esc(r.item_description) + '" required></div>' +
           '<div class="field"><label>Weight (grams)</label><input type="number" name="weightGrams" step="0.001" min="0" value="' + (r.weight_grams ?? '') + '"></div>' +
           '<div class="field"><label>Pawn Reference</label><input type="text" name="pawnReference" value="' + esc(r.pawn_reference || '') + '"></div>' +
@@ -297,7 +302,7 @@ if (employee) {
         try {
           await updateSubastaItem(id, {
             branchId: isScoped ? employee.branch_id : Number(f.branchId.value),
-            customerName: f.customerName.value.trim(),
+            sku: f.sku.value.trim(),
             itemDescription: f.itemDescription.value.trim(), weightGrams: f.weightGrams.value ? Number(f.weightGrams.value) : null,
             pawnReference: f.pawnReference.value.trim(),
             pawnDate: f.pawnDate.value || null, auctionEligibleDate: f.auctionEligibleDate.value || null,
@@ -345,11 +350,13 @@ if (employee) {
 
       const list = document.getElementById('scrap-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No scrap entries for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Date</th><th>Type</th><th>Metal</th><th>Karat</th><th>Weight</th><th>Price/g</th><th>Total</th><th>Source</th><th>Notes</th><th></th></tr>' +
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Date</th><th>Type</th><th>Customer</th><th>Contact</th><th>Metal</th><th>Karat</th><th>Weight</th><th>Price/g</th><th>Total</th><th>Source</th><th>Notes</th><th>Photo</th><th></th></tr>' +
         rows.map((r) =>
           '<tr>' +
             '<td data-label="Date">' + (r.entry_date || '—') + '</td>' +
             '<td data-label="Type"><span class="badge ' + (r.entry_type === 'In' ? 'ok' : 'pending') + '">' + esc(r.entry_type) + '</span></td>' +
+            '<td data-label="Customer">' + esc(r.customer_name || '') + '</td>' +
+            '<td data-label="Contact">' + esc(r.contact_number || '') + '</td>' +
             '<td data-label="Metal">' + esc(r.metal_type) + '</td>' +
             '<td data-label="Karat">' + esc(r.karat || '') + '</td>' +
             '<td data-label="Weight">' + weight(r.weight_grams) +
@@ -359,6 +366,7 @@ if (employee) {
             '<td data-label="Total">' + money(r.total_amount) + '</td>' +
             '<td data-label="Source">' + esc(r.source || '') + '</td>' +
             '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
+            '<td data-label="Photo">' + (r.attachment_path ? '<button class="btn small secondary" data-id="' + r.id + '" data-path="' + esc(r.attachment_path) + '" data-act="view-photo">View Photo</button>' : '—') + '</td>' +
             '<td data-label="Actions" style="white-space:nowrap;"><button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button></td>' +
           '</tr>'
         ).join('') + '</table></div>';
@@ -366,6 +374,11 @@ if (employee) {
       list.querySelectorAll('[data-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
         if (!confirm('Delete this scrap entry?')) return;
         try { await deleteScrapEntry(btn.dataset.id); toast('br-msg', 'Deleted.', false); await loadScrap(); }
+        catch (err) { toast('br-msg', String(err.message || err), true); }
+      }));
+
+      list.querySelectorAll('[data-act="view-photo"]').forEach((btn) => btn.addEventListener('click', async () => {
+        try { window.open(await getScrapAttachmentUrl(btn.dataset.path), '_blank'); }
         catch (err) { toast('br-msg', String(err.message || err), true); }
       }));
     }
