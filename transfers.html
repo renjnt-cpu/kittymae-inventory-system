@@ -39,7 +39,7 @@ const employee = await initShell('transfers');
 if (employee) {
   const branches = await getBranches();
   const byId = Object.fromEntries(branches.map((b) => [b.id, b.name]));
-  const isSupervisorOrAdmin = ['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role);
+  const isSupervisorOrAdmin = ['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Sales Executive';
 
   ['from-branch', 'to-branch'].forEach((id) => {
     document.getElementById(id).innerHTML = branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('');
@@ -103,10 +103,13 @@ if (employee) {
     const canActOnTo = employee.role === 'Admin' || employee.role === 'Manager' ||
       (employee.role === 'Branch Supervisor' && employee.branch_id === t.to_branch_id);
     const isAdminManager = employee.role === 'Admin' || employee.role === 'Manager';
+    const canApprove = isAdminManager ||
+      (employee.role === 'Branch Supervisor' && (employee.branch_id === t.from_branch_id || employee.branch_id === t.to_branch_id));
 
     let actions = '';
-    if (t.status === 'Requested' && isAdminManager) {
-      actions += btn('Approve', 'approve', t.id) + btn('Reject', 'reject', t.id, true);
+    if (t.status === 'Requested') {
+      if (canApprove) actions += btn('Approve', 'approve', t.id);
+      if (isAdminManager) actions += btn('Reject', 'reject', t.id, true);
     }
     if (t.status === 'Approved' && canActOnFrom) actions += btn('Start Preparing', 'prepare', t.id);
     if ((t.status === 'Approved' || t.status === 'Preparing') && canActOnFrom) actions += btn('Ship', 'ship', t.id);

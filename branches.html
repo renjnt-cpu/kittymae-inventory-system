@@ -31,8 +31,8 @@ const employee = await initShell('branches');
 if (employee) {
   const root = document.getElementById('branches-root');
 
-  if (!['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role)) {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Subasta/Scrap monitoring is restricted to Admin, Manager, or Branch Supervisor accounts.</p></div></div>';
+  if (!['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) && employee.position !== 'Sales Executive') {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Subasta/Scrap monitoring is restricted to Admin, Manager, Branch Supervisor, or Sales Executive accounts.</p></div></div>';
   } else {
     const isScoped = employee.role === 'Branch Supervisor';
     const branches = await getBranches();
@@ -203,9 +203,11 @@ if (employee) {
       document.getElementById('sub-branch-label').textContent = label;
       document.getElementById('scrap-branch-label').textContent = label;
 
-      const canWriteHere = !isScoped || selectedBranch === employee.branch_id;
+      const canWriteHere = ['Admin', 'Manager'].includes(employee.role) || (isScoped && selectedBranch === employee.branch_id);
       document.querySelectorAll('#sub-form button[type="submit"], #scrap-form button[type="submit"]').forEach((btn) => { btn.disabled = !canWriteHere; });
-      const note = canWriteHere ? '' : '<p class="muted" style="font-size:11px;">View only — you can only add items for ' + esc(branchName(employee.branch_id)) + '.</p>';
+      const note = canWriteHere ? '' : isScoped
+        ? '<p class="muted" style="font-size:11px;">View only — you can only add items for ' + esc(branchName(employee.branch_id)) + '.</p>'
+        : '<p class="muted" style="font-size:11px;">View only.</p>';
       document.querySelectorAll('#sub-write-note, #scrap-write-note').forEach((el) => { el.innerHTML = note; });
     }
 

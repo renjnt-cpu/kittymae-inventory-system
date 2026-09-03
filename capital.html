@@ -22,8 +22,8 @@ const employee = await initShell('capital');
 if (employee) {
   const root = document.getElementById('capital-root');
 
-  if (!['Admin', 'Branch Supervisor'].includes(employee.role)) {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Capital tracking is restricted to Admin (full) and Branch Supervisor (view own branch only).</p></div></div>';
+  if (!['Admin', 'Branch Supervisor'].includes(employee.role) && employee.position !== 'Sales Executive') {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Capital tracking is restricted to Admin (full), Branch Supervisor (view own branch), and Sales Executive (view all branches).</p></div></div>';
   } else {
     const isAdmin = employee.role === 'Admin';
     const branches = await getBranches();

@@ -23,7 +23,7 @@ export async function initShell(activePage) {
   const pages = [
     { id: 'dashboard', label: 'Dashboard', href: 'dashboard.html' },
   ];
-  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role)) {
+  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Sales Executive') {
     pages.push({ id: 'branches', label: 'Branches', href: 'branches.html' });
   }
   pages.push(
@@ -41,9 +41,10 @@ export async function initShell(activePage) {
     pages.push({ id: 'payments', label: 'Payments', href: 'payments.html' });
     pages.push({ id: 'assets', label: 'Asset & Supplies Custodian', href: 'assets.html' });
   }
-  if (['Admin', 'Branch Supervisor'].includes(employee.role)) {
-    // Branch Supervisor gets a view-only version of their own branch's balance (see
-    // capital.html's isAdmin split) — so they can check funds before buying scrap.
+  if (['Admin', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Sales Executive') {
+    // Branch Supervisor gets a view-only version of their own branch's balance, and a
+    // Sales Executive a view-only company-wide one (see capital.html's isAdmin split) —
+    // so they can check funds before buying scrap.
     pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });
   }
   if (employee.role === 'Admin') {
