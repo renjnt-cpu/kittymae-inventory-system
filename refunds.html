@@ -47,6 +47,7 @@ const REFUND_FORM_FIELDS =
   '<div class="field"><label>Name *</label><input type="text" name="customerName" required></div>' +
   '<div class="field"><label>Order ID</label><input type="text" name="orderReference"></div>' +
   '<div class="field"><label>Date Purchased</label><input type="date" name="purchaseDate"></div>' +
+  '<div class="field"><label>Date Requested</label><input type="date" name="dateRequested" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
   '<div class="field"><label>Item</label><input type="text" name="itemDescription"></div>' +
   '<div class="field"><label>Reason</label><input type="text" name="reason"></div>' +
   '<div class="field"><label>Refund Method *</label><select name="refundMethod" required><option>GCash</option><option>BDO</option><option>Maya</option><option>BPI</option></select></div>' +
@@ -58,7 +59,8 @@ const REFUND_FORM_FIELDS =
 function readRefundForm(f) {
   return {
     customerName: f.customerName.value.trim(), orderReference: f.orderReference.value.trim(),
-    purchaseDate: f.purchaseDate.value || null, itemDescription: f.itemDescription.value.trim(),
+    purchaseDate: f.purchaseDate.value || null, dateRequested: f.dateRequested.value || null,
+    itemDescription: f.itemDescription.value.trim(),
     reason: f.reason.value.trim(), refundMethod: f.refundMethod.value,
     accountName: f.accountName.value.trim(), accountNumber: f.accountNumber.value.trim(),
     refundAmount: Number(f.refundAmount.value), notes: f.notes.value.trim(),
@@ -136,6 +138,7 @@ if (employee) {
             ' <span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '" style="font-weight:normal;">' + esc(r.status) + '</span>' +
           '</button>' +
           (isOpen ? '<div class="completed-detail">' +
+            '<div><b>Date Requested:</b> ' + (r.date_requested || '—') + '</div>' +
             '<div><b>Item:</b> ' + esc(r.item_description || '—') + '</div>' +
             '<div><b>Amount:</b> ' + money(r.refund_amount) + '</div>' +
             '<div><b>Method:</b> ' + esc(r.refund_method) + '</div>' +
@@ -243,6 +246,7 @@ if (employee) {
           (isOpen ? '<div class="completed-detail">' +
             '<div><b>Customer:</b> ' + esc(r.customer_name) + '</div>' +
             '<div><b>Item:</b> ' + esc(r.item_description || '—') + '</div>' +
+            '<div><b>Date Requested:</b> ' + (r.date_requested || '—') + '</div>' +
             '<div><b>Date Purchased:</b> ' + (r.purchase_date || '—') + '</div>' +
             '<div><b>Reason:</b> ' + esc(r.reason || '—') + '</div>' +
             '<div><b>Amount:</b> ' + money(r.refund_amount) + '</div>' +
@@ -251,7 +255,7 @@ if (employee) {
             '<div><b>Requested by:</b> ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div>' +
             '<div style="margin-top:4px;"><b>Proof of Payment:</b><br>' +
               (photos.length
-                ? photos.map((a) => '<div>' + money(a.amount) + ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button></div>').join('')
+                ? photos.map((a) => '<div>' + money(a.amount) + (a.reference_number ? ' · Ref: ' + esc(a.reference_number) : '') + ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button></div>').join('')
                 : 'None') +
             '</div>' +
             '<button class="btn small secondary" type="button" data-id="' + r.id + '" data-act="reopen" style="margin-top:8px;">Reopen</button>' +
@@ -315,6 +319,7 @@ if (employee) {
             ' <span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '" style="font-weight:normal;">' + esc(r.status) + '</span>' +
           '</button>' +
           (isOpen ? '<div class="completed-detail">' +
+            '<div><b>Date Requested:</b> ' + (r.date_requested || '—') + '</div>' +
             '<div><b>Date Purchased:</b> ' + (r.purchase_date || '—') + '</div>' +
             '<div><b>Item:</b> ' + esc(r.item_description || '—') + '</div>' +
             '<div><b>Reason:</b> ' + esc(r.reason || '—') + '</div>' +
@@ -326,12 +331,13 @@ if (employee) {
             '<div><b>Requested by:</b> ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div>' +
             '<div style="margin-top:4px;"><b>Proof of Payment:</b><br>' +
               (photos.length
-                ? photos.map((a) => '<div style="margin-bottom:2px;">' + money(a.amount) + ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button> <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">✕</button></div>').join('')
+                ? photos.map((a) => '<div style="margin-bottom:2px;">' + money(a.amount) + (a.reference_number ? ' · Ref: ' + esc(a.reference_number) : '') + ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button> <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">✕</button></div>').join('')
                 : 'None yet') +
               (canAttach
                 ? (openAddProofFor === r.id
                     ? '<form class="add-proof-form" data-refund-id="' + r.id + '" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;max-width:220px;">' +
                         '<input type="number" name="amount" step="0.01" min="0.01" placeholder="Amount paid" required style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
+                        '<input type="text" name="referenceNumber" placeholder="Reference number" style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
                         '<input type="file" name="photo" accept="image/*" required style="font-size:11px;">' +
                         '<div><button class="btn small" type="submit">Save</button> <button class="btn small secondary" type="button" data-cancel-proof="1">Cancel</button></div>' +
                       '</form>'
@@ -394,8 +400,9 @@ if (employee) {
         const refundId = form.dataset.refundId;
         const file = form.photo.files[0];
         const amount = Number(form.amount.value);
+        const referenceNumber = form.referenceNumber.value.trim();
         try {
-          await addRefundAttachment(refundId, amount, file);
+          await addRefundAttachment(refundId, amount, file, referenceNumber);
           toast('ref-msg', 'Proof of payment added.', false);
           openAddProofFor = null;
           await load();

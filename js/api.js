@@ -4,6 +4,16 @@
 // supabase-js's table/RPC calls aren't as uniformly shaped as google.script.run's.
 import { supabase } from './supabaseClient.js';
 
+/** Resolves the signed-in employee's id for "created_by"/"paid_by"/etc attribution.
+ * Goes through the current_employee() RPC (which joins employee_auth_links) rather
+ * than matching employees.auth_user_id directly -- that column is only ever set for
+ * Google logins, so a direct match silently returns nothing for anyone who signed in
+ * with ID+password (see 33_multi_auth_identity.sql). */
+async function currentEmployeeId() {
+  const { data: emp } = await supabase.rpc('current_employee');
+  return emp ? emp.id : null;
+}
+
 /** Live cross-user updates — the business is fast-paced (multiple people approving/
  * editing the same records), so every page subscribes to Postgres changes on the
  * table(s) it displays and just reloads when anything changes, instead of everyone
@@ -156,13 +166,12 @@ export async function listBills() {
 /** Returns the new bill's id — needed so a photo picked in the same Add Bill submit
  * can be uploaded and linked to the row right after it's created. */
 export async function createBill({ name, category, accountName, accountNumber, amount, dueDate, status, isRecurring, notes }) {
-  const { data: auth } = await supabase.auth.getUser();
-  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const empId = await currentEmployeeId();
   const { data, error } = await supabase.from('bills').insert({
     name, category, account_name: accountName || null, account_number: accountNumber || null,
     amount: amount || null, due_date: dueDate || null,
     status: status || 'Unpaid', is_recurring: !!isRecurring, notes: notes || null,
-    created_by: emp ? emp.id : null,
+    created_by: empId,
   }).select('id').single();
   if (error) throw new Error(error.message);
   return data.id;
@@ -172,9 +181,7 @@ export async function setBillStatus(id, status) {
   const patch = { status, updated_at: new Date().toISOString() };
   patch.paid_date = status === 'Paid' ? new Date().toISOString().slice(0, 10) : null;
   if (status === 'Paid') {
-    const { data: auth } = await supabase.auth.getUser();
-    const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
-    patch.paid_by = emp ? emp.id : null;
+    patch.paid_by = await currentEmployeeId();
   } else {
     patch.paid_by = null;
   }
@@ -245,13 +252,12 @@ export async function listSubastaItems() {
 }
 
 export async function createSubastaItem({ branchId, sku, itemDescription, weightGrams, pawnReference, pawnDate, auctionEligibleDate, notes }) {
-  const { data: auth } = await supabase.auth.getUser();
-  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const empId = await currentEmployeeId();
   const { error } = await supabase.from('subasta_items').insert({
     branch_id: branchId, sku: sku || null, item_description: itemDescription,
     weight_grams: weightGrams || null, pawn_reference: pawnReference || null, pawn_date: pawnDate || null,
     auction_eligible_date: auctionEligibleDate || null, notes: notes || null,
-    created_by: emp ? emp.id : null,
+    created_by: empId,
   });
   if (error) throw new Error(error.message);
 }
@@ -292,14 +298,13 @@ export async function getScrapBalances() {
 /** Returns the new entry's id so a photo picked in the same Add form submit can be
  * uploaded and linked right after it's created (mirrors bills' attachment flow). */
 export async function createScrapEntry({ branchId, entryDate, entryType, metalType, karat, weightGrams, pricePerGram, totalAmount, customerName, contactNumber, source, notes }) {
-  const { data: auth } = await supabase.auth.getUser();
-  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const empId = await currentEmployeeId();
   const { data, error } = await supabase.from('scrap_entries').insert({
     branch_id: branchId, entry_date: entryDate || new Date().toISOString().slice(0, 10),
     entry_type: entryType || 'In', metal_type: metalType, karat: karat || null,
     weight_grams: weightGrams, price_per_gram: pricePerGram || null, total_amount: totalAmount || null,
     customer_name: customerName || null, contact_number: contactNumber || null,
-    source: source || null, notes: notes || null, created_by: emp ? emp.id : null,
+    source: source || null, notes: notes || null, created_by: empId,
   }).select('id').single();
   if (error) throw new Error(error.message);
   return data.id;
@@ -343,12 +348,11 @@ export async function listPayments() {
 }
 
 export async function createPayment({ method, transactionDate, amount, referenceNumber, payerName, notes }) {
-  const { data: auth } = await supabase.auth.getUser();
-  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const empId = await currentEmployeeId();
   const { error } = await supabase.from('payment_transactions').insert({
     method, transaction_date: transactionDate || new Date().toISOString().slice(0, 10),
     amount, reference_number: referenceNumber || null, payer_name: payerName || null,
-    notes: notes || null, created_by: emp ? emp.id : null,
+    notes: notes || null, created_by: empId,
   });
   if (error) throw new Error(error.message);
 }
@@ -363,7 +367,7 @@ export async function deletePayment(id) {
 
 export async function listRefunds() {
   const { data, error } = await supabase.from('refunds')
-    .select('*, creator:employees!refunds_created_by_fkey(full_name), refund_attachments(id, attachment_path, amount, uploaded_at)')
+    .select('*, creator:employees!refunds_created_by_fkey(full_name), refund_attachments(id, attachment_path, amount, reference_number, uploaded_at)')
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return data;
@@ -372,15 +376,15 @@ export async function listRefunds() {
 /** No photo field here on purpose — a refund starts as a request awaiting Manager/Admin
  * approval, and proof-of-payment photos only make sense once it's actually been paid
  * out, which can't happen before approval. */
-export async function createRefund({ customerName, orderReference, itemDescription, purchaseDate, refundAmount, refundMethod, accountName, accountNumber, reason, notes }) {
-  const { data: auth } = await supabase.auth.getUser();
-  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+export async function createRefund({ customerName, orderReference, itemDescription, purchaseDate, dateRequested, refundAmount, refundMethod, accountName, accountNumber, reason, notes }) {
+  const empId = await currentEmployeeId();
   const { data, error } = await supabase.from('refunds').insert({
     customer_name: customerName, order_reference: orderReference || null,
     item_description: itemDescription || null, purchase_date: purchaseDate || null,
+    date_requested: dateRequested || new Date().toISOString().slice(0, 10),
     refund_amount: refundAmount, refund_method: refundMethod || 'GCash',
     account_name: accountName || null, account_number: accountNumber || null,
-    reason: reason || null, notes: notes || null, created_by: emp ? emp.id : null,
+    reason: reason || null, notes: notes || null, created_by: empId,
   }).select('id').single();
   if (error) throw new Error(error.message);
   return data.id;
@@ -406,14 +410,13 @@ export async function deleteRefund(id) {
  * to only allow this once the refund is Approved (or later), matching real payout
  * timing, and to only allow marking a refund Completed once the attached amounts sum
  * to the full requested refund_amount — see refunds.html's remaining-balance check. */
-export async function addRefundAttachment(refundId, amount, file) {
+export async function addRefundAttachment(refundId, amount, file, referenceNumber) {
   const path = refundId + '/' + Date.now() + '_' + file.name;
   const { error: upErr } = await supabase.storage.from('refund-attachments').upload(path, file, { upsert: true });
   if (upErr) throw new Error(upErr.message);
-  const { data: auth } = await supabase.auth.getUser();
-  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const empId = await currentEmployeeId();
   const { error: insErr } = await supabase.from('refund_attachments')
-    .insert({ refund_id: refundId, attachment_path: path, amount, uploaded_by: emp ? emp.id : null });
+    .insert({ refund_id: refundId, attachment_path: path, amount, reference_number: referenceNumber || null, uploaded_by: empId });
   if (insErr) throw new Error(insErr.message);
   return path;
 }
@@ -451,13 +454,12 @@ export async function listAssetCustodianItems() {
 }
 
 export async function createAssetCustodianItem({ itemName, itemType, branchId, custodianId, quantity, unitValue, condition, dateAssigned, notes }) {
-  const { data: auth } = await supabase.auth.getUser();
-  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const empId = await currentEmployeeId();
   const { error } = await supabase.from('asset_custodian_items').insert({
     item_name: itemName, item_type: itemType || 'Asset', branch_id: branchId || null,
     custodian_id: custodianId || null, quantity: quantity || 1, unit_value: unitValue || null,
     condition: condition || 'Good', date_assigned: dateAssigned || null, notes: notes || null,
-    created_by: emp ? emp.id : null,
+    created_by: empId,
   });
   if (error) throw new Error(error.message);
 }
@@ -495,11 +497,10 @@ export async function getBranchCapitalBalances() {
 }
 
 export async function createBranchCapitalEntry({ branchId, entryDate, amount, purpose, notes }) {
-  const { data: auth } = await supabase.auth.getUser();
-  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const empId = await currentEmployeeId();
   const { error } = await supabase.from('branch_capital_entries').insert({
     branch_id: branchId, entry_date: entryDate || new Date().toISOString().slice(0, 10),
-    amount, purpose: purpose || null, notes: notes || null, created_by: emp ? emp.id : null,
+    amount, purpose: purpose || null, notes: notes || null, created_by: empId,
   });
   if (error) throw new Error(error.message);
 }
@@ -531,11 +532,10 @@ export async function getAccessChecklist() {
 }
 
 export async function setAccessChecklistItem(employeeId, itemKey, checked) {
-  const { data: auth } = await supabase.auth.getUser();
-  const { data: emp } = await supabase.from('employees').select('id').eq('auth_user_id', auth.user.id).single();
+  const empId = checked ? await currentEmployeeId() : null;
   const { error } = await supabase.from('access_checklist_verifications').upsert({
     employee_id: employeeId, item_key: itemKey, checked,
-    checked_by: checked ? (emp ? emp.id : null) : null,
+    checked_by: empId,
     checked_at: checked ? new Date().toISOString() : null,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'employee_id,item_key' });
