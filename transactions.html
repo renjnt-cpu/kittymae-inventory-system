@@ -466,25 +466,19 @@ if (employee) {
             (t.credit != null && !t.order_id ? ' <span class="badge low" style="font-weight:normal;">No Order ID</span>' : '') +
           '</button>' +
           (isOpen ? '<div class="completed-detail">' +
-            '<div><b>Description:</b> ' + esc(t.description || '—') + '</div>' +
-            '<div><b>Reference No.:</b> ' + esc(t.reference_number || '—') + '</div>' +
-            '<div><b>Debit:</b> ' + money(t.debit) + '</div>' +
-            '<div><b>Credit:</b> ' + money(t.credit) + '</div>' +
-            '<div><b>Balance:</b> ' + money(t.balance) + '</div>' +
-            '<div><b>Branch:</b> ' + (t.branches ? esc(t.branches.name) : '—') + '</div>' +
-            '<div><b>Source:</b> ' + esc(t.source) + '</div>' +
-            '<div><b>Notes:</b> ' + esc(t.notes || '—') + '</div>' +
-            '<div><b>Added by:</b> ' + (t.creator ? esc(t.creator.full_name) : '—') + '</div>' +
-            '<form class="recon-form" data-id="' + t.id + '" style="display:flex;flex-direction:column;gap:4px;margin-top:8px;max-width:240px;">' +
-              '<label class="muted" style="font-size:11px;">FB Name</label>' +
-              '<input type="text" name="fbName" value="' + esc(t.fb_name || '') + '" style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
-              '<label class="muted" style="font-size:11px;">Customer Name</label>' +
-              '<input type="text" name="customerName" value="' + esc(t.customer_name || '') + '" style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
-              '<label class="muted" style="font-size:11px;">Order ID</label>' +
-              '<input type="text" name="orderId" value="' + esc(t.order_id || '') + '" style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
-              '<button class="btn small" type="submit" style="margin-top:2px;">Save</button>' +
+            '<form class="recon-form" data-id="' + t.id + '" style="display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:12px;">' +
+              '<span title="Description">' + esc(t.description || '—') + '</span>' +
+              '<span class="muted">Ref: ' + esc(t.reference_number || '—') + '</span>' +
+              '<span class="muted">Debit: ' + money(t.debit) + '</span>' +
+              '<span class="muted">Credit: ' + money(t.credit) + '</span>' +
+              '<span class="muted">Bal: ' + money(t.balance) + '</span>' +
+              '<input type="text" name="fbName" value="' + esc(t.fb_name || '') + '" placeholder="FB Name" style="width:110px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
+              '<input type="text" name="customerName" value="' + esc(t.customer_name || '') + '" placeholder="Customer Name" style="width:130px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
+              '<input type="text" name="orderId" value="' + esc(t.order_id || '') + '" placeholder="Order ID" style="width:100px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
+              '<button class="btn small" type="submit">Save</button>' +
+              (canManage ? '<button class="btn small secondary" type="button" data-id="' + t.id + '" data-act="delete">Delete</button>' : '') +
             '</form>' +
-            (canManage ? '<button class="btn small secondary" type="button" data-id="' + t.id + '" data-act="delete" style="margin-top:8px;">Delete</button>' : '') +
+            '<div class="muted" style="font-size:10px;margin-top:4px;">' + esc(t.source) + (t.creator ? ' · Added by ' + esc(t.creator.full_name) : '') + (t.notes ? ' · ' + esc(t.notes) : '') + '</div>' +
           '</div>' : '') +
         '</div>';
       }).join('');
