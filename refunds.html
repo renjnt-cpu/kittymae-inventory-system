@@ -37,11 +37,12 @@ function nameOrderLabel(r, dupKeys) {
   return dupKeys.has(key) ? '<span style="color:var(--warn);font-weight:bold;" title="Possible duplicate: same Order ID + name appears more than once">' + text + ' ⚠</span>' : text;
 }
 
-/** Any active employee lands here to request a refund. Only the named approval group
- * (Admin, or the refund_approval_access flag — mirrors has_refund_approval_access() in
- * 27_refund_request_any_employee.sql) gets the full approve/manage view; everyone else
- * gets just the request form plus a read-only list of their own submissions. */
-const canApprove = (emp) => emp.role === 'Admin' || !!emp.refund_approval_access;
+/** Any active employee lands here to request a refund. Only the approval group --
+ * Admin/Manager/Branch Supervisor (role), Admin Assistant (position), or the
+ * hand-picked refund_approval_access flag (mirrors has_refund_approval_access() in
+ * 58_refund_approval_role_based.sql) -- gets the full approve/manage view; everyone
+ * else gets just the request form plus a read-only list of their own submissions. */
+const canApprove = (emp) => ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || emp.position === 'Admin Assistant' || !!emp.refund_approval_access;
 // Broader group (refund_approval_access) can approve/process and add Proof of Payment,
 // but fixing a mistake -- removing a wrong attachment, deleting a refund outright --
 // stays with a supervisor/manager, same rule as Scrap/Subasta.

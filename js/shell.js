@@ -45,14 +45,12 @@ export async function initShell(activePage) {
   if (['Admin', 'Manager'].includes(employee.role)) {
     pages.push({ id: 'assets', label: 'Asset & Supplies Custodian', href: 'assets.html' });
   }
-  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Sales Executive', 'Admin Assistant'].includes(employee.position)) {
-    // Branch Supervisor gets a view-only version of their own branch's balance, and
-    // Manager/Sales Executive a view-only company-wide one (see capital.html's canAdd
-    // split) — so they can check funds before buying scrap. Manager can also delete
-    // entries and approve Admin Assistant's pending ones -- see capital.html's
-    // canDelete/canApproveRow. Admin Assistant can add (Pending Approval only).
-    pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });
-  }
+  // Branch Capital: like Refunds, everyone gets in now -- Admin/Manager/Branch
+  // Supervisor/Sales Executive/Admin Assistant get the full company-wide (or own-
+  // branch) balance view, everyone else just a "My Capital Requests" list of their own
+  // submissions (see capital.html's canFullView split). Anyone who isn't Admin/Manager
+  // (or the relevant Branch Supervisor) has their entry sit as Pending Approval.
+  pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });
   if (employee.role === 'Admin') {
     pages.push({ id: 'access-checklist', label: 'Access Checklist', href: 'access-checklist.html' });
   }

@@ -22,87 +22,84 @@ const employee = await initShell('capital');
 if (employee) {
   const root = document.getElementById('capital-root');
 
-  if (!['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) && !['Sales Executive', 'Admin Assistant'].includes(employee.position)) {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Capital tracking is restricted to Admin (full), Manager (view + approve + delete), Branch Supervisor (view + approve own branch), Sales Executive (view all branches), and Admin Assistant (add, pending approval).</p></div></div>';
-  } else {
-    const isAdmin = employee.role === 'Admin';
-    const isAdminAssistant = employee.position === 'Admin Assistant';
-    const canAdd = isAdmin || isAdminAssistant;
-    const canDelete = ['Admin', 'Manager'].includes(employee.role);
-    // Admin Assistant's entries sit as Pending Approval until a Manager or the Branch
-    // Supervisor for that specific branch signs off -- scoped per-row, not a flat flag.
-    const canApproveRow = (r) => ['Admin', 'Manager'].includes(employee.role) ||
-      (employee.role === 'Branch Supervisor' && r.branch_id === employee.branch_id);
-    const branches = await getBranches();
-    const branchById = Object.fromEntries(branches.map((b) => [b.id, b.name]));
-    const branchOptions = (selected) => branches.map((b) =>
-      '<option value="' + b.id + '"' + (b.id === selected ? ' selected' : '') + '>' + esc(b.name) + '</option>'
-    ).join('');
+  const isAdmin = employee.role === 'Admin';
+  const isManagerial = ['Admin', 'Manager'].includes(employee.role);
+  // Everyone can add now -- Admin/Manager's own entries post as Approved immediately
+  // (they're the approval authority); anyone else's sit as Pending Approval. Full
+  // company-wide balances/browsing stays limited to the roles/positions that already
+  // had it -- everyone else just sees their own requests (like Refunds' "My Requests").
+  const canFullView = ['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Sales Executive', 'Admin Assistant'].includes(employee.position);
+  const canDelete = ['Admin', 'Manager'].includes(employee.role);
+  const canApproveRow = (r) => isManagerial || (employee.role === 'Branch Supervisor' && r.branch_id === employee.branch_id);
+  const branches = await getBranches();
+  const branchById = Object.fromEntries(branches.map((b) => [b.id, b.name]));
+  const branchOptions = (selected) => branches.map((b) =>
+    '<option value="' + b.id + '"' + (b.id === selected ? ' selected' : '') + '>' + esc(b.name) + '</option>'
+  ).join('');
 
-    root.innerHTML =
-      '<div class="layout-2col">' +
-        (canAdd ?
-          '<div class="layout-2col-side">' +
+  const addFormHtml =
+    '<div class="card">' +
+      '<h3>Add Capital Entry</h3>' +
+      '<p class="muted" style="margin-top:-4px;">Money put into a branch — working capital, float, or other funding.' +
+        (isManagerial ? '' : ' A Manager or that branch\'s Supervisor must approve it before it counts.') +
+      '</p>' +
+      '<form id="cap-form" style="flex-direction:column;align-items:stretch;">' +
+        '<div class="field"><label>Branch *</label><select name="branchId" required>' + branchOptions() + '</select></div>' +
+        '<div class="field"><label>Date</label><input type="date" name="entryDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
+        '<div class="field"><label>Amount (PHP) *</label><input type="number" name="amount" step="0.01" required></div>' +
+        '<div class="field"><label>Purpose</label><select name="purposeType" id="purpose-type"><option>Scrap</option><option>Other</option></select></div>' +
+        '<div class="field" id="purpose-other-field" style="display:none;"><label>Specify</label><input type="text" name="purposeOther" placeholder="What does \'Other\' mean here?"></div>' +
+        '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+        '<button class="btn" type="submit">Add Entry</button>' +
+      '</form>' +
+    '</div>';
+
+  root.innerHTML =
+    '<div class="layout-2col">' +
+      '<div class="layout-2col-side">' + addFormHtml + '</div>' +
+      '<div class="layout-2col-main">' +
+        (canFullView
+          ? '<h3>Total Capital <span class="muted" style="font-weight:normal;">— per branch</span></h3><div class="tiles" id="cap-tiles"></div>' +
             '<div class="card">' +
-              '<h3>Add Capital Entry</h3>' +
-              '<p class="muted" style="margin-top:-4px;">Money put into a branch — working capital, float, or other funding.' +
-                (isAdminAssistant ? ' A Manager or that branch\'s Supervisor must approve it before it counts.' : '') +
-              '</p>' +
-              '<form id="cap-form" style="flex-direction:column;align-items:stretch;">' +
-                '<div class="field"><label>Branch *</label><select name="branchId" required>' + branchOptions() + '</select></div>' +
-                '<div class="field"><label>Date</label><input type="date" name="entryDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
-                '<div class="field"><label>Amount (PHP) *</label><input type="number" name="amount" step="0.01" required></div>' +
-                '<div class="field"><label>Purpose</label><select name="purposeType" id="purpose-type"><option>Scrap</option><option>Other</option></select></div>' +
-                '<div class="field" id="purpose-other-field" style="display:none;"><label>Specify</label><input type="text" name="purposeOther" placeholder="What does \'Other\' mean here?"></div>' +
-                '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
-                '<button class="btn" type="submit">Add Entry</button>' +
-              '</form>' +
-            '</div>' +
-          '</div>'
-        : '') +
-        '<div class="layout-2col-main">' +
-          '<h3>Total Capital <span class="muted" style="font-weight:normal;">— per branch</span></h3>' +
-          '<div class="tiles" id="cap-tiles"></div>' +
-          '<div class="card">' +
-            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
-              '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Purpose, notes…"></div>' +
-              (isAdmin ? '<div class="field"><label>Branch</label><select id="f-branch"><option value="all">All Branches</option>' + branchOptions() + '</select></div>' : '') +
-              '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
-            '</div>' +
-          '</div>' +
-          '<div id="cap-list"><div class="muted">Loading…</div></div>' +
-        '</div>' +
-      '</div>';
+              '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+                '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Purpose, notes…"></div>' +
+                (isAdmin ? '<div class="field"><label>Branch</label><select id="f-branch"><option value="all">All Branches</option>' + branchOptions() + '</select></div>' : '') +
+                '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
+              '</div>' +
+            '</div>'
+          : '<h3>My Capital Requests</h3><p class="muted" style="margin-top:-4px;">Entries you\'ve submitted, and whether they\'ve been approved yet.</p>') +
+        '<div id="cap-list"><div class="muted">Loading…</div></div>' +
+      '</div>' +
+    '</div>';
 
-    if (canAdd) {
-      document.getElementById('purpose-type').addEventListener('change', (ev) => {
-        document.getElementById('purpose-other-field').style.display = ev.target.value === 'Other' ? '' : 'none';
+  document.getElementById('purpose-type').addEventListener('change', (ev) => {
+    document.getElementById('purpose-other-field').style.display = ev.target.value === 'Other' ? '' : 'none';
+  });
+  document.getElementById('cap-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    try {
+      const purpose = f.purposeType.value === 'Other' ? f.purposeOther.value.trim() : f.purposeType.value;
+      await createBranchCapitalEntry({
+        branchId: Number(f.branchId.value), entryDate: f.entryDate.value,
+        amount: Number(f.amount.value), purpose, notes: f.notes.value.trim(),
+        status: isManagerial ? 'Approved' : 'Pending Approval',
       });
-      document.getElementById('cap-form').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const f = ev.target;
-      try {
-        const purpose = f.purposeType.value === 'Other' ? f.purposeOther.value.trim() : f.purposeType.value;
-        await createBranchCapitalEntry({
-          branchId: Number(f.branchId.value), entryDate: f.entryDate.value,
-          amount: Number(f.amount.value), purpose, notes: f.notes.value.trim(),
-          status: isAdminAssistant ? 'Pending Approval' : 'Approved',
-        });
-        toast('cap-msg', isAdminAssistant ? 'Entry added — pending approval.' : 'Entry added.', false);
-        f.reset();
-        f.entryDate.value = new Date().toISOString().slice(0, 10);
-        document.getElementById('purpose-other-field').style.display = 'none';
-        await load();
-      } catch (err) {
-        toast('cap-msg', String(err.message || err), true);
-      }
-      });
+      toast('cap-msg', isManagerial ? 'Entry added.' : 'Entry added — pending approval.', false);
+      f.reset();
+      f.entryDate.value = new Date().toISOString().slice(0, 10);
+      document.getElementById('purpose-other-field').style.display = 'none';
+      await load();
+    } catch (err) {
+      toast('cap-msg', String(err.message || err), true);
     }
+  });
 
-    let allEntries = [];
-    await load();
-    subscribeToChanges('branch_capital_entries', load);
+  let allEntries = [];
+  await load();
+  subscribeToChanges('branch_capital_entries', load);
 
+  if (canFullView) {
     document.getElementById('f-search').addEventListener('input', render);
     if (isAdmin) document.getElementById('f-branch').addEventListener('change', render);
     document.getElementById('f-clear').addEventListener('click', () => {
@@ -110,69 +107,74 @@ if (employee) {
       if (isAdmin) document.getElementById('f-branch').value = 'all';
       render();
     });
+  }
 
-    async function load() {
-      const list = document.getElementById('cap-list');
-      list.innerHTML = '<div class="muted">Loading…</div>';
-      try {
+  async function load() {
+    const list = document.getElementById('cap-list');
+    list.innerHTML = '<div class="muted">Loading…</div>';
+    try {
+      if (canFullView) {
         const [entries, balances] = await Promise.all([listBranchCapitalEntries(), getBranchCapitalBalances()]);
         allEntries = entries;
         renderTiles(balances);
-        render();
-      } catch (err) {
-        list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+      } else {
+        allEntries = await listBranchCapitalEntries(); // RLS already scopes this to just the caller's own rows
       }
+      render();
+    } catch (err) {
+      list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
     }
+  }
 
-    function renderTiles(balances) {
-      const box = document.getElementById('cap-tiles');
-      if (!balances.length) { box.innerHTML = '<p class="muted">No capital entries yet.</p>'; return; }
-      box.innerHTML = balances.map((b) => tile(money(b.total_capital), branchById[b.branch_id] || 'Branch #' + b.branch_id)).join('');
-    }
+  function renderTiles(balances) {
+    const box = document.getElementById('cap-tiles');
+    if (!balances.length) { box.innerHTML = '<p class="muted">No capital entries yet.</p>'; return; }
+    box.innerHTML = balances.map((b) => tile(money(b.total_capital), branchById[b.branch_id] || 'Branch #' + b.branch_id)).join('');
+  }
 
-    function render() {
-      let rows = allEntries;
+  function render() {
+    let rows = allEntries;
+    if (canFullView) {
       const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
       const fBranch = isAdmin ? document.getElementById('f-branch').value : 'all';
-
       if (fSearch) rows = rows.filter((r) => (r.purpose || '').toLowerCase().includes(fSearch) || (r.notes || '').toLowerCase().includes(fSearch));
       if (fBranch !== 'all') rows = rows.filter((r) => String(r.branch_id) === fBranch);
-
-      const list = document.getElementById('cap-list');
-      if (!rows.length) { list.innerHTML = '<p class="muted">No capital entries for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Branch</th><th>Date</th><th>Amount</th><th>Purpose</th><th>Notes</th><th>Status</th><th></th></tr>' +
-        rows.map((r) => {
-          const pending = r.status === 'Pending Approval';
-          return '<tr' + (pending ? ' style="background:#fff8e8;"' : '') + '>' +
-            '<td data-label="Branch">' + esc(r.branches?.name || '') + '</td>' +
-            '<td data-label="Date">' + (r.entry_date || '—') + '</td>' +
-            '<td data-label="Amount">' + money(r.amount) +
-              (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
-            '</td>' +
-            '<td data-label="Purpose">' + esc(r.purpose || '') + '</td>' +
-            '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
-            '<td data-label="Status"><span class="badge ' + (pending ? 'pending' : 'ok') + '">' + esc(r.status) + '</span></td>' +
-            '<td data-label="Actions" style="white-space:nowrap;">' +
-              (pending && canApproveRow(r) ? '<button class="btn small" data-id="' + r.id + '" data-act="approve">Approve</button> ' : '') +
-              (canDelete ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' : '') +
-            '</td>' +
-          '</tr>';
-        }).join('') + '</table></div>';
-
-      list.querySelectorAll('[data-act="approve"]').forEach((btn) => btn.addEventListener('click', async () => {
-        try { await approveBranchCapitalEntry(btn.dataset.id); toast('cap-msg', 'Approved.', false); await load(); }
-        catch (err) { toast('cap-msg', String(err.message || err), true); }
-      }));
-
-      list.querySelectorAll('[data-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
-        if (!confirm('Delete this capital entry?')) return;
-        try { await deleteBranchCapitalEntry(btn.dataset.id); toast('cap-msg', 'Deleted.', false); await load(); }
-        catch (err) { toast('cap-msg', String(err.message || err), true); }
-      }));
     }
 
-    function tile(num, label) { return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>'; }
+    const list = document.getElementById('cap-list');
+    if (!rows.length) { list.innerHTML = '<p class="muted">No capital entries for this filter.</p>'; return; }
+    list.innerHTML = '<div class="table-scroll"><table><tr><th>Branch</th><th>Date</th><th>Amount</th><th>Purpose</th><th>Notes</th><th>Status</th><th></th></tr>' +
+      rows.map((r) => {
+        const pending = r.status === 'Pending Approval';
+        return '<tr' + (pending ? ' style="background:#fff8e8;"' : '') + '>' +
+          '<td data-label="Branch">' + esc(r.branches?.name || '') + '</td>' +
+          '<td data-label="Date">' + (r.entry_date || '—') + '</td>' +
+          '<td data-label="Amount">' + money(r.amount) +
+            (r.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
+          '</td>' +
+          '<td data-label="Purpose">' + esc(r.purpose || '') + '</td>' +
+          '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
+          '<td data-label="Status"><span class="badge ' + (pending ? 'pending' : 'ok') + '">' + esc(r.status) + '</span></td>' +
+          '<td data-label="Actions" style="white-space:nowrap;">' +
+            (pending && canApproveRow(r) ? '<button class="btn small" data-id="' + r.id + '" data-act="approve">Approve</button> ' : '') +
+            (canDelete ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' : '') +
+          '</td>' +
+        '</tr>';
+      }).join('') + '</table></div>';
+
+    list.querySelectorAll('[data-act="approve"]').forEach((btn) => btn.addEventListener('click', async () => {
+      try { await approveBranchCapitalEntry(btn.dataset.id); toast('cap-msg', 'Approved.', false); await load(); }
+      catch (err) { toast('cap-msg', String(err.message || err), true); }
+    }));
+
+    list.querySelectorAll('[data-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
+      if (!confirm('Delete this capital entry?')) return;
+      try { await deleteBranchCapitalEntry(btn.dataset.id); toast('cap-msg', 'Deleted.', false); await load(); }
+      catch (err) { toast('cap-msg', String(err.message || err), true); }
+    }));
   }
+
+  function tile(num, label) { return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>'; }
 }
 </script>
 </body>
