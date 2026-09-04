@@ -488,10 +488,15 @@ export async function deleteRefund(id) {
  * to only allow this once the refund is Approved (or later), matching real payout
  * timing, and to only allow marking a refund Completed once the attached amounts sum
  * to the full requested refund_amount — see refunds.html's remaining-balance check. */
+/** photo is optional -- a Proof of Payment entry can be saved with just the amount and
+ * reference number when no image is available yet. */
 export async function addRefundAttachment(refundId, amount, file, referenceNumber) {
-  const path = refundId + '/' + Date.now() + '_' + file.name;
-  const { error: upErr } = await supabase.storage.from('refund-attachments').upload(path, file, { upsert: true });
-  if (upErr) throw new Error(upErr.message);
+  let path = null;
+  if (file) {
+    path = refundId + '/' + Date.now() + '_' + file.name;
+    const { error: upErr } = await supabase.storage.from('refund-attachments').upload(path, file, { upsert: true });
+    if (upErr) throw new Error(upErr.message);
+  }
   const empId = await currentEmployeeId();
   const { error: insErr } = await supabase.from('refund_attachments')
     .insert({ refund_id: refundId, attachment_path: path, amount, reference_number: referenceNumber || null, uploaded_by: empId });
@@ -500,7 +505,7 @@ export async function addRefundAttachment(refundId, amount, file, referenceNumbe
 }
 
 export async function removeRefundAttachment(attachmentId, path) {
-  await supabase.storage.from('refund-attachments').remove([path]);
+  if (path) await supabase.storage.from('refund-attachments').remove([path]);
   const { error } = await supabase.from('refund_attachments').delete().eq('id', attachmentId);
   if (error) throw new Error(error.message);
 }

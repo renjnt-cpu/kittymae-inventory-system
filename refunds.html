@@ -50,7 +50,7 @@ const REFUND_FORM_FIELDS =
   '<div class="field"><label>Date Requested</label><input type="date" name="dateRequested" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
   '<div class="field"><label>Item</label><input type="text" name="itemDescription"></div>' +
   '<div class="field"><label>Reason</label><input type="text" name="reason"></div>' +
-  '<div class="field"><label>Refund Method *</label><select name="refundMethod" required><option>GCash</option><option>BDO</option><option>Maya</option><option>BPI</option></select></div>' +
+  '<div class="field"><label>Refund Method *</label><select name="refundMethod" required><option>GCash</option><option>BDO</option><option>Maya</option><option>BPI</option><option>GoTyme</option><option>Maribank</option><option>Union Bank</option></select></div>' +
   '<div class="field"><label>Account Name</label><input type="text" name="accountName" placeholder="Payout account name"></div>' +
   '<div class="field"><label>Account Number</label><input type="text" name="accountNumber" placeholder="Payout account number"></div>' +
   '<div class="field"><label>Amount to Refund (PHP) *</label><input type="number" name="refundAmount" step="0.01" min="0.01" required></div>' +
@@ -156,7 +156,7 @@ if (employee) {
             '<div><b>Approved by:</b> ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
             '<div style="margin-top:4px;"><b>Proof of Payment:</b><br>' +
               (photos.length
-                ? photos.map((a) => '<div>' + money(a.amount) + (a.reference_number ? ' · Ref: ' + esc(a.reference_number) : '') + ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button></div>').join('')
+                ? photos.map((a) => '<div>' + money(a.amount) + (a.reference_number ? ' · Ref: ' + esc(a.reference_number) : '') + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button>' : ' <span class="muted">(no photo)</span>') + '</div>').join('')
                 : 'None yet') +
             '</div>' +
           '</div>' : '') +
@@ -278,7 +278,7 @@ if (employee) {
             '<div><b>Approved by:</b> ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
             '<div style="margin-top:4px;"><b>Proof of Payment:</b><br>' +
               (photos.length
-                ? photos.map((a) => '<div>' + money(a.amount) + (a.reference_number ? ' · Ref: ' + esc(a.reference_number) : '') + ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button></div>').join('')
+                ? photos.map((a) => '<div>' + money(a.amount) + (a.reference_number ? ' · Ref: ' + esc(a.reference_number) : '') + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button>' : ' <span class="muted">(no photo)</span>') + '</div>').join('')
                 : 'None') +
             '</div>' +
             '<button class="btn small secondary" type="button" data-id="' + r.id + '" data-act="reopen" style="margin-top:8px;">Reopen</button>' +
@@ -356,14 +356,15 @@ if (employee) {
             '<div><b>Approved by:</b> ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
             '<div style="margin-top:4px;"><b>Proof of Payment:</b><br>' +
               (photos.length
-                ? photos.map((a) => '<div style="margin-bottom:2px;">' + money(a.amount) + (a.reference_number ? ' · Ref: ' + esc(a.reference_number) : '') + ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button> <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">✕</button></div>').join('')
+                ? photos.map((a) => '<div style="margin-bottom:2px;">' + money(a.amount) + (a.reference_number ? ' · Ref: ' + esc(a.reference_number) : '') + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button>' : ' <span class="muted">(no photo)</span>') + ' <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path || '') + '">✕</button></div>').join('')
                 : 'None yet') +
               (canAttach
                 ? (openAddProofFor === r.id
                     ? '<form class="add-proof-form" data-refund-id="' + r.id + '" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;max-width:220px;">' +
                         '<input type="number" name="amount" step="0.01" min="0.01" placeholder="Amount paid" required style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
                         '<input type="text" name="referenceNumber" placeholder="Reference number" required style="padding:5px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
-                        '<input type="file" name="photo" accept="image/*" required style="font-size:11px;">' +
+                        '<input type="file" name="photo" accept="image/*" style="font-size:11px;">' +
+                        '<span class="muted" style="font-size:10px;">Photo optional — amount and reference are enough to record it.</span>' +
                         '<div><button class="btn small" type="submit">Save</button> <button class="btn small secondary" type="button" data-cancel-proof="1">Cancel</button></div>' +
                       '</form>'
                     : '<button type="button" class="btn small secondary" data-open-proof="' + r.id + '" style="margin-top:4px;">+ Add Proof of Payment</button>')
