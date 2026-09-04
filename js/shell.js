@@ -35,14 +35,15 @@ export async function initShell(activePage) {
   // block — refunds.html itself shows a simple request form to most people, and the
   // full approve/manage view only to has_refund_approval_access() accounts.
   pages.push({ id: 'refunds', label: 'Refunds', href: 'refunds.html' });
-  if (['Admin', 'Manager'].includes(employee.role) || employee.position === 'Admin Assistant') {
+  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Admin Assistant' || (employee.extra_page_access || []).includes('transactions')) {
     // Transactions doesn't fit the per-branch model (a different process, per Ren) —
     // flat company-wide log. Admin/Manager run CSV imports and manage everything;
-    // Admin Assistant gets in too, but transactions.html only lets them fill in
-    // FB Name/Customer/Order ID, not import or delete.
+    // Branch Supervisor, Admin Assistant, and anyone with extra_page_access
+    // 'transactions' (e.g. Jessica) get in too, but transactions.html only lets them
+    // fill in FB Name/Customer/Order ID, not import or delete.
     pages.push({ id: 'transactions', label: 'Transactions', href: 'transactions.html' });
   }
-  if (['Admin', 'Manager'].includes(employee.role)) {
+  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || (employee.extra_page_access || []).includes('assets')) {
     pages.push({ id: 'assets', label: 'Asset & Supplies Custodian', href: 'assets.html' });
   }
   // Branch Capital: like Refunds, everyone gets in now -- Admin/Manager/Branch

@@ -46,7 +46,8 @@ function itemsForEmployee(emp) {
     items.push({ id: 'branches-own', label: 'Can see and manage Subasta and Scrap for ' + branch, expect: true });
     items.push({ id: 'branches-other', label: 'Cannot see Subasta/Scrap for other branches', expect: false });
     items.push({ id: 'capital', label: 'Can add Branch Capital entries (pending approval elsewhere, auto-approved for ' + branch + ') and approve pending entries for ' + branch, expect: true });
-    items.push({ id: 'payments', label: 'Cannot see Transactions (Admin/Manager/Admin Assistant only)', expect: false });
+    items.push({ id: 'payments', label: 'Can see Transactions and fill in FB Name/Customer/Order ID — cannot add, import, or delete', expect: true });
+    items.push({ id: 'assets', label: 'Can add/edit/delete Asset & Supplies Custodian items', expect: true });
   } else if (emp.role === 'Staff') {
     items.push({ id: 'inventory-own', label: 'Sees inventory for ' + branch, expect: true });
     items.push({ id: 'inventory-other', label: 'Cannot see inventory for other branches', expect: false });
@@ -89,6 +90,12 @@ function itemsForEmployee(emp) {
     id: 'bills',
     label: emp.bills_access ? 'Can see and add Bills' : 'Cannot see the Bills tracker',
     expect: true, // either outcome is correct as long as it matches today's bills_access flag
+  });
+  // extra_page_access is the catch-all for "grant this one person this one page"
+  // requests (e.g. Jessica on Transactions/Assets) that don't fit any role/position
+  // rule above -- surfaced here so it's just as verifiable as everything else.
+  (emp.extra_page_access || []).forEach((page) => {
+    items.push({ id: 'extra-' + page, label: 'Individually granted extra access to: ' + page, expect: true });
   });
   return items;
 }

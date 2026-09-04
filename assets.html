@@ -25,8 +25,9 @@ const employee = await initShell('assets');
 if (employee) {
   const root = document.getElementById('assets-root');
 
-  if (!['Admin', 'Manager'].includes(employee.role)) {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Asset &amp; Supplies Custodian tracking is restricted to Admin and Manager.</p></div></div>';
+  const hasAssetsAccess = ['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || (employee.extra_page_access || []).includes('assets');
+  if (!hasAssetsAccess) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Asset &amp; Supplies Custodian tracking is restricted to Admin, Manager, and Branch Supervisor.</p></div></div>';
   } else {
     const [branches, employees] = await Promise.all([getBranches(), listActiveEmployees()]);
     const branchOptions = (selected) => '<option value="">—</option>' + branches.map((b) =>

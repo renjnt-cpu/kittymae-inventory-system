@@ -646,7 +646,7 @@ export async function approveBranchCapitalEntry(id) {
  * here immediately -- the checklist tracks today's roster, not a snapshot. */
 export async function getEmployeesForChecklist() {
   const { data, error } = await supabase.from('employees')
-    .select('id, full_name, role, position, bills_access, refund_approval_access, branches(name)')
+    .select('id, full_name, role, position, bills_access, refund_approval_access, extra_page_access, branches(name)')
     .neq('role', 'Admin')
     .eq('status', 'Active')
     .order('full_name');

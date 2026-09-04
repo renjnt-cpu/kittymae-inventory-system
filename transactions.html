@@ -313,10 +313,11 @@ const employee = await initShell('transactions');
 if (employee) {
   const root = document.getElementById('transactions-root');
   const canManage = ['Admin', 'Manager'].includes(employee.role);
-  const canReconcile = canManage || employee.position === 'Admin Assistant';
+  const canReconcile = canManage || employee.position === 'Admin Assistant' ||
+    employee.role === 'Branch Supervisor' || (employee.extra_page_access || []).includes('transactions');
 
   if (!canReconcile) {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Transactions is restricted to Admin, Manager, and Admin Assistant accounts.</p></div></div>';
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Transactions is restricted to Admin, Manager, Branch Supervisor, and Admin Assistant accounts.</p></div></div>';
   } else {
     let allAccounts = await listAccounts();
     const accountOptions = () => allAccounts.map((a) => '<option value="' + a.id + '">' + esc(a.name) + ' (' + esc(a.type) + ')</option>').join('');
