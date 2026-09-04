@@ -579,17 +579,26 @@ export async function getBranchCapitalBalances() {
   return data;
 }
 
-export async function createBranchCapitalEntry({ branchId, entryDate, amount, purpose, notes }) {
+export async function createBranchCapitalEntry({ branchId, entryDate, amount, purpose, notes, status }) {
   const empId = await currentEmployeeId();
   const { error } = await supabase.from('branch_capital_entries').insert({
     branch_id: branchId, entry_date: entryDate || new Date().toISOString().slice(0, 10),
     amount, purpose: purpose || null, notes: notes || null, created_by: empId,
+    status: status || 'Approved',
   });
   if (error) throw new Error(error.message);
 }
 
 export async function deleteBranchCapitalEntry(id) {
   const { error } = await supabase.from('branch_capital_entries').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function approveBranchCapitalEntry(id) {
+  const empId = await currentEmployeeId();
+  const { error } = await supabase.from('branch_capital_entries')
+    .update({ status: 'Approved', approved_by: empId, approved_at: new Date().toISOString() })
+    .eq('id', id);
   if (error) throw new Error(error.message);
 }
 

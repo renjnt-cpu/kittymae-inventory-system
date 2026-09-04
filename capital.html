@@ -14,7 +14,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { getBranches, listBranchCapitalEntries, getBranchCapitalBalances, createBranchCapitalEntry, deleteBranchCapitalEntry, subscribeToChanges } from './js/api.js';
+import { getBranches, listBranchCapitalEntries, getBranchCapitalBalances, createBranchCapitalEntry, approveBranchCapitalEntry, deleteBranchCapitalEntry, subscribeToChanges } from './js/api.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
@@ -22,11 +22,17 @@ const employee = await initShell('capital');
 if (employee) {
   const root = document.getElementById('capital-root');
 
-  if (!['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) && employee.position !== 'Sales Executive') {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Capital tracking is restricted to Admin (full), Manager (view + delete), Branch Supervisor (view own branch), and Sales Executive (view all branches).</p></div></div>';
+  if (!['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) && !['Sales Executive', 'Admin Assistant'].includes(employee.position)) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Capital tracking is restricted to Admin (full), Manager (view + approve + delete), Branch Supervisor (view + approve own branch), Sales Executive (view all branches), and Admin Assistant (add, pending approval).</p></div></div>';
   } else {
     const isAdmin = employee.role === 'Admin';
+    const isAdminAssistant = employee.position === 'Admin Assistant';
+    const canAdd = isAdmin || isAdminAssistant;
     const canDelete = ['Admin', 'Manager'].includes(employee.role);
+    // Admin Assistant's entries sit as Pending Approval until a Manager or the Branch
+    // Supervisor for that specific branch signs off -- scoped per-row, not a flat flag.
+    const canApproveRow = (r) => ['Admin', 'Manager'].includes(employee.role) ||
+      (employee.role === 'Branch Supervisor' && r.branch_id === employee.branch_id);
     const branches = await getBranches();
     const branchById = Object.fromEntries(branches.map((b) => [b.id, b.name]));
     const branchOptions = (selected) => branches.map((b) =>
@@ -35,11 +41,13 @@ if (employee) {
 
     root.innerHTML =
       '<div class="layout-2col">' +
-        (isAdmin ?
+        (canAdd ?
           '<div class="layout-2col-side">' +
             '<div class="card">' +
               '<h3>Add Capital Entry</h3>' +
-              '<p class="muted" style="margin-top:-4px;">Money put into a branch — working capital, float, or other funding.</p>' +
+              '<p class="muted" style="margin-top:-4px;">Money put into a branch — working capital, float, or other funding.' +
+                (isAdminAssistant ? ' A Manager or that branch\'s Supervisor must approve it before it counts.' : '') +
+              '</p>' +
               '<form id="cap-form" style="flex-direction:column;align-items:stretch;">' +
                 '<div class="field"><label>Branch *</label><select name="branchId" required>' + branchOptions() + '</select></div>' +
                 '<div class="field"><label>Date</label><input type="date" name="entryDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
@@ -66,7 +74,7 @@ if (employee) {
         '</div>' +
       '</div>';
 
-    if (isAdmin) {
+    if (canAdd) {
       document.getElementById('purpose-type').addEventListener('change', (ev) => {
         document.getElementById('purpose-other-field').style.display = ev.target.value === 'Other' ? '' : 'none';
       });
@@ -78,8 +86,9 @@ if (employee) {
         await createBranchCapitalEntry({
           branchId: Number(f.branchId.value), entryDate: f.entryDate.value,
           amount: Number(f.amount.value), purpose, notes: f.notes.value.trim(),
+          status: isAdminAssistant ? 'Pending Approval' : 'Approved',
         });
-        toast('cap-msg', 'Entry added.', false);
+        toast('cap-msg', isAdminAssistant ? 'Entry added — pending approval.' : 'Entry added.', false);
         f.reset();
         f.entryDate.value = new Date().toISOString().slice(0, 10);
         document.getElementById('purpose-other-field').style.display = 'none';
@@ -131,9 +140,10 @@ if (employee) {
 
       const list = document.getElementById('cap-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No capital entries for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Branch</th><th>Date</th><th>Amount</th><th>Purpose</th><th>Notes</th>' + (canDelete ? '<th></th>' : '') + '</tr>' +
-        rows.map((r) =>
-          '<tr>' +
+      list.innerHTML = '<div class="table-scroll"><table><tr><th>Branch</th><th>Date</th><th>Amount</th><th>Purpose</th><th>Notes</th><th>Status</th><th></th></tr>' +
+        rows.map((r) => {
+          const pending = r.status === 'Pending Approval';
+          return '<tr' + (pending ? ' style="background:#fff8e8;"' : '') + '>' +
             '<td data-label="Branch">' + esc(r.branches?.name || '') + '</td>' +
             '<td data-label="Date">' + (r.entry_date || '—') + '</td>' +
             '<td data-label="Amount">' + money(r.amount) +
@@ -141,9 +151,18 @@ if (employee) {
             '</td>' +
             '<td data-label="Purpose">' + esc(r.purpose || '') + '</td>' +
             '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
-            (canDelete ? '<td data-label="Actions" style="white-space:nowrap;"><button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button></td>' : '') +
-          '</tr>'
-        ).join('') + '</table></div>';
+            '<td data-label="Status"><span class="badge ' + (pending ? 'pending' : 'ok') + '">' + esc(r.status) + '</span></td>' +
+            '<td data-label="Actions" style="white-space:nowrap;">' +
+              (pending && canApproveRow(r) ? '<button class="btn small" data-id="' + r.id + '" data-act="approve">Approve</button> ' : '') +
+              (canDelete ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' : '') +
+            '</td>' +
+          '</tr>';
+        }).join('') + '</table></div>';
+
+      list.querySelectorAll('[data-act="approve"]').forEach((btn) => btn.addEventListener('click', async () => {
+        try { await approveBranchCapitalEntry(btn.dataset.id); toast('cap-msg', 'Approved.', false); await load(); }
+        catch (err) { toast('cap-msg', String(err.message || err), true); }
+      }));
 
       list.querySelectorAll('[data-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
         if (!confirm('Delete this capital entry?')) return;

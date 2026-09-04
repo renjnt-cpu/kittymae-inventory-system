@@ -45,11 +45,12 @@ export async function initShell(activePage) {
   if (['Admin', 'Manager'].includes(employee.role)) {
     pages.push({ id: 'assets', label: 'Asset & Supplies Custodian', href: 'assets.html' });
   }
-  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Sales Executive') {
+  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Sales Executive', 'Admin Assistant'].includes(employee.position)) {
     // Branch Supervisor gets a view-only version of their own branch's balance, and
-    // Manager/Sales Executive a view-only company-wide one (see capital.html's isAdmin
+    // Manager/Sales Executive a view-only company-wide one (see capital.html's canAdd
     // split) — so they can check funds before buying scrap. Manager can also delete
-    // entries (not add/edit) -- see capital.html's canDelete.
+    // entries and approve Admin Assistant's pending ones -- see capital.html's
+    // canDelete/canApproveRow. Admin Assistant can add (Pending Approval only).
     pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });
   }
   if (employee.role === 'Admin') {
