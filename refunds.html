@@ -161,8 +161,7 @@ if (employee) {
           '<td style="font-size:11px;">' + esc(r.notes || '') + '<div class="muted" style="font-size:10px;">Approved by: ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div></td>' +
         '</tr>';
       }).join('');
-      list.innerHTML = '<div class="table-scroll"><table style="table-layout:fixed;word-break:break-word;">' +
-        '<colgroup><col style="width:14%"><col style="width:8%"><col style="width:11%"><col style="width:13%"><col style="width:11%"><col style="width:12%"><col style="width:16%"><col style="width:15%"></colgroup>' +
+      list.innerHTML = '<div class="table-scroll"><table style="min-width:900px;">' +
         '<thead><tr><th>Order ID / Customer</th><th>Status</th><th>Dates</th><th>Item / Reason</th><th>Amount</th><th>Method / Account</th><th>Proof of Payment</th><th>Notes / Approved by</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +
         '<tfoot><tr style="font-weight:bold;background:#f7f7f7;">' +
@@ -277,8 +276,7 @@ if (employee) {
           '<td style="white-space:nowrap;"><button class="btn small secondary" type="button" data-id="' + r.id + '" data-act="reopen">Reopen</button></td>' +
         '</tr>';
       }).join('');
-      box.innerHTML = '<div class="table-scroll"><table style="table-layout:fixed;word-break:break-word;">' +
-        '<colgroup><col style="width:32%"><col style="width:24%"><col style="width:28%"><col style="width:16%"></colgroup>' +
+      box.innerHTML = '<div class="table-scroll"><table style="min-width:420px;">' +
         '<thead><tr><th>Order ID / Customer</th><th>Amount</th><th>Proof of Payment</th><th></th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +
         '<tfoot><tr style="font-weight:bold;background:#f7f7f7;"><td>Qty: ' + completed.length + '</td><td>' + money(total) + '</td><td colspan="2"></td></tr></tfoot>' +
@@ -370,8 +368,7 @@ if (employee) {
           '</td>' +
         '</tr>';
       }).join('');
-      list.innerHTML = '<div class="table-scroll"><table style="table-layout:fixed;word-break:break-word;">' +
-        '<colgroup><col style="width:13%"><col style="width:8%"><col style="width:9%"><col style="width:9%"><col style="width:10%"><col style="width:17%"><col style="width:13%"><col style="width:12%"></colgroup>' +
+      list.innerHTML = '<div class="table-scroll"><table style="min-width:1000px;">' +
         '<thead><tr><th>Order ID / Customer</th><th>Status</th><th>Dates</th><th>Amount</th><th>Method / Account</th><th>Proof of Payment</th><th>Notes / By</th><th></th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +
         '<tfoot><tr style="font-weight:bold;background:#f7f7f7;">' +
