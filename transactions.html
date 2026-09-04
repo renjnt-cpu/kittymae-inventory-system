@@ -395,6 +395,7 @@ if (employee) {
               '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
             '</div>' +
           '</div>' +
+          '<div id="account-chips" style="display:flex;gap:6px;flex-wrap:wrap;"></div>' +
           '<div id="tx-list"><div class="muted">Loading…</div></div>' +
         '</div>' +
       '</div>';
@@ -565,6 +566,22 @@ if (employee) {
       const fFrom = document.getElementById('f-from').value;
       const fTo = document.getElementById('f-to').value;
       const fUnreconciled = document.getElementById('f-unreconciled').checked;
+
+      // A row of account chips up top -- click one to jump straight to that account's
+      // transactions below, instead of opening the Account dropdown every time.
+      const chipsEl = document.getElementById('account-chips');
+      chipsEl.innerHTML =
+        '<button type="button" class="badge" data-chip-account="all" style="border:none;cursor:pointer;font-weight:normal;' +
+          (fAccount === 'all' ? 'background:var(--ink);color:#fff;' : 'background:#eee;color:var(--ink);') + '">All</button>' +
+        allAccounts.map((a) =>
+          '<button type="button" class="badge" data-chip-account="' + a.id + '" style="border:none;cursor:pointer;font-weight:normal;' +
+            accountColorStyle(a.name) + (fAccount === String(a.id) ? 'outline:2px solid var(--ink);' : '') + '">' + esc(a.name) + '</button>'
+        ).join('');
+      chipsEl.querySelectorAll('[data-chip-account]').forEach((btn) => btn.addEventListener('click', () => {
+        document.getElementById('f-account').value = btn.dataset.chipAccount;
+        render();
+      }));
+
       if (fSearch) rows = rows.filter((t) =>
         (t.description || '').toLowerCase().includes(fSearch) ||
         (t.reference_number || '').toLowerCase().includes(fSearch) ||
