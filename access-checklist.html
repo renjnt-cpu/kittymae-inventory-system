@@ -73,7 +73,7 @@ function itemsForEmployee(emp) {
     items.push({ id: 'inventory', label: 'Sees inventory for every branch (view only)', expect: true });
     items.push({ id: 'movement', label: 'Cannot record any stock movement', expect: false });
     items.push({ id: 'transfers', label: 'Can request transfers, cannot approve them', expect: true });
-    items.push({ id: 'branches', label: 'Can view Branches (Subasta/Scrap) for every branch, view only — cannot add or delete', expect: true });
+    items.push({ id: 'branches', label: 'Can view and add Subasta/Scrap entries for any branch — cannot edit or delete', expect: true });
     items.push({ id: 'capital', label: 'Can view Branch Capital for every branch, and add entries (pending approval) — cannot approve or delete', expect: true });
     items.push({ id: 'payments', label: 'Cannot see Transactions', expect: false });
   } else if (emp.role === 'None' && POSITION_MANAGERS.includes(emp.position)) {

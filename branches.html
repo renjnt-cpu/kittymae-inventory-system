@@ -262,11 +262,12 @@ if (employee) {
 
     // Add gate: everything canWriteHere() allows, plus literally any active employee
     // for their own branch (scrap_any_employee_own_branch_insert /
-    // subasta_any_employee_own_branch_insert) -- "whole staff" can add, only the
-    // position-manager group above (or Admin/Manager/own-branch Supervisor) can edit
-    // or delete afterward.
+    // subasta_any_employee_own_branch_insert), plus Sales Executive company-wide
+    // (scrap_sales_executive_insert -- she doesn't have a fixed branch_id, rotates
+    // weekly) -- "whole staff" can add, only the position-manager group above (or
+    // Admin/Manager/own-branch Supervisor) can edit or delete afterward.
     function canAddHere() {
-      return canWriteHere() || employee.branch_id === selectedBranch;
+      return canWriteHere() || employee.branch_id === selectedBranch || employee.position === 'Sales Executive';
     }
 
     function renderBranchButtons() {
