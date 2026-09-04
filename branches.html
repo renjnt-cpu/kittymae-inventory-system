@@ -68,9 +68,10 @@ const employee = await initShell('branches');
 if (employee) {
   const root = document.getElementById('branches-root');
 
-  if (!['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) && !['Sales Executive', 'Admin Assistant'].includes(employee.position)) {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Subasta/Scrap monitoring is restricted to Admin, Manager, Branch Supervisor, Sales Executive, or Admin Assistant accounts.</p></div></div>';
-  } else {
+  {
+    // Any active employee can reach this page now -- "whole staff" can add a Scrap or
+    // Subasta entry for their own branch (canAddHere()), everyone can view every
+    // branch, and editing/deleting stays with canWriteHere()'s stricter group.
     const isScoped = employee.role === 'Branch Supervisor';
     const branches = await getBranches();
     const branchOptions = (selected) => branches.map((b) =>
@@ -249,20 +250,23 @@ if (employee) {
     });
 
     // Shared by every row's Edit/Delete buttons -- mirrors the backend RLS exactly
-    // (Admin/Manager anywhere, Branch Supervisor only their own branch, Sales Executive
-    // never) so a button is never shown enabled only to fail with a permission error
-    // when clicked. Editing/deleting stays managerial-only even for positions that can
-    // add (Admin Assistant) -- a staff input error gets fixed by a supervisor, not by
-    // whoever typed it in.
+    // (Admin/Manager anywhere, Branch Supervisor only their own branch, or the
+    // Operations Supervisor/Inventory Supervisor/Admin Assistant position group
+    // anywhere -- is_position_manager() in 62_position_managers_refund_scrap_subasta.sql)
+    // so a button is never shown enabled only to fail with a permission error.
+    const POSITION_MANAGERS = ['Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
     function canWriteHere() {
-      return ['Admin', 'Manager'].includes(employee.role) || (isScoped && selectedBranch === employee.branch_id);
+      return ['Admin', 'Manager'].includes(employee.role) || (isScoped && selectedBranch === employee.branch_id) ||
+        POSITION_MANAGERS.includes(employee.position);
     }
 
-    // Add-only gate: everything canWriteHere() allows, plus Admin Assistant (company-
-    // wide, matching the scrap_admin_assistant_insert / subasta_admin_assistant_insert
-    // RLS policies -- insert-only, no update/delete).
+    // Add gate: everything canWriteHere() allows, plus literally any active employee
+    // for their own branch (scrap_any_employee_own_branch_insert /
+    // subasta_any_employee_own_branch_insert) -- "whole staff" can add, only the
+    // position-manager group above (or Admin/Manager/own-branch Supervisor) can edit
+    // or delete afterward.
     function canAddHere() {
-      return canWriteHere() || employee.position === 'Admin Assistant';
+      return canWriteHere() || employee.branch_id === selectedBranch;
     }
 
     function renderBranchButtons() {
@@ -283,7 +287,7 @@ if (employee) {
       document.getElementById('scrap-branch-label').textContent = label;
 
       document.querySelectorAll('#sub-form button[type="submit"], #scrap-form button[type="submit"]').forEach((btn) => { btn.disabled = !canAddHere(); });
-      const note = canAddHere() ? '' : isScoped
+      const note = canAddHere() ? '' : employee.branch_id
         ? '<p class="muted" style="font-size:11px;">View only — you can only add items for ' + esc(branchName(employee.branch_id)) + '.</p>'
         : '<p class="muted" style="font-size:11px;">View only.</p>';
       document.querySelectorAll('#sub-write-note, #scrap-write-note').forEach((el) => { el.innerHTML = note; });

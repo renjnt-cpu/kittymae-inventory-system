@@ -38,15 +38,17 @@ function nameOrderLabel(r, dupKeys) {
 }
 
 /** Any active employee lands here to request a refund. Only the approval group --
- * Admin/Manager/Branch Supervisor (role), Admin Assistant (position), or the
- * hand-picked refund_approval_access flag (mirrors has_refund_approval_access() in
- * 58_refund_approval_role_based.sql) -- gets the full approve/manage view; everyone
- * else gets just the request form plus a read-only list of their own submissions. */
-const canApprove = (emp) => ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || emp.position === 'Admin Assistant' || !!emp.refund_approval_access;
-// Broader group (refund_approval_access) can approve/process and add Proof of Payment,
-// but fixing a mistake -- removing a wrong attachment, deleting a refund outright --
-// stays with a supervisor/manager, same rule as Scrap/Subasta.
-const canEditRefund = (emp) => ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role);
+ * Admin/Manager/Branch Supervisor (role), Operations Supervisor/Inventory Supervisor/
+ * Admin Assistant (position), or the hand-picked refund_approval_access flag (mirrors
+ * has_refund_approval_access() in 62_position_managers_refund_scrap_subasta.sql) --
+ * gets the full approve/manage view; everyone else gets just the request form plus a
+ * read-only list of their own submissions. */
+const POSITION_MANAGERS = ['Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
+const canApprove = (emp) => ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || POSITION_MANAGERS.includes(emp.position) || !!emp.refund_approval_access;
+// The same position-manager group can also delete a refund / remove a wrong
+// attachment now (can_edit_refund() in 62_position_managers_refund_scrap_subasta.sql),
+// matching the same expanded rule on Scrap/Subasta.
+const canEditRefund = (emp) => ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || POSITION_MANAGERS.includes(emp.position);
 
 const REFUND_FORM_FIELDS =
   '<div class="field"><label>Name *</label><input type="text" name="customerName" required></div>' +

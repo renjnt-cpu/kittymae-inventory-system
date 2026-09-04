@@ -31,6 +31,9 @@ const POSITIONS = ['Sales Executive', 'Admin Assistant', 'Branch Team Leader', '
 const positionOptions = (selected) => '<option value="">— None —</option>' + POSITIONS.map((p) =>
   '<option' + (p === selected ? ' selected' : '') + '>' + p + '</option>'
 ).join('');
+// Mirrors is_position_manager() in 62_position_managers_refund_scrap_subasta.sql --
+// full manage (approve/edit/delete) on Refunds/Scrap/Subasta, not just add.
+const POSITION_MANAGERS = ['Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
 
 /** Builds the list of things to verify from the employee's CURRENT role,
  * branch, and bills_access -- not a hardcoded name lookup -- so a role or
@@ -63,7 +66,7 @@ function itemsForEmployee(emp) {
     items.push({ id: 'inventory-other', label: 'Cannot see inventory for other branches', expect: false });
     items.push({ id: 'movement', label: 'Can record Stock In/Out, Damage, Missing at ' + branch, expect: true });
     items.push({ id: 'transfers-view', label: 'Can view transfers involving ' + branch + ', but cannot request or approve them', expect: true });
-    items.push({ id: 'branches', label: 'Cannot see Branches (Subasta/Scrap)', expect: false });
+    items.push({ id: 'branches', label: 'Can add Subasta/Scrap entries for ' + branch + ' — cannot edit or delete any entry', expect: true });
     items.push({ id: 'capital', label: 'Can add Branch Capital entries (pending approval) — sees only their own submissions, not company-wide', expect: true });
     items.push({ id: 'payments', label: 'Cannot see Transactions', expect: false });
   } else if (emp.role === 'None' && emp.position === 'Sales Executive') {
@@ -73,28 +76,40 @@ function itemsForEmployee(emp) {
     items.push({ id: 'branches', label: 'Can view Branches (Subasta/Scrap) for every branch, view only — cannot add or delete', expect: true });
     items.push({ id: 'capital', label: 'Can view Branch Capital for every branch, and add entries (pending approval) — cannot approve or delete', expect: true });
     items.push({ id: 'payments', label: 'Cannot see Transactions', expect: false });
-  } else if (emp.role === 'None' && emp.position === 'Admin Assistant') {
+  } else if (emp.role === 'None' && POSITION_MANAGERS.includes(emp.position)) {
+    // Admin Assistant, Operations Supervisor, Inventory Supervisor -- same expanded
+    // rule: full manage (add/edit/delete) on Subasta/Scrap anywhere, not just add.
     items.push({ id: 'inventory', label: 'Cannot see any branch’s inventory', expect: false });
     items.push({ id: 'movement', label: 'Cannot record any stock movement', expect: false });
     items.push({ id: 'transfers', label: 'Cannot see or act on transfers', expect: false });
-    items.push({ id: 'branches', label: 'Can add Subasta/Scrap entries for any branch — cannot edit or delete any entry', expect: true });
+    items.push({ id: 'branches', label: 'Can add, edit, and delete Subasta/Scrap entries for any branch', expect: true });
     items.push({ id: 'capital', label: 'Can add Branch Capital entries for any branch, held as Pending Approval until a Manager/Supervisor approves', expect: true });
-    items.push({ id: 'payments', label: 'Can see Transactions and fill in FB Name/Customer/Order ID — cannot add, import, or delete', expect: true });
+    items.push({
+      id: 'payments',
+      label: emp.position === 'Admin Assistant'
+        ? 'Can see Transactions and fill in FB Name/Customer/Order ID — cannot add, import, or delete'
+        : 'Cannot see Transactions',
+      expect: emp.position === 'Admin Assistant',
+    });
   } else if (emp.role === 'None') {
     items.push({ id: 'inventory', label: 'Cannot see any branch’s inventory', expect: false });
     items.push({ id: 'movement', label: 'Cannot record any stock movement', expect: false });
     items.push({ id: 'transfers', label: 'Cannot see or act on transfers', expect: false });
-    items.push({ id: 'branches', label: 'Cannot see Branches (Subasta/Scrap)', expect: false });
+    items.push({
+      id: 'branches',
+      label: emp.branches ? 'Can add Subasta/Scrap entries for ' + branch + ' — cannot edit or delete' : 'Cannot add Subasta/Scrap entries (no branch assigned)',
+      expect: !!emp.branches,
+    });
     items.push({ id: 'capital', label: 'Can add Branch Capital entries (pending approval) — sees only their own submissions, not company-wide', expect: true });
     items.push({ id: 'payments', label: 'Cannot see Transactions', expect: false });
   }
-  const autoRefundApprover = ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || emp.position === 'Admin Assistant';
+  const autoRefundApprover = ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || POSITION_MANAGERS.includes(emp.position);
   items.push({
     id: 'refund-approval',
     label: (autoRefundApprover || emp.refund_approval_access)
       ? 'Can approve and process refund requests (not just submit them)'
       : 'Can only submit refund requests, cannot approve or process them',
-    expect: true, // Admin/Manager/Branch Supervisor/Admin Assistant qualify automatically; anyone else matches today's refund_approval_access flag
+    expect: true, // Admin/Manager/Branch Supervisor/the position-manager group qualify automatically; anyone else matches today's refund_approval_access flag
   });
   items.push({
     id: 'bills',
