@@ -307,8 +307,10 @@ if (employee) {
       const completedTotal = allRefunds.filter((r) => r.status === 'Completed').reduce((s, r) => s + Number(r.refund_amount || 0), 0);
       // Completed refunds live in the right-side panel, not this table.
       const rows = filtered.filter((r) => r.status !== 'Completed');
+      const activeTotal = rows.reduce((s, r) => s + Number(r.refund_amount || 0), 0);
       document.getElementById('ref-tiles').innerHTML =
-        tile(String(pendingCount), 'Pending Approval') + tile(String(approvedCount), 'Approved') + tile(money(completedTotal), 'Total Refunded') + tile(String(rows.length), 'Count');
+        tile(String(pendingCount), 'Pending Approval') + tile(String(approvedCount), 'Approved') +
+        tile(money(activeTotal), 'Total Amount (Pending + Approved)') + tile(money(completedTotal), 'Total Refunded') + tile(String(rows.length), 'Count');
 
       renderCompletedPanel();
 

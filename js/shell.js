@@ -46,6 +46,10 @@ export async function initShell(activePage) {
   if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || (employee.extra_page_access || []).includes('assets')) {
     pages.push({ id: 'assets', label: 'Asset & Supplies Custodian', href: 'assets.html' });
   }
+  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Admin Assistant' || (employee.extra_page_access || []).includes('lbc')) {
+    // COD parcels shipped via LBC for online orders -- company-wide, not per-branch.
+    pages.push({ id: 'lbc', label: 'LBC Monitoring', href: 'lbc.html' });
+  }
   // Branch Capital: like Refunds, everyone gets in now -- Admin/Manager/Branch
   // Supervisor/Sales Executive/Admin Assistant get the full company-wide (or own-
   // branch) balance view, everyone else just a "My Capital Requests" list of their own

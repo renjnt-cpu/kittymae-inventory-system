@@ -22,7 +22,15 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, subscribeToChanges } from './js/api.js';
+import { getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, subscribeToChanges } from './js/api.js';
+
+// Every position value that currently drives an access rule somewhere, plus the other
+// job titles already in use -- kept as a fixed list (not free text) so a typo here
+// can't silently fail to match the position checks in shell.js/transactions.html/etc.
+const POSITIONS = ['Sales Executive', 'Admin Assistant', 'Branch Team Leader', 'HR Supervisor', 'Inventory Supervisor', 'Operations Supervisor', 'Personal Assistant'];
+const positionOptions = (selected) => '<option value="">— None —</option>' + POSITIONS.map((p) =>
+  '<option' + (p === selected ? ' selected' : '') + '>' + p + '</option>'
+).join('');
 
 /** Builds the list of things to verify from the employee's CURRENT role,
  * branch, and bills_access -- not a hardcoded name lookup -- so a role or
@@ -37,6 +45,7 @@ function itemsForEmployee(emp) {
     items.push({ id: 'branches', label: 'Can see and manage Subasta and Scrap for every branch', expect: true });
     items.push({ id: 'capital', label: 'Can add Branch Capital entries (auto-approved) and approve others’ pending entries anywhere', expect: true });
     items.push({ id: 'payments', label: 'Can see, add, and import Transactions (GCash/Bank Transfer)', expect: true });
+    items.push({ id: 'lbc', label: 'Can see and manage LBC Monitoring (COD shipments)', expect: true });
   } else if (emp.role === 'Branch Supervisor') {
     items.push({ id: 'inventory-own', label: 'Sees inventory for ' + branch, expect: true });
     items.push({ id: 'inventory-other', label: 'Cannot see inventory for other branches', expect: false });
@@ -48,6 +57,7 @@ function itemsForEmployee(emp) {
     items.push({ id: 'capital', label: 'Can add Branch Capital entries (pending approval elsewhere, auto-approved for ' + branch + ') and approve pending entries for ' + branch, expect: true });
     items.push({ id: 'payments', label: 'Can see Transactions and fill in FB Name/Customer/Order ID — cannot add, import, or delete', expect: true });
     items.push({ id: 'assets', label: 'Can add/edit/delete Asset & Supplies Custodian items', expect: true });
+    items.push({ id: 'lbc', label: 'Can see and manage LBC Monitoring (COD shipments)', expect: true });
   } else if (emp.role === 'Staff') {
     items.push({ id: 'inventory-own', label: 'Sees inventory for ' + branch, expect: true });
     items.push({ id: 'inventory-other', label: 'Cannot see inventory for other branches', expect: false });
@@ -131,14 +141,18 @@ if (employee) {
 
       root.innerHTML =
         '<h2>Access Verification Checklist</h2>' +
-        '<p class="muted">Tick each item off only after you’ve personally confirmed it with that person’s real account. This list is built from each person’s current role and branch, so it updates on its own whenever their task changes — Ren isn’t listed since Admin already has full access by definition.</p>' +
+        '<p class="muted">Tick each item off only after you’ve personally confirmed it with that person’s real account. Set or change someone’s Position here — several checks below (and pages like Branches, Transactions, Branch Capital) key off it directly, so changing it here takes effect immediately. This list is built from each person’s current role, position, and branch, so it updates on its own whenever any of those change — Ren isn’t listed since Admin already has full access by definition.</p>' +
         '<div class="tiles"><div class="tile"><div class="num">' + done + ' / ' + total + '</div><div class="lbl">Verified</div></div></div>' +
         (!people.length ? '<p class="muted">No non-Admin employees yet.</p>' : people.map((p) => {
           const pDone = p.items.filter((it) => checked[p.id + ':' + it.id]).length;
           return '<div class="card">' +
-            '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;">' +
-              '<h3 style="margin:0;">' + esc(p.name) + ' <span class="muted" style="font-weight:normal;font-size:13px;">— ' + esc(p.role) + (p.position ? ' · ' + esc(p.position) : '') + '</span></h3>' +
-              '<span class="ac-progress">' + pDone + ' / ' + p.items.length + ' verified</span>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+              '<h3 style="margin:0;">' + esc(p.name) + ' <span class="muted" style="font-weight:normal;font-size:13px;">— ' + esc(p.role) + '</span></h3>' +
+              '<span style="display:flex;align-items:center;gap:6px;">' +
+                '<label class="muted" style="font-size:12px;">Position</label>' +
+                '<select data-position-for="' + p.id + '" style="padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' + positionOptions(p.position) + '</select>' +
+                '<span class="ac-progress">' + pDone + ' / ' + p.items.length + ' verified</span>' +
+              '</span>' +
             '</div>' +
             p.items.map((it) => {
               const key = p.id + ':' + it.id;
@@ -152,6 +166,18 @@ if (employee) {
             }).join('') +
           '</div>';
         }).join(''));
+
+      root.querySelectorAll('[data-position-for]').forEach((sel) => sel.addEventListener('change', async (ev) => {
+        const employeeId = ev.target.dataset.positionFor;
+        const newPosition = ev.target.value;
+        try {
+          await updateEmployeePosition(employeeId, newPosition);
+          toast('ac-msg', 'Position updated.', false);
+          await load();
+        } catch (err) {
+          toast('ac-msg', String(err.message || err), true);
+        }
+      }));
 
       root.querySelectorAll('input[type="checkbox"]').forEach((cb) => cb.addEventListener('change', async (ev) => {
         const key = ev.target.dataset.key;

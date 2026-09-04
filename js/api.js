@@ -599,6 +599,54 @@ export async function deleteAssetCustodianItem(id) {
   if (error) throw new Error(error.message);
 }
 
+// ---- LBC monitoring (COD parcels shipped via LBC for online orders) — company-wide,
+// not branch-scoped, same shape as Transactions. ----
+
+export async function listLbcShipments() {
+  const { data, error } = await supabase.from('lbc_shipments')
+    .select('*, creator:employees!lbc_shipments_created_by_fkey(full_name), branches(name)')
+    .order('ship_date', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createLbcShipment({ branchId, orderId, customerName, trackingNumber, shipDate, codAmount, notes }) {
+  const empId = await currentEmployeeId();
+  const { error } = await supabase.from('lbc_shipments').insert({
+    branch_id: branchId || null, order_id: orderId, customer_name: customerName,
+    tracking_number: trackingNumber || null, ship_date: shipDate || new Date().toISOString().slice(0, 10),
+    cod_amount: codAmount || null, notes: notes || null, created_by: empId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function updateLbcShipment(id, { branchId, orderId, customerName, trackingNumber, shipDate, codAmount, status, remitted, remittedDate, notes }) {
+  const { error } = await supabase.from('lbc_shipments').update({
+    branch_id: branchId || null, order_id: orderId, customer_name: customerName,
+    tracking_number: trackingNumber || null, ship_date: shipDate || null,
+    cod_amount: codAmount || null, status, remitted: !!remitted, remitted_date: remittedDate || null,
+    notes: notes || null, updated_at: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function setLbcStatus(id, status) {
+  const { error } = await supabase.from('lbc_shipments').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function setLbcRemitted(id, remitted) {
+  const { error } = await supabase.from('lbc_shipments')
+    .update({ remitted, remitted_date: remitted ? new Date().toISOString().slice(0, 10) : null, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteLbcShipment(id) {
+  const { error } = await supabase.from('lbc_shipments').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 // ---- Branch Capital (money Ren injects into a branch — the inverse of Bills) ----
 // Admin-only, same access model as Bills.
 
@@ -636,6 +684,14 @@ export async function approveBranchCapitalEntry(id) {
   const { error } = await supabase.from('branch_capital_entries')
     .update({ status: 'Approved', approved_by: empId, approved_at: new Date().toISOString() })
     .eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+/** Admin sets a person's position directly from the Access Checklist -- position drives
+ * several access rules (Sales Executive, Admin Assistant, ...) so this is where an
+ * Admin actually assigns it, rather than every position change needing a DB edit. */
+export async function updateEmployeePosition(employeeId, position) {
+  const { error } = await supabase.from('employees').update({ position: position || null }).eq('id', employeeId);
   if (error) throw new Error(error.message);
 }
 
