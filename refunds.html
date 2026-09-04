@@ -42,6 +42,10 @@ function nameOrderLabel(r, dupKeys) {
  * 27_refund_request_any_employee.sql) gets the full approve/manage view; everyone else
  * gets just the request form plus a read-only list of their own submissions. */
 const canApprove = (emp) => emp.role === 'Admin' || !!emp.refund_approval_access;
+// Broader group (refund_approval_access) can approve/process and add Proof of Payment,
+// but fixing a mistake -- removing a wrong attachment, deleting a refund outright --
+// stays with a supervisor/manager, same rule as Scrap/Subasta.
+const canEditRefund = (emp) => ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role);
 
 const REFUND_FORM_FIELDS =
   '<div class="field"><label>Name *</label><input type="text" name="customerName" required></div>' +
@@ -356,7 +360,7 @@ if (employee) {
             '<div><b>Approved by:</b> ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
             '<div style="margin-top:4px;"><b>Proof of Payment:</b><br>' +
               (photos.length
-                ? photos.map((a) => '<div style="margin-bottom:2px;">' + money(a.amount) + (a.reference_number ? ' · Ref: ' + esc(a.reference_number) : '') + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button>' : ' <span class="muted">(no photo)</span>') + ' <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path || '') + '">✕</button></div>').join('')
+                ? photos.map((a) => '<div style="margin-bottom:2px;">' + money(a.amount) + (a.reference_number ? ' · Ref: ' + esc(a.reference_number) : '') + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button>' : ' <span class="muted">(no photo)</span>') + (canEditRefund(employee) ? ' <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path || '') + '">✕</button>' : '') + '</div>').join('')
                 : 'None yet') +
               (canAttach
                 ? (openAddProofFor === r.id
@@ -376,7 +380,7 @@ if (employee) {
                   ? '<button class="btn small" data-id="' + r.id + '" data-act="complete">Mark Completed</button> '
                   : '<span class="muted" style="font-size:11px;">' + money(remaining) + ' left to refund</span> ')
                 : '') +
-              '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' +
+              (canEditRefund(employee) ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' : '') +
             '</div>' +
           '</div>' : '') +
         '</div>';

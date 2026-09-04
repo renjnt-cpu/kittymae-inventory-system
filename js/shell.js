@@ -23,7 +23,7 @@ export async function initShell(activePage) {
   const pages = [
     { id: 'dashboard', label: 'Dashboard', href: 'dashboard.html' },
   ];
-  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Sales Executive') {
+  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Sales Executive', 'Admin Assistant'].includes(employee.position)) {
     pages.push({ id: 'branches', label: 'Branches', href: 'branches.html' });
   }
   pages.push(

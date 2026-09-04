@@ -63,7 +63,7 @@ function itemsForEmployee(emp) {
     items.push({ id: 'inventory', label: 'Cannot see any branch’s inventory', expect: false });
     items.push({ id: 'movement', label: 'Cannot record any stock movement', expect: false });
     items.push({ id: 'transfers', label: 'Cannot see or act on transfers', expect: false });
-    items.push({ id: 'branches', label: 'Cannot see Branches (Subasta/Scrap)', expect: false });
+    items.push({ id: 'branches', label: 'Can add Subasta/Scrap entries for any branch — cannot edit or delete any entry', expect: true });
     items.push({ id: 'payments', label: 'Can see Transactions and fill in FB Name/Customer/Order ID — cannot add, import, or delete', expect: true });
   } else if (emp.role === 'None') {
     items.push({ id: 'inventory', label: 'Cannot see any branch’s inventory', expect: false });
