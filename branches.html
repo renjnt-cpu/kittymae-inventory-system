@@ -31,6 +31,39 @@ const GOLD_KARATS = ['24K', '22K', '21K', '18K', '16K', '14K', '10K', 'Other'];
 const SILVER_KARATS = ['999', '925', 'Other'];
 const karatOptionsFor = (metal) => (metal === 'Silver' ? SILVER_KARATS : GOLD_KARATS).map((k) => '<option>' + k + '</option>').join('');
 
+const PAYMENT_METHODS = ['Cash', 'Store Sales Cash', 'GCash', 'Bank Transfer', 'Other'];
+// 3 fixed slots instead of a dynamic add/remove list -- covers any real split (rarely
+// more than 2 methods on one transaction) without the complexity of managing rows
+// inside innerHTML-rendered forms. Slots left blank/zero are just ignored on submit.
+function paymentSlotsHtml(prefix, existing, opts) {
+  const label0 = (opts && opts.label0) || 'Payment Method';
+  const requireFirst = !(opts && opts.optional);
+  const rows = existing && existing.length ? existing : [];
+  let html = '';
+  for (let i = 0; i < 3; i++) {
+    const row = rows[i] || {};
+    const isRequired = i === 0 && requireFirst;
+    const label = i === 0 ? label0 + (isRequired ? ' *' : ' (optional)') : label0 + ' ' + (i + 1) + ' (optional)';
+    const amtLabel = 'Amount (PHP)' + (isRequired ? ' *' : '');
+    html +=
+      '<div class="field"><label>' + label + '</label><select name="' + prefix + 'Method' + i + '"' + (isRequired ? ' required' : '') + '>' +
+        (!isRequired ? '<option value="">— none —</option>' : '') +
+        PAYMENT_METHODS.map((m) => '<option' + (row.method === m ? ' selected' : '') + '>' + m + '</option>').join('') +
+      '</select></div>' +
+      '<div class="field"><label>' + amtLabel + '</label><input type="number" name="' + prefix + 'Amount' + i + '" step="0.01" min="0"' + (isRequired ? ' required' : '') + (row.amount ? ' value="' + row.amount + '"' : '') + '></div>';
+  }
+  return html;
+}
+function readPaymentSlots(f, prefix) {
+  const payments = [];
+  for (let i = 0; i < 3; i++) {
+    const method = f[prefix + 'Method' + i]?.value;
+    const amount = Number(f[prefix + 'Amount' + i]?.value || 0);
+    if (method && amount > 0) payments.push({ method, amount });
+  }
+  return payments;
+}
+
 const employee = await initShell('branches');
 if (employee) {
   const root = document.getElementById('branches-root');
@@ -104,8 +137,7 @@ if (employee) {
               '<div class="field" id="scrap-karat-other-field" style="display:none;"><label>Specify</label><input type="text" name="karatOther" placeholder="Karat / purity"></div>' +
               '<div class="field"><label>Weight (grams) *</label><input type="number" name="weightGrams" step="0.001" min="0" required></div>' +
               '<div class="field"><label>Price per Gram (PHP)</label><input type="number" name="pricePerGram" step="0.01" min="0"></div>' +
-              '<div class="field"><label>Total Amount (PHP)</label><input type="number" name="totalAmount" step="0.01" min="0"></div>' +
-              '<div class="field"><label>Payment Method</label><select name="paymentMethod"><option>Cash</option><option>Store Sales Cash</option><option>GCash</option><option>Bank Transfer</option><option>Other</option></select></div>' +
+              paymentSlotsHtml('scrap', [{ method: 'Cash', amount: '' }]) +
               '<div class="field"><label>Source</label><input type="text" name="source" placeholder="Walk-in, buyback, refiner name…"></div>' +
               '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
               '<div class="field"><label>Photo</label><input type="file" name="attachment" accept="image/*"></div>' +
@@ -164,13 +196,14 @@ if (employee) {
       const f = ev.target;
       try {
         const karat = f.karat.value === 'Other' ? f.karatOther.value.trim() : f.karat.value;
+        const payments = readPaymentSlots(f, 'scrap');
+        if (!payments.length) { toast('br-msg', 'Enter at least one payment method and amount.', true); return; }
         const newScrapId = await createScrapEntry({
           branchId: selectedBranch, entryDate: f.entryDate.value, entryType: f.entryType.value, metalType: f.metalType.value,
           karat, weightGrams: Number(f.weightGrams.value),
           pricePerGram: f.pricePerGram.value ? Number(f.pricePerGram.value) : null,
-          totalAmount: f.totalAmount.value ? Number(f.totalAmount.value) : null,
           customerName: f.customerName.value.trim(), contactNumber: f.contactNumber.value.trim(),
-          paymentMethod: f.paymentMethod.value,
+          payments,
           source: f.source.value.trim(), notes: f.notes.value.trim(),
         });
         if (f.attachment.files[0]) await uploadScrapAttachment(selectedBranch, newScrapId, f.attachment.files[0]);
@@ -186,7 +219,6 @@ if (employee) {
     });
 
     let allSubasta = [], allScrap = [], branchBalances = [], scrapCashBalances = [];
-    let openSubId = null, openSubEditId = null, openScrapId = null;
     await Promise.all([loadSubasta(), loadScrap()]);
     subscribeToChanges('subasta_items', loadSubasta);
     subscribeToChanges(['scrap_entries', 'branch_capital_entries'], loadScrap);
@@ -296,80 +328,85 @@ if (employee) {
       const list = document.getElementById('sub-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No subasta items for this filter.</p>'; return; }
 
-      // Compact "click to expand" cards (same pattern as Refunds) instead of a wide
-      // table — with every field now shown, the table had grown too wide to view
-      // without horizontal scrolling.
-      list.innerHTML = rows.map((r) => {
-        const isOpen = openSubId === r.id;
-        const isEditing = openSubEditId === r.id;
-        return '<div class="completed-item">' +
-          '<button type="button" class="completed-orderid" data-toggle-sub="' + r.id + '">' +
-            esc(r.item_description) + (r.sku ? ' (' + esc(r.sku) + ')' : '') +
-            ' <span class="badge ' + (SUB_STATUS_BADGE[r.status] || 'pending') + '" style="font-weight:normal;">' + esc(r.status) + '</span>' +
-          '</button>' +
-          (isOpen ? '<div class="completed-detail">' +
-            (isEditing ? subEditFormHtml(r) :
-              '<div><b>Weight:</b> ' + (r.weight_grams ? Number(r.weight_grams).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g' : '—') + '</div>' +
-              '<div><b>Pawn Ref:</b> ' + esc(r.pawn_reference || '—') + '</div>' +
-              '<div><b>Pawn Date:</b> ' + (r.pawn_date || '—') + '</div>' +
-              '<div><b>Eligible Date:</b> ' + (r.auction_eligible_date || '—') + '</div>' +
-              '<div><b>Sale Date:</b> ' + (r.sale_date || '—') + '</div>' +
-              '<div><b>Sale Price:</b> ' + money(r.sale_price) + '</div>' +
-              '<div><b>Buyer:</b> ' + esc(r.buyer_name || '—') + '</div>' +
-              '<div><b>Notes:</b> ' + esc(r.notes || '—') + '</div>' +
-              '<div><b>Added by:</b> ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div>' +
-              (canWriteHere()
-                ? '<div style="margin-top:8px;"><button class="btn small secondary" data-id="' + r.id + '" data-act="edit">Edit</button> <button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button></div>'
-                : '')) +
-          '</div>' : '') +
-        '</div>';
-      }).join('');
-
-      list.querySelectorAll('[data-toggle-sub]').forEach((btn) => btn.addEventListener('click', () => {
-        const id = Number(btn.dataset.toggleSub);
-        openSubId = openSubId === id ? null : id;
-        openSubEditId = null;
-        renderSubasta();
-      }));
+      // Every field shows directly in the row -- no click-to-expand -- matching the
+      // Transactions list. Edit still opens a form (same as before), it just isn't
+      // gated behind a separate "view details" click anymore.
+      list.innerHTML = '<div class="table-scroll"><table style="table-layout:fixed;word-break:break-word;">' +
+        '<colgroup><col style="width:14%"><col style="width:7%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:12%"></colgroup>' +
+        '<thead><tr><th>Item</th><th>Weight</th><th>Pawn Ref</th><th>Pawn Date</th><th>Eligible</th><th>Status</th><th>Sale Date</th><th>Sale Price</th><th>Payment</th><th>Buyer/Notes</th><th></th></tr></thead><tbody>' +
+        rows.map((r) => {
+          const payments = r.subasta_payments || [];
+          const paymentDetail = payments.length > 1
+            ? payments.map((p) => esc(p.payment_method) + ': ' + money(p.amount)).join('<br>')
+            : esc(r.payment_method || '—');
+          return '<tr>' +
+            '<td>' + esc(r.item_description) + (r.sku ? '<div class="muted" style="font-size:10px;">' + esc(r.sku) + '</div>' : '') + '</td>' +
+            '<td>' + (r.weight_grams ? Number(r.weight_grams).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g' : '—') + '</td>' +
+            '<td>' + esc(r.pawn_reference || '—') + '</td>' +
+            '<td>' + (r.pawn_date || '—') + '</td>' +
+            '<td>' + (r.auction_eligible_date || '—') + '</td>' +
+            '<td><span class="badge ' + (SUB_STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
+            '<td>' + (r.sale_date || '—') + '</td>' +
+            '<td>' + money(r.sale_price) + '</td>' +
+            '<td style="font-size:11px;">' + paymentDetail + '</td>' +
+            '<td style="font-size:11px;">' + esc(r.buyer_name || '') + (r.notes ? '<div class="muted">' + esc(r.notes) + '</div>' : '') +
+              '<div class="muted" style="font-size:10px;">' + (r.creator ? 'Added by ' + esc(r.creator.full_name) : '') + '</div>' +
+            '</td>' +
+            '<td style="white-space:nowrap;">' +
+              (canWriteHere() ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="edit">Edit</button> <button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' : '') +
+            '</td>' +
+          '</tr>' +
+          '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="11"></td></tr>';
+        }).join('') +
+      '</tbody></table></div>';
 
       list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
         const id = btn.dataset.id;
         try {
           if (btn.dataset.act === 'delete') { if (!confirm('Delete this item?')) return; await deleteSubastaItem(id); toast('br-msg', 'Deleted.', false); await loadSubasta(); }
-          else if (btn.dataset.act === 'edit') { openSubEditId = Number(id); renderSubasta(); }
+          else if (btn.dataset.act === 'edit') openSubEdit(id, rows);
         } catch (err) {
           toast('br-msg', String(err.message || err), true);
         }
       }));
+    }
 
-      list.querySelectorAll('.edit-form').forEach((form) => {
-        form.querySelector('[data-cancel]').addEventListener('click', () => { openSubEditId = null; renderSubasta(); });
-        form.addEventListener('submit', async (ev) => {
-          ev.preventDefault();
-          const f = ev.target;
-          const id = f.dataset.id;
-          try {
-            await updateSubastaItem(id, {
-              branchId: isScoped ? employee.branch_id : Number(f.branchId.value),
-              sku: f.sku.value.trim(),
-              itemDescription: f.itemDescription.value.trim(), weightGrams: f.weightGrams.value ? Number(f.weightGrams.value) : null,
-              pawnReference: f.pawnReference.value.trim(),
-              pawnDate: f.pawnDate.value || null, auctionEligibleDate: f.auctionEligibleDate.value || null,
-              status: f.status.value, saleDate: f.saleDate.value || null,
-              salePrice: f.salePrice.value ? Number(f.salePrice.value) : null,
-              buyerName: f.buyerName.value.trim(), notes: f.notes.value.trim(),
-            });
-            toast('br-msg', 'Item updated.', false);
-            openSubEditId = null;
-            await loadSubasta();
-          } catch (err) {
-            toast('br-msg', String(err.message || err), true);
-          }
-        });
+    /** Opens an inline edit form in the hidden row right below this item -- same
+     * mechanic as Bills' inline edit -- instead of a separate "view details" step. */
+    function openSubEdit(id, rows) {
+      const r = rows.find((x) => String(x.id) === String(id));
+      const cell = document.querySelector('tr[data-edit-for="' + id + '"]');
+      const isOpen = cell.style.display !== 'none';
+      document.querySelectorAll('#sub-list .edit-row').forEach((row) => { row.style.display = 'none'; row.querySelector('td').innerHTML = ''; });
+      if (isOpen) return; // toggle closed if it was already open
+      cell.style.display = '';
+      cell.querySelector('td').innerHTML = subEditFormHtml(r);
+      const form = cell.querySelector('.edit-form');
+      form.querySelector('[data-cancel]').addEventListener('click', () => { cell.style.display = 'none'; cell.querySelector('td').innerHTML = ''; });
+      form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        try {
+          await updateSubastaItem(id, {
+            branchId: isScoped ? employee.branch_id : Number(f.branchId.value),
+            sku: f.sku.value.trim(),
+            itemDescription: f.itemDescription.value.trim(), weightGrams: f.weightGrams.value ? Number(f.weightGrams.value) : null,
+            pawnReference: f.pawnReference.value.trim(),
+            pawnDate: f.pawnDate.value || null, auctionEligibleDate: f.auctionEligibleDate.value || null,
+            status: f.status.value, saleDate: f.saleDate.value || null,
+            payments: readPaymentSlots(f, 'sub'),
+            buyerName: f.buyerName.value.trim(), notes: f.notes.value.trim(),
+          });
+          toast('br-msg', 'Item updated.', false);
+          await loadSubasta();
+        } catch (err) {
+          toast('br-msg', String(err.message || err), true);
+        }
       });
     }
 
     function subEditFormHtml(r) {
+      const existingPayments = (r.subasta_payments || []).map((p) => ({ method: p.payment_method, amount: p.amount }));
       return '<form class="edit-form" data-id="' + r.id + '" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
           '<div class="field"><label>Branch</label><select name="branchId"' + (isScoped ? ' disabled' : '') + '>' + branchOptions(r.branch_id) + '</select></div>' +
           '<div class="field"><label>SKU</label><input type="text" name="sku" value="' + esc(r.sku || '') + '"></div>' +
@@ -380,9 +417,9 @@ if (employee) {
           '<div class="field"><label>Auction Eligible Date</label><input type="date" name="auctionEligibleDate" value="' + (r.auction_eligible_date || '') + '"></div>' +
           '<div class="field"><label>Status</label><select name="status">' + SUB_STATUS_OPTIONS(r.status) + '</select></div>' +
           '<div class="field"><label>Sale Date</label><input type="date" name="saleDate" value="' + (r.sale_date || '') + '"></div>' +
-          '<div class="field"><label>Sale Price (PHP)</label><input type="number" name="salePrice" step="0.01" min="0" value="' + (r.sale_price ?? '') + '"></div>' +
           '<div class="field"><label>Buyer</label><input type="text" name="buyerName" value="' + esc(r.buyer_name || '') + '"></div>' +
           '<div class="field" style="min-width:180px;"><label>Notes</label><input type="text" name="notes" value="' + esc(r.notes || '') + '"></div>' +
+          paymentSlotsHtml('sub', existingPayments, { label0: 'Sale Payment Method', optional: true }) +
           '<button class="btn small" type="submit">Save</button> ' +
           '<button class="btn small secondary" type="button" data-cancel="1">Cancel</button>' +
         '</form>';
@@ -464,41 +501,36 @@ if (employee) {
       const list = document.getElementById('scrap-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No scrap entries for this filter.</p>'; return; }
 
-      // Compact "click to expand" cards (same pattern as Refunds/Subasta) instead of
-      // a wide table -- with every field now shown, the table had grown too wide to
-      // view without horizontal scrolling.
-      list.innerHTML = rows.map((r) => {
-        const isOpen = openScrapId === r.id;
-        return '<div class="completed-item">' +
-          '<button type="button" class="completed-orderid" data-toggle-scrap="' + r.id + '">' +
-            (r.entry_date || '—') + ' — ' + esc(r.customer_name || 'Walk-in') +
-            ' <span class="badge ' + (r.entry_type === 'In' ? 'ok' : 'pending') + '" style="font-weight:normal;">' + esc(r.entry_type) + '</span>' +
-            ' <span class="muted" style="font-weight:normal;">' + money(r.total_amount) + '</span>' +
-          '</button>' +
-          (isOpen ? '<div class="completed-detail">' +
-            '<div><b>Contact:</b> ' + esc(r.contact_number || '—') + '</div>' +
-            '<div><b>Metal:</b> ' + esc(r.metal_type) + '</div>' +
-            '<div><b>Karat/Purity:</b> ' + esc(r.karat || '—') + '</div>' +
-            '<div><b>Weight:</b> ' + weight(r.weight_grams) + '</div>' +
-            '<div><b>Price/g:</b> ' + money(r.price_per_gram) + '</div>' +
-            '<div><b>Total:</b> ' + money(r.total_amount) + '</div>' +
-            '<div><b>Payment:</b> ' + esc(r.payment_method || '—') + '</div>' +
-            '<div><b>Source:</b> ' + esc(r.source || '—') + '</div>' +
-            '<div><b>Notes:</b> ' + esc(r.notes || '—') + '</div>' +
-            '<div><b>Added by:</b> ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div>' +
-            '<div style="margin-top:8px;">' +
-              (r.attachment_path ? '<button class="btn small secondary" data-id="' + r.id + '" data-path="' + esc(r.attachment_path) + '" data-act="view-photo">View Photo</button> ' : '') +
+      // Every field shows directly in the row -- no click-to-expand -- matching the
+      // Transactions list. Payment breaks down per method underneath the total when
+      // an entry was split across more than one.
+      list.innerHTML = '<div class="table-scroll"><table style="table-layout:fixed;word-break:break-word;">' +
+        '<colgroup><col style="width:9%"><col style="width:10%"><col style="width:11%"><col style="width:7%"><col style="width:8%"><col style="width:9%"><col style="width:9%"><col style="width:12%"><col style="width:12%"><col style="width:13%"></colgroup>' +
+        '<thead><tr><th>Date</th><th>Customer</th><th>Metal/Karat</th><th>Type</th><th>Weight</th><th>Price/g</th><th>Total</th><th>Payment</th><th>Source/Notes</th><th></th></tr></thead><tbody>' +
+        rows.map((r) => {
+          const payments = r.scrap_payments || [];
+          const paymentDetail = payments.length > 1
+            ? payments.map((p) => esc(p.payment_method) + ': ' + money(p.amount)).join('<br>')
+            : esc(r.payment_method || '—');
+          return '<tr>' +
+            '<td>' + (r.entry_date || '—') + '<div class="muted" style="font-size:10px;">' + esc(r.contact_number || '') + '</div></td>' +
+            '<td>' + esc(r.customer_name || 'Walk-in') + '</td>' +
+            '<td>' + esc(r.metal_type) + ' ' + esc(r.karat || '') + '</td>' +
+            '<td><span class="badge ' + (r.entry_type === 'In' ? 'ok' : 'pending') + '">' + esc(r.entry_type) + '</span></td>' +
+            '<td>' + weight(r.weight_grams) + '</td>' +
+            '<td>' + money(r.price_per_gram) + '</td>' +
+            '<td>' + money(r.total_amount) + '</td>' +
+            '<td style="font-size:11px;">' + paymentDetail + '</td>' +
+            '<td style="font-size:11px;">' + esc(r.source || '') + (r.notes ? '<div class="muted">' + esc(r.notes) + '</div>' : '') +
+              '<div class="muted" style="font-size:10px;">' + (r.creator ? 'Added by ' + esc(r.creator.full_name) : '') + '</div>' +
+            '</td>' +
+            '<td style="white-space:nowrap;">' +
+              (r.attachment_path ? '<button class="btn small secondary" data-id="' + r.id + '" data-path="' + esc(r.attachment_path) + '" data-act="view-photo">Photo</button> ' : '') +
               (canWriteHere() ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' : '') +
-            '</div>' +
-          '</div>' : '') +
-        '</div>';
-      }).join('');
-
-      list.querySelectorAll('[data-toggle-scrap]').forEach((btn) => btn.addEventListener('click', () => {
-        const id = Number(btn.dataset.toggleScrap);
-        openScrapId = openScrapId === id ? null : id;
-        renderScrap();
-      }));
+            '</td>' +
+          '</tr>';
+        }).join('') +
+      '</tbody></table></div>';
 
       list.querySelectorAll('[data-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
         if (!confirm('Delete this scrap entry?')) return;

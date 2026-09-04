@@ -248,12 +248,20 @@ export async function removeBillAttachment(billId, path) {
  * (and re-filtering it client-side) got slower as the table grew for no reason. */
 export async function listSubastaItems(branchId) {
   let query = supabase.from('subasta_items')
-    .select('*, creator:employees!subasta_items_created_by_fkey(full_name), branches(name)')
+    .select('*, creator:employees!subasta_items_created_by_fkey(full_name), branches(name), subasta_payments(*)')
     .order('auction_eligible_date', { ascending: true, nullsFirst: false });
   if (branchId != null) query = query.eq('branch_id', branchId);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data;
+}
+
+/** One payment method label for quick display/search -- the individual rows in
+ * payments are still the source of truth (sums, cash-only balances, etc.). */
+function summarizePaymentMethod(payments) {
+  if (!payments || !payments.length) return null;
+  const methods = [...new Set(payments.map((p) => p.method))];
+  return methods.length === 1 ? methods[0] : 'Multiple';
 }
 
 export async function createSubastaItem({ branchId, sku, itemDescription, weightGrams, pawnReference, pawnDate, auctionEligibleDate, notes }) {
@@ -267,15 +275,32 @@ export async function createSubastaItem({ branchId, sku, itemDescription, weight
   if (error) throw new Error(error.message);
 }
 
-export async function updateSubastaItem(id, { branchId, sku, itemDescription, weightGrams, pawnReference, pawnDate, auctionEligibleDate, status, saleDate, salePrice, buyerName, notes }) {
+/** payments (optional [{method, amount}]) lets a sale be split across methods -- when
+ * given, it replaces any existing rows for this item and salePrice is recomputed as
+ * their sum rather than trusting a separately-typed figure. */
+export async function updateSubastaItem(id, { branchId, sku, itemDescription, weightGrams, pawnReference, pawnDate, auctionEligibleDate, status, saleDate, salePrice, buyerName, notes, payments }) {
+  const effectiveSalePrice = payments && payments.length ? payments.reduce((s, p) => s + Number(p.amount || 0), 0) : (salePrice || null);
   const { error } = await supabase.from('subasta_items').update({
     branch_id: branchId, sku: sku || null, item_description: itemDescription,
     weight_grams: weightGrams || null, pawn_reference: pawnReference || null, pawn_date: pawnDate || null,
     auction_eligible_date: auctionEligibleDate || null, status,
-    sale_date: saleDate || null, sale_price: salePrice || null, buyer_name: buyerName || null,
+    sale_date: saleDate || null, sale_price: effectiveSalePrice, buyer_name: buyerName || null,
+    payment_method: payments && payments.length ? summarizePaymentMethod(payments) : null,
     notes: notes || null, updated_at: new Date().toISOString(),
   }).eq('id', id);
   if (error) throw new Error(error.message);
+
+  if (payments) {
+    const { error: delErr } = await supabase.from('subasta_payments').delete().eq('subasta_item_id', id);
+    if (delErr) throw new Error(delErr.message);
+    if (payments.length) {
+      const rows = payments.filter((p) => p.amount > 0).map((p) => ({ subasta_item_id: id, payment_method: p.method, amount: p.amount }));
+      if (rows.length) {
+        const { error: insErr } = await supabase.from('subasta_payments').insert(rows);
+        if (insErr) throw new Error(insErr.message);
+      }
+    }
+  }
 }
 
 export async function deleteSubastaItem(id) {
@@ -289,7 +314,7 @@ export async function deleteSubastaItem(id) {
 /** branchId narrows the query server-side -- see listSubastaItems() for why. */
 export async function listScrapEntries(branchId) {
   let query = supabase.from('scrap_entries')
-    .select('*, creator:employees!scrap_entries_created_by_fkey(full_name), branches(name)')
+    .select('*, creator:employees!scrap_entries_created_by_fkey(full_name), branches(name), scrap_payments(*)')
     .order('entry_date', { ascending: false });
   if (branchId != null) query = query.eq('branch_id', branchId);
   const { data, error } = await query;
@@ -311,19 +336,31 @@ export async function getScrapCashBalances() {
   return data;
 }
 
-/** Returns the new entry's id so a photo picked in the same Add form submit can be
- * uploaded and linked right after it's created (mirrors bills' attachment flow). */
-export async function createScrapEntry({ branchId, entryDate, entryType, metalType, karat, weightGrams, pricePerGram, totalAmount, customerName, contactNumber, paymentMethod, source, notes }) {
+/** payments ([{method, amount}], at least one required) replaces the old single
+ * paymentMethod/totalAmount fields -- total_amount is their sum and payment_method a
+ * quick summary label ('Multiple' when more than one method is used). Returns the new
+ * entry's id so a photo picked in the same Add form submit can be uploaded and linked
+ * right after it's created (mirrors bills' attachment flow). */
+export async function createScrapEntry({ branchId, entryDate, entryType, metalType, karat, weightGrams, pricePerGram, customerName, contactNumber, payments, source, notes }) {
   const empId = await currentEmployeeId();
+  const totalAmount = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
   const { data, error } = await supabase.from('scrap_entries').insert({
     branch_id: branchId, entry_date: entryDate || new Date().toISOString().slice(0, 10),
     entry_type: entryType || 'In', metal_type: metalType, karat: karat || null,
     weight_grams: weightGrams, price_per_gram: pricePerGram || null, total_amount: totalAmount || null,
     customer_name: customerName || null, contact_number: contactNumber || null,
-    payment_method: paymentMethod || null,
+    payment_method: summarizePaymentMethod(payments),
     source: source || null, notes: notes || null, created_by: empId,
   }).select('id').single();
   if (error) throw new Error(error.message);
+
+  if (payments.length) {
+    const rows = payments.filter((p) => p.amount > 0).map((p) => ({ scrap_entry_id: data.id, payment_method: p.method, amount: p.amount }));
+    if (rows.length) {
+      const { error: payErr } = await supabase.from('scrap_payments').insert(rows);
+      if (payErr) throw new Error(payErr.message);
+    }
+  }
   return data.id;
 }
 
