@@ -358,7 +358,15 @@ if (employee) {
           '</tr>' +
           '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="11"></td></tr>';
         }).join('') +
-      '</tbody></table></div>';
+      '</tbody>' +
+      '<tfoot><tr style="font-weight:bold;background:#f7f7f7;">' +
+        '<td>Qty: ' + rows.length + '</td>' +
+        '<td>' + (rows.reduce((s, r) => s + Number(r.weight_grams || 0), 0)).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g</td>' +
+        '<td colspan="5"></td>' +
+        '<td>' + money(rows.filter((r) => r.status === 'Sold').reduce((s, r) => s + Number(r.sale_price || 0), 0)) + '</td>' +
+        '<td colspan="3"></td>' +
+      '</tr></tfoot>' +
+      '</table></div>';
 
       list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
         const id = btn.dataset.id;
@@ -530,7 +538,15 @@ if (employee) {
             '</td>' +
           '</tr>';
         }).join('') +
-      '</tbody></table></div>';
+      '</tbody>' +
+      '<tfoot><tr style="font-weight:bold;background:#f7f7f7;">' +
+        '<td colspan="4">Qty: ' + rows.length + '</td>' +
+        '<td>' + weight(rows.reduce((s, r) => s + Number(r.weight_grams || 0), 0)) + '</td>' +
+        '<td></td>' +
+        '<td>' + money(rows.reduce((s, r) => s + Number(r.total_amount || 0), 0)) + '</td>' +
+        '<td colspan="3"></td>' +
+      '</tr></tfoot>' +
+      '</table></div>';
 
       list.querySelectorAll('[data-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
         if (!confirm('Delete this scrap entry?')) return;
