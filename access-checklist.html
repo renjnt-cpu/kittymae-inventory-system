@@ -12,6 +12,10 @@
   .ac-item .lbl { flex:1; }
   .ac-item.checked .lbl-text { color:var(--muted); }
   .ac-progress { font-size:12px; color:var(--muted); }
+  .ac-roster-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:8px 0; border-bottom:1px solid #f0f0f0; }
+  .ac-roster-row:last-child { border-bottom:none; }
+  .ac-task-card h3 { margin:0 0 2px; }
+  .ac-task-card .ac-task-progress { font-size:12px; color:var(--muted); margin-bottom:8px; }
 </style>
 </head>
 <body>
@@ -35,6 +39,28 @@ const positionOptions = (selected) => '<option value="">— None —</option>' +
 // full manage (approve/edit/delete) on Refunds/Scrap/Subasta, not just add.
 const POSITION_MANAGERS = ['Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
 
+// Fixed set of task categories, in the order they're shown -- every item pushed
+// below is tagged with one of these keys so the checklist can be organized by task
+// (one section per key, every employee's row under it) instead of by person.
+const CATEGORY_ORDER = ['inventory', 'movement', 'transfers', 'branches', 'capital', 'payments', 'assets', 'lbc', 'refund', 'bills', 'extra'];
+const CATEGORY_LABEL = {
+  inventory: 'Inventory Visibility',
+  movement: 'Stock Movements',
+  transfers: 'Transfers',
+  branches: 'Branches (Subasta / Scrap)',
+  capital: 'Branch Capital',
+  payments: 'Transactions',
+  assets: 'Asset & Supplies Custodian',
+  lbc: 'LBC Monitoring',
+  refund: 'Refund Approval',
+  bills: 'Bills',
+  extra: 'Other Individually Granted Access',
+};
+// extra_page_access values map onto the same task section the rest of that page's
+// access lives under, so e.g. Jessica's individual Transactions grant shows up
+// alongside everyone else's Transactions expectations, not off in its own bucket.
+const EXTRA_PAGE_CATEGORY = { transactions: 'payments', assets: 'assets', lbc: 'lbc' };
+
 /** Builds the list of things to verify from the employee's CURRENT role,
  * branch, and bills_access -- not a hardcoded name lookup -- so a role or
  * task change shows up here automatically instead of needing a code edit. */
@@ -42,84 +68,84 @@ function itemsForEmployee(emp) {
   const branch = (emp.branches && emp.branches.name) || 'their branch';
   const items = [];
   if (emp.role === 'Manager') {
-    items.push({ id: 'inventory-all', label: 'Sees inventory for every branch, not just ' + branch, expect: true });
-    items.push({ id: 'movement', label: 'Can record stock movements at any branch', expect: true });
-    items.push({ id: 'transfers', label: 'Can approve, ship, and receive transfers anywhere', expect: true });
-    items.push({ id: 'branches', label: 'Can see and manage Subasta and Scrap for every branch', expect: true });
-    items.push({ id: 'capital', label: 'Can add Branch Capital entries (auto-approved) and approve others’ pending entries anywhere', expect: true });
-    items.push({ id: 'payments', label: 'Can see, add, and import Transactions (GCash/Bank Transfer)', expect: true });
-    items.push({ id: 'lbc', label: 'Can see and manage LBC Monitoring (COD shipments)', expect: true });
+    items.push({ id: 'inventory-all', category: 'inventory', label: 'Sees inventory for every branch, not just ' + branch, expect: true });
+    items.push({ id: 'movement', category: 'movement', label: 'Can record stock movements at any branch', expect: true });
+    items.push({ id: 'transfers', category: 'transfers', label: 'Can approve, ship, and receive transfers anywhere', expect: true });
+    items.push({ id: 'branches', category: 'branches', label: 'Can see and manage Subasta and Scrap for every branch', expect: true });
+    items.push({ id: 'capital', category: 'capital', label: 'Can add Branch Capital entries (auto-approved) and approve others’ pending entries anywhere', expect: true });
+    items.push({ id: 'payments', category: 'payments', label: 'Can see, add, and import Transactions (GCash/Bank Transfer)', expect: true });
+    items.push({ id: 'lbc', category: 'lbc', label: 'Can see and manage LBC Monitoring (COD shipments)', expect: true });
   } else if (emp.role === 'Branch Supervisor') {
-    items.push({ id: 'inventory-own', label: 'Sees inventory for ' + branch, expect: true });
-    items.push({ id: 'inventory-other', label: 'Cannot see inventory for other branches', expect: false });
-    items.push({ id: 'movement', label: 'Can record Stock In/Out, Damage, Missing at ' + branch, expect: true });
-    items.push({ id: 'adjustment', label: 'Cannot post Adjustment or Correction entries', expect: false });
-    items.push({ id: 'transfers', label: 'Can request, ship, and receive transfers involving ' + branch, expect: true });
-    items.push({ id: 'branches-own', label: 'Can see and manage Subasta and Scrap for ' + branch, expect: true });
-    items.push({ id: 'branches-other', label: 'Cannot see Subasta/Scrap for other branches', expect: false });
-    items.push({ id: 'capital', label: 'Can add Branch Capital entries (pending approval elsewhere, auto-approved for ' + branch + ') and approve pending entries for ' + branch, expect: true });
-    items.push({ id: 'payments', label: 'Can see Transactions and fill in FB Name/Customer/Order ID — cannot add, import, or delete', expect: true });
-    items.push({ id: 'assets', label: 'Can add/edit/delete Asset & Supplies Custodian items', expect: true });
-    items.push({ id: 'lbc', label: 'Can see and manage LBC Monitoring (COD shipments)', expect: true });
+    items.push({ id: 'inventory-own', category: 'inventory', label: 'Sees inventory for ' + branch, expect: true });
+    items.push({ id: 'inventory-other', category: 'inventory', label: 'Cannot see inventory for other branches', expect: false });
+    items.push({ id: 'movement', category: 'movement', label: 'Can record Stock In/Out, Damage, Missing at ' + branch, expect: true });
+    items.push({ id: 'adjustment', category: 'movement', label: 'Cannot post Adjustment or Correction entries', expect: false });
+    items.push({ id: 'transfers', category: 'transfers', label: 'Can request, ship, and receive transfers involving ' + branch, expect: true });
+    items.push({ id: 'branches-own', category: 'branches', label: 'Can see and manage Subasta and Scrap for ' + branch, expect: true });
+    items.push({ id: 'branches-other', category: 'branches', label: 'Cannot see Subasta/Scrap for other branches', expect: false });
+    items.push({ id: 'capital', category: 'capital', label: 'Can add Branch Capital entries (pending approval elsewhere, auto-approved for ' + branch + ') and approve pending entries for ' + branch, expect: true });
+    items.push({ id: 'payments', category: 'payments', label: 'Can see Transactions and fill in FB Name/Customer/Order ID — cannot add, import, or delete', expect: true });
+    items.push({ id: 'assets', category: 'assets', label: 'Can add/edit/delete Asset & Supplies Custodian items', expect: true });
+    items.push({ id: 'lbc', category: 'lbc', label: 'Can see and manage LBC Monitoring (COD shipments)', expect: true });
   } else if (emp.role === 'Staff') {
-    items.push({ id: 'inventory-own', label: 'Sees inventory for ' + branch, expect: true });
-    items.push({ id: 'inventory-other', label: 'Cannot see inventory for other branches', expect: false });
-    items.push({ id: 'movement', label: 'Can record Stock In/Out, Damage, Missing at ' + branch, expect: true });
-    items.push({ id: 'transfers-view', label: 'Can view transfers involving ' + branch + ', but cannot request or approve them', expect: true });
-    items.push({ id: 'branches', label: 'Can add Subasta/Scrap entries for ' + branch + ' — cannot edit or delete any entry', expect: true });
-    items.push({ id: 'capital', label: 'Can add Branch Capital entries (pending approval) — sees only their own submissions, not company-wide', expect: true });
-    items.push({ id: 'payments', label: 'Cannot see Transactions', expect: false });
+    items.push({ id: 'inventory-own', category: 'inventory', label: 'Sees inventory for ' + branch, expect: true });
+    items.push({ id: 'inventory-other', category: 'inventory', label: 'Cannot see inventory for other branches', expect: false });
+    items.push({ id: 'movement', category: 'movement', label: 'Can record Stock In/Out, Damage, Missing at ' + branch, expect: true });
+    items.push({ id: 'transfers-view', category: 'transfers', label: 'Can view transfers involving ' + branch + ', but cannot request or approve them', expect: true });
+    items.push({ id: 'branches', category: 'branches', label: 'Can add Subasta/Scrap entries for ' + branch + ' — cannot edit or delete any entry', expect: true });
+    items.push({ id: 'capital', category: 'capital', label: 'Can add Branch Capital entries (pending approval) — sees only their own submissions, not company-wide', expect: true });
+    items.push({ id: 'payments', category: 'payments', label: 'Cannot see Transactions', expect: false });
   } else if (emp.role === 'None' && emp.position === 'Sales Executive') {
-    items.push({ id: 'inventory', label: 'Sees inventory for every branch (view only)', expect: true });
-    items.push({ id: 'movement', label: 'Cannot record any stock movement', expect: false });
-    items.push({ id: 'transfers', label: 'Can request transfers, cannot approve them', expect: true });
-    items.push({ id: 'branches', label: 'Can view and add Subasta/Scrap entries for any branch — cannot edit or delete', expect: true });
-    items.push({ id: 'capital', label: 'Can view Branch Capital for every branch, and add entries (pending approval) — cannot approve or delete', expect: true });
-    items.push({ id: 'payments', label: 'Cannot see Transactions', expect: false });
+    items.push({ id: 'inventory', category: 'inventory', label: 'Sees inventory for every branch (view only)', expect: true });
+    items.push({ id: 'movement', category: 'movement', label: 'Cannot record any stock movement', expect: false });
+    items.push({ id: 'transfers', category: 'transfers', label: 'Can request transfers, cannot approve them', expect: true });
+    items.push({ id: 'branches', category: 'branches', label: 'Can view and add Subasta/Scrap entries for any branch — cannot edit or delete', expect: true });
+    items.push({ id: 'capital', category: 'capital', label: 'Can view Branch Capital for every branch, and add entries (pending approval) — cannot approve or delete', expect: true });
+    items.push({ id: 'payments', category: 'payments', label: 'Cannot see Transactions', expect: false });
   } else if (emp.role === 'None' && POSITION_MANAGERS.includes(emp.position)) {
     // Admin Assistant, Operations Supervisor, Inventory Supervisor -- same expanded
     // rule: full manage (add/edit/delete) on Subasta/Scrap anywhere, not just add.
-    items.push({ id: 'inventory', label: 'Cannot see any branch’s inventory', expect: false });
-    items.push({ id: 'movement', label: 'Cannot record any stock movement', expect: false });
-    items.push({ id: 'transfers', label: 'Cannot see or act on transfers', expect: false });
-    items.push({ id: 'branches', label: 'Can add, edit, and delete Subasta/Scrap entries for any branch', expect: true });
-    items.push({ id: 'capital', label: 'Can add Branch Capital entries for any branch, held as Pending Approval until a Manager/Supervisor approves', expect: true });
+    items.push({ id: 'inventory', category: 'inventory', label: 'Cannot see any branch’s inventory', expect: false });
+    items.push({ id: 'movement', category: 'movement', label: 'Cannot record any stock movement', expect: false });
+    items.push({ id: 'transfers', category: 'transfers', label: 'Cannot see or act on transfers', expect: false });
+    items.push({ id: 'branches', category: 'branches', label: 'Can add, edit, and delete Subasta/Scrap entries for any branch', expect: true });
+    items.push({ id: 'capital', category: 'capital', label: 'Can add Branch Capital entries for any branch, held as Pending Approval until a Manager/Supervisor approves', expect: true });
     items.push({
-      id: 'payments',
+      id: 'payments', category: 'payments',
       label: emp.position === 'Admin Assistant'
         ? 'Can see Transactions and fill in FB Name/Customer/Order ID — cannot add, import, or delete'
         : 'Cannot see Transactions',
       expect: emp.position === 'Admin Assistant',
     });
   } else if (emp.role === 'None' && emp.position === 'Personal Assistant') {
-    items.push({ id: 'inventory', label: 'Cannot see any branch’s inventory', expect: false });
-    items.push({ id: 'movement', label: 'Cannot record any stock movement', expect: false });
-    items.push({ id: 'transfers', label: 'Cannot see or act on transfers', expect: false });
-    items.push({ id: 'branches', label: 'Can view Subasta/Scrap for every branch (view only) — cannot add, edit, or delete', expect: true });
-    items.push({ id: 'capital', label: 'Can view remaining balance (Total Capital tiles) for every branch, and add entries (pending approval) — sees only their own submissions in the list, not the full company-wide log', expect: true });
-    items.push({ id: 'payments', label: 'Cannot see Transactions', expect: false });
+    items.push({ id: 'inventory', category: 'inventory', label: 'Cannot see any branch’s inventory', expect: false });
+    items.push({ id: 'movement', category: 'movement', label: 'Cannot record any stock movement', expect: false });
+    items.push({ id: 'transfers', category: 'transfers', label: 'Cannot see or act on transfers', expect: false });
+    items.push({ id: 'branches', category: 'branches', label: 'Can view Subasta/Scrap for every branch (view only) — cannot add, edit, or delete', expect: true });
+    items.push({ id: 'capital', category: 'capital', label: 'Can view remaining balance (Total Capital tiles) for every branch, and add entries (pending approval) — sees only their own submissions in the list, not the full company-wide log', expect: true });
+    items.push({ id: 'payments', category: 'payments', label: 'Cannot see Transactions', expect: false });
   } else if (emp.role === 'None') {
-    items.push({ id: 'inventory', label: 'Cannot see any branch’s inventory', expect: false });
-    items.push({ id: 'movement', label: 'Cannot record any stock movement', expect: false });
-    items.push({ id: 'transfers', label: 'Cannot see or act on transfers', expect: false });
+    items.push({ id: 'inventory', category: 'inventory', label: 'Cannot see any branch’s inventory', expect: false });
+    items.push({ id: 'movement', category: 'movement', label: 'Cannot record any stock movement', expect: false });
+    items.push({ id: 'transfers', category: 'transfers', label: 'Cannot see or act on transfers', expect: false });
     items.push({
-      id: 'branches',
+      id: 'branches', category: 'branches',
       label: emp.branches ? 'Can add Subasta/Scrap entries for ' + branch + ' — cannot edit or delete' : 'Cannot add Subasta/Scrap entries (no branch assigned)',
       expect: !!emp.branches,
     });
-    items.push({ id: 'capital', label: 'Can add Branch Capital entries (pending approval) — sees only their own submissions, not company-wide', expect: true });
-    items.push({ id: 'payments', label: 'Cannot see Transactions', expect: false });
+    items.push({ id: 'capital', category: 'capital', label: 'Can add Branch Capital entries (pending approval) — sees only their own submissions, not company-wide', expect: true });
+    items.push({ id: 'payments', category: 'payments', label: 'Cannot see Transactions', expect: false });
   }
   const autoRefundApprover = ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || POSITION_MANAGERS.includes(emp.position);
   items.push({
-    id: 'refund-approval',
+    id: 'refund-approval', category: 'refund',
     label: (autoRefundApprover || emp.refund_approval_access)
       ? 'Can approve and process refund requests (not just submit them)'
       : 'Can only submit refund requests, cannot approve or process them',
     expect: true, // Admin/Manager/Branch Supervisor/the position-manager group qualify automatically; anyone else matches today's refund_approval_access flag
   });
   items.push({
-    id: 'bills',
+    id: 'bills', category: 'bills',
     label: emp.bills_access ? 'Can see and add Bills' : 'Cannot see the Bills tracker',
     expect: true, // either outcome is correct as long as it matches today's bills_access flag
   });
@@ -127,7 +153,7 @@ function itemsForEmployee(emp) {
   // requests (e.g. Jessica on Transactions/Assets) that don't fit any role/position
   // rule above -- surfaced here so it's just as verifiable as everything else.
   (emp.extra_page_access || []).forEach((page) => {
-    items.push({ id: 'extra-' + page, label: 'Individually granted extra access to: ' + page, expect: true });
+    items.push({ id: 'extra-' + page, category: EXTRA_PAGE_CATEGORY[page] || 'extra', label: 'Individually granted extra access to: ' + page, expect: true });
   });
   return items;
 }
@@ -161,33 +187,56 @@ if (employee) {
       let total = 0, done = 0;
       people.forEach((p) => p.items.forEach((it) => { total++; if (checked[p.id + ':' + it.id]) done++; }));
 
-      root.innerHTML =
-        '<h2>Access Verification Checklist</h2>' +
-        '<p class="muted">Tick each item off only after you’ve personally confirmed it with that person’s real account. Set or change someone’s Position here — several checks below (and pages like Branches, Transactions, Branch Capital) key off it directly, so changing it here takes effect immediately. This list is built from each person’s current role, position, and branch, so it updates on its own whenever any of those change — Ren isn’t listed since Admin already has full access by definition.</p>' +
-        '<div class="tiles"><div class="tile"><div class="num">' + done + ' / ' + total + '</div><div class="lbl">Verified</div></div></div>' +
-        (!people.length ? '<p class="muted">No non-Admin employees yet.</p>' : people.map((p) => {
-          const pDone = p.items.filter((it) => checked[p.id + ':' + it.id]).length;
-          return '<div class="card">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
-              '<h3 style="margin:0;">' + esc(p.name) + ' <span class="muted" style="font-weight:normal;font-size:13px;">— ' + esc(p.role) + '</span></h3>' +
+      // Group every person's items by task category, in a fixed display order, so
+      // Ren can work through one task at a time ("does everyone's Branch Capital
+      // access look right?") instead of paging through each person's full list.
+      const rowsByCategory = {};
+      CATEGORY_ORDER.forEach((c) => { rowsByCategory[c] = []; });
+      people.forEach((p) => p.items.forEach((it) => {
+        (rowsByCategory[it.category] || rowsByCategory.extra).push({ person: p, item: it });
+      }));
+
+      const rosterHtml =
+        '<div class="card">' +
+          '<h3 style="margin:0 0 4px;">Employee Roster &amp; Positions</h3>' +
+          '<p class="muted" style="margin-top:-2px;">Set or change someone’s Position here — several tasks below (and pages like Branches, Transactions, Branch Capital) key off it directly, so a change here takes effect immediately.</p>' +
+          (!people.length ? '<p class="muted">No non-Admin employees yet.</p>' : people.map((p) =>
+            '<div class="ac-roster-row">' +
+              '<span>' + esc(p.name) + ' <span class="muted" style="font-size:13px;">— ' + esc(p.role) + '</span></span>' +
               '<span style="display:flex;align-items:center;gap:6px;">' +
                 '<label class="muted" style="font-size:12px;">Position</label>' +
                 '<select data-position-for="' + p.id + '" style="padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' + positionOptions(p.position) + '</select>' +
-                '<span class="ac-progress">' + pDone + ' / ' + p.items.length + ' verified</span>' +
               '</span>' +
-            '</div>' +
-            p.items.map((it) => {
-              const key = p.id + ':' + it.id;
-              const isChecked = !!checked[key];
-              return '<label class="ac-item' + (isChecked ? ' checked' : '') + '">' +
-                '<input type="checkbox" data-key="' + key + '"' + (isChecked ? ' checked' : '') + '>' +
-                '<span class="lbl"><span class="lbl-text">' + esc(it.label) + '</span> ' +
-                  '<span class="badge ' + (it.expect ? 'ok' : 'low') + '">' + (it.expect ? 'Should have access' : 'Should NOT have access') + '</span>' +
-                '</span>' +
-              '</label>';
-            }).join('') +
-          '</div>';
-        }).join(''));
+            '</div>'
+          ).join('')) +
+        '</div>';
+
+      const taskCardsHtml = CATEGORY_ORDER.map((catKey) => {
+        const rows = rowsByCategory[catKey];
+        if (!rows.length) return '';
+        const catDone = rows.filter(({ person, item }) => checked[person.id + ':' + item.id]).length;
+        return '<div class="card ac-task-card">' +
+          '<h3>' + esc(CATEGORY_LABEL[catKey]) + '</h3>' +
+          '<div class="ac-task-progress">' + catDone + ' / ' + rows.length + ' verified</div>' +
+          rows.map(({ person, item }) => {
+            const key = person.id + ':' + item.id;
+            const isChecked = !!checked[key];
+            return '<label class="ac-item' + (isChecked ? ' checked' : '') + '">' +
+              '<input type="checkbox" data-key="' + key + '"' + (isChecked ? ' checked' : '') + '>' +
+              '<span class="lbl"><span class="lbl-text"><b>' + esc(person.name) + '</b> — ' + esc(item.label) + '</span> ' +
+                '<span class="badge ' + (item.expect ? 'ok' : 'low') + '">' + (item.expect ? 'Should have access' : 'Should NOT have access') + '</span>' +
+              '</span>' +
+            '</label>';
+          }).join('') +
+        '</div>';
+      }).join('');
+
+      root.innerHTML =
+        '<h2>Access Verification Checklist</h2>' +
+        '<p class="muted">Tick each item off only after you’ve personally confirmed it with that person’s real account. Organized by task — each section below covers one thing the system does, listing everyone it applies to. This list is built from each person’s current role, position, and branch, so it updates on its own whenever any of those change — Ren isn’t listed since Admin already has full access by definition.</p>' +
+        '<div class="tiles"><div class="tile"><div class="num">' + done + ' / ' + total + '</div><div class="lbl">Verified</div></div></div>' +
+        rosterHtml +
+        (!people.length ? '' : taskCardsHtml);
 
       root.querySelectorAll('[data-position-for]').forEach((sel) => sel.addEventListener('change', async (ev) => {
         const employeeId = ev.target.dataset.positionFor;
