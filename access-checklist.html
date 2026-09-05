@@ -15,6 +15,7 @@
   .lvl-pill:hover { border-color:#ccc; }
   .lvl-pill.active.none { background:#fdecea; color:var(--warn); border-color:#fdecea; }
   .lvl-pill.active.view { background:#eef2f7; color:#46586b; border-color:#eef2f7; }
+  .lvl-pill.active.encode { background:#eaf6ec; color:var(--ok); border-color:#eaf6ec; }
   .lvl-pill.active.edit { background:#fff4e0; color:#a15c00; border-color:#fff4e0; }
   .lvl-pill.active.approver { background:#f0e9fb; color:#6a3fa0; border-color:#f0e9fb; }
 
@@ -82,84 +83,87 @@ const NO_ACCESS_LABEL = {
 /** Builds one row per task category from the employee's CURRENT role, position,
  * branch, and flags -- not a hardcoded name lookup -- so a role or task change shows
  * up here automatically instead of needing a code edit. Each row is { access: does
- * this person currently have access at all, level: 'view'|'edit'|'approver' when they
- * do }. This is the DEFAULT the level picker shows for that row -- Ren can click a
- * different option (including "No access") to record what's actually observed on
- * their real account, if it differs. */
+ * this person currently have access at all, levels: any combination of
+ * 'view'|'encode'|'edit'|'approver' when they do }. 'encode' means they can add a new
+ * entry but not edit/delete an existing one (e.g. Staff on Scrap, or anyone's own
+ * pending-approval Branch Capital request) -- distinct from 'edit', which is full
+ * read-write over existing records. This is the DEFAULT the level picker shows for
+ * that row -- Ren can click different options (including combining several, or "No
+ * access") to record what's actually observed on their real account, if it differs. */
 function itemsForEmployee(emp) {
   const branch = (emp.branches && emp.branches.name) || 'their branch';
   const isPosMgr = POSITION_MANAGERS.includes(emp.position);
   const cat = {};
-  CATEGORY_ORDER.forEach((c) => { cat[c] = { label: '', access: false, level: null }; });
+  CATEGORY_ORDER.forEach((c) => { cat[c] = { label: '', access: false, levels: [] }; });
 
   if (emp.role === 'Manager') {
-    cat.inventory = { label: 'Sees inventory for every branch', access: true, level: 'view' };
-    cat.movement  = { label: 'Can record stock movements at any branch', access: true, level: 'edit' };
-    cat.transfers = { label: 'Can approve, ship, and receive transfers anywhere', access: true, level: 'approver' };
-    cat.branches  = { label: 'Can add, edit, and delete Subasta/Scrap for every branch', access: true, level: 'edit' };
-    cat.capital   = { label: 'Can add (auto-approved) and approve Branch Capital entries anywhere', access: true, level: 'approver' };
-    cat.payments  = { label: 'Can see, add, and import Transactions', access: true, level: 'edit' };
-    cat.assets    = { label: 'Can add/edit/delete Asset & Supplies Custodian items', access: true, level: 'edit' };
-    cat.lbc       = { label: 'Can see and manage LBC Monitoring', access: true, level: 'edit' };
+    cat.inventory = { label: 'Sees inventory for every branch', access: true, levels: ['view'] };
+    cat.movement  = { label: 'Can record stock movements at any branch', access: true, levels: ['encode'] };
+    cat.transfers = { label: 'Can approve, ship, and receive transfers anywhere', access: true, levels: ['edit', 'approver'] };
+    cat.branches  = { label: 'Can add, edit, and delete Subasta/Scrap for every branch', access: true, levels: ['edit'] };
+    cat.capital   = { label: 'Can add (auto-approved) and approve Branch Capital entries anywhere', access: true, levels: ['encode', 'approver'] };
+    cat.payments  = { label: 'Can see, add, and import Transactions', access: true, levels: ['edit'] };
+    cat.assets    = { label: 'Can add/edit/delete Asset & Supplies Custodian items', access: true, levels: ['edit'] };
+    cat.lbc       = { label: 'Can see and manage LBC Monitoring', access: true, levels: ['edit'] };
   } else if (emp.role === 'Branch Supervisor') {
-    cat.inventory = { label: 'Sees inventory for ' + branch + ' only', access: true, level: 'view' };
-    cat.movement  = { label: 'Can record Stock In/Out, Damage, Missing at ' + branch + ' (not Adjustment/Correction)', access: true, level: 'edit' };
-    cat.transfers = { label: 'Can request, ship, and receive transfers involving ' + branch, access: true, level: 'edit' };
-    cat.branches  = { label: 'Can add, edit, and delete Subasta/Scrap for ' + branch, access: true, level: 'edit' };
-    cat.capital   = { label: 'Can add and approve Branch Capital entries for ' + branch, access: true, level: 'approver' };
-    cat.payments  = { label: 'Can see Transactions and fill in FB Name/Customer/Order ID (not add/import/delete)', access: true, level: 'edit' };
-    cat.assets    = { label: 'Can add/edit/delete Asset & Supplies Custodian items', access: true, level: 'edit' };
-    cat.lbc       = { label: 'Can see and manage LBC Monitoring', access: true, level: 'edit' };
+    cat.inventory = { label: 'Sees inventory for ' + branch + ' only', access: true, levels: ['view'] };
+    cat.movement  = { label: 'Can record Stock In/Out, Damage, Missing at ' + branch + ' (not Adjustment/Correction)', access: true, levels: ['encode'] };
+    cat.transfers = { label: 'Can request, ship, and receive transfers involving ' + branch, access: true, levels: ['edit'] };
+    cat.branches  = { label: 'Can add, edit, and delete Subasta/Scrap for ' + branch, access: true, levels: ['edit'] };
+    cat.capital   = { label: 'Can add and approve Branch Capital entries for ' + branch, access: true, levels: ['encode', 'approver'] };
+    cat.payments  = { label: 'Can see Transactions and fill in FB Name/Customer/Order ID (not add/import/delete)', access: true, levels: ['edit'] };
+    cat.assets    = { label: 'Can add/edit/delete Asset & Supplies Custodian items', access: true, levels: ['edit'] };
+    cat.lbc       = { label: 'Can see and manage LBC Monitoring', access: true, levels: ['edit'] };
   } else if (emp.role === 'Staff') {
-    cat.inventory = { label: 'Sees inventory for ' + branch + ' only', access: true, level: 'view' };
-    cat.movement  = { label: 'Can record Stock In/Out, Damage, Missing at ' + branch, access: true, level: 'edit' };
-    cat.transfers = { label: 'Can view transfers involving ' + branch + ' (cannot request/approve)', access: true, level: 'view' };
-    cat.branches  = { label: 'Can add Subasta/Scrap entries for ' + branch + ' (cannot edit/delete)', access: true, level: 'edit' };
-    cat.capital   = { label: 'Can add Branch Capital entries for ' + branch + ' (pending approval) — own submissions only', access: true, level: 'edit' };
+    cat.inventory = { label: 'Sees inventory for ' + branch + ' only', access: true, levels: ['view'] };
+    cat.movement  = { label: 'Can record Stock In/Out, Damage, Missing at ' + branch, access: true, levels: ['encode'] };
+    cat.transfers = { label: 'Can view transfers involving ' + branch + ' (cannot request/approve)', access: true, levels: ['view'] };
+    cat.branches  = { label: 'Can add Subasta/Scrap entries for ' + branch + ' (cannot edit/delete)', access: true, levels: ['encode'] };
+    cat.capital   = { label: 'Can add Branch Capital entries for ' + branch + ' (pending approval) — own submissions only', access: true, levels: ['encode'] };
   } else if (emp.role === 'None' && emp.position === 'Sales Executive') {
-    cat.inventory = { label: 'Sees inventory for every branch', access: true, level: 'view' };
-    cat.transfers = { label: 'Can request transfers (cannot approve)', access: true, level: 'edit' };
-    cat.branches  = { label: 'Can view and add Subasta/Scrap for any branch (cannot edit/delete)', access: true, level: 'edit' };
-    cat.capital   = { label: 'Can view Branch Capital for every branch; add entries (pending approval)', access: true, level: 'edit' };
+    cat.inventory = { label: 'Sees inventory for every branch', access: true, levels: ['view'] };
+    cat.transfers = { label: 'Can request transfers (cannot approve)', access: true, levels: ['encode'] };
+    cat.branches  = { label: 'Can view and add Subasta/Scrap for any branch (cannot edit/delete)', access: true, levels: ['encode'] };
+    cat.capital   = { label: 'Can view Branch Capital for every branch; add entries (pending approval)', access: true, levels: ['view', 'encode'] };
   } else if (emp.role === 'None' && isPosMgr) {
     // Admin Assistant, Operations Supervisor, Inventory Supervisor -- full manage
     // (add/edit/delete) on Subasta/Scrap anywhere, not just add.
-    cat.branches = { label: 'Can add, edit, and delete Subasta/Scrap for any branch', access: true, level: 'edit' };
-    cat.capital  = { label: 'Can add Branch Capital entries for any branch (pending approval)', access: true, level: 'edit' };
+    cat.branches = { label: 'Can add, edit, and delete Subasta/Scrap for any branch', access: true, levels: ['edit'] };
+    cat.capital  = { label: 'Can add Branch Capital entries for any branch (pending approval)', access: true, levels: ['encode'] };
     if (emp.position === 'Admin Assistant') {
-      cat.payments = { label: 'Can see Transactions and fill in FB Name/Customer/Order ID (not add/import/delete)', access: true, level: 'edit' };
-      cat.lbc      = { label: 'Can see and manage LBC Monitoring', access: true, level: 'edit' };
+      cat.payments = { label: 'Can see Transactions and fill in FB Name/Customer/Order ID (not add/import/delete)', access: true, levels: ['edit'] };
+      cat.lbc      = { label: 'Can see and manage LBC Monitoring', access: true, levels: ['edit'] };
     }
   } else if (emp.role === 'None' && emp.position === 'Personal Assistant') {
-    cat.branches = { label: 'Can view Subasta/Scrap for every branch (view only)', access: true, level: 'view' };
-    cat.capital  = { label: 'Can view remaining balance for every branch; add own entries (pending approval)', access: true, level: 'view' };
+    cat.branches = { label: 'Can view Subasta/Scrap for every branch (view only)', access: true, levels: ['view'] };
+    cat.capital  = { label: 'Can view remaining balance for every branch; add own entries (pending approval)', access: true, levels: ['view', 'encode'] };
   } else if (emp.role === 'None') {
     cat.branches = emp.branches
-      ? { label: 'Can add Subasta/Scrap entries for ' + branch + ' (cannot edit/delete)', access: true, level: 'edit' }
-      : { label: 'No branch assigned — cannot add Subasta/Scrap entries', access: false, level: null };
-    cat.capital = { label: 'Can add Branch Capital entries (pending approval) — own submissions only', access: true, level: 'edit' };
+      ? { label: 'Can add Subasta/Scrap entries for ' + branch + ' (cannot edit/delete)', access: true, levels: ['encode'] }
+      : { label: 'No branch assigned — cannot add Subasta/Scrap entries', access: false, levels: [] };
+    cat.capital = { label: 'Can add Branch Capital entries (pending approval) — own submissions only', access: true, levels: ['encode'] };
   }
 
   const autoRefundApprover = ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || isPosMgr;
   cat.refund = (autoRefundApprover || emp.refund_approval_access)
-    ? { label: 'Can approve and process refund requests', access: true, level: 'approver' }
-    : { label: 'Can only submit refund requests (cannot approve)', access: false, level: null };
+    ? { label: 'Can approve and process refund requests', access: true, levels: ['approver'] }
+    : { label: 'Can only submit refund requests (cannot approve)', access: false, levels: [] };
 
   cat.bills = emp.bills_access
-    ? { label: 'Can see and add Bills', access: true, level: 'edit' }
-    : { label: 'Cannot see the Bills tracker', access: false, level: null };
+    ? { label: 'Can see and add Bills', access: true, levels: ['edit'] }
+    : { label: 'Cannot see the Bills tracker', access: false, levels: [] };
 
   // Individually granted extra access upgrades whichever category it belongs to,
   // instead of showing as a separate "other" row.
   (emp.extra_page_access || []).forEach((page) => {
     const c = EXTRA_PAGE_CATEGORY[page];
     if (!c) return;
-    cat[c] = { label: cat[c].access ? cat[c].label : 'Individually granted access to ' + page, access: true, level: cat[c].level || 'edit' };
+    cat[c] = { label: cat[c].access ? cat[c].label : 'Individually granted access to ' + page, access: true, levels: cat[c].levels.length ? cat[c].levels : ['edit'] };
   });
 
   CATEGORY_ORDER.forEach((c) => { if (!cat[c].label) cat[c].label = NO_ACCESS_LABEL[c] || 'No access'; });
 
-  return CATEGORY_ORDER.map((c) => ({ id: c, category: c, label: cat[c].label, access: cat[c].access, level: cat[c].level }));
+  return CATEGORY_ORDER.map((c) => ({ id: c, category: c, label: cat[c].label, access: cat[c].access, levels: cat[c].levels }));
 }
 
 const employee = await initShell('access-checklist');
@@ -172,10 +176,10 @@ if (employee) {
     let people = [];
     let selectedId = null;
 
-    // overrides holds an EXPLICIT {checked, level} only for (employee, task) pairs Ren
-    // has actually set here -- absence means "not overridden," so the pill picker
-    // falls back to the auto-computed item.access/item.level. This is what lets the
-    // picker directly mean "here's their access level" while still defaulting
+    // overrides holds an EXPLICIT {checked, levels} only for (employee, task) pairs
+    // Ren has actually set here -- absence means "not overridden," so the pill picker
+    // falls back to the auto-computed item.access/item.levels. This is what lets the
+    // picker directly mean "here's their access level(s)" while still defaulting
     // sensibly to what the system actually grants, with room to correct it if reality
     // differs from the computed default.
     let overrides = {};
@@ -188,7 +192,7 @@ if (employee) {
         // bills_access, refund_approval_access, extra_page_access -- not just position).
         people = emps.map((e) => ({ id: e.id, name: e.full_name, role: e.role, position: e.position, raw: e, items: itemsForEmployee(e) }));
         overrides = {};
-        rows.forEach((r) => { overrides[r.employee_id + ':' + r.item_key] = { checked: r.checked, level: r.level }; });
+        rows.forEach((r) => { overrides[r.employee_id + ':' + r.item_key] = { checked: r.checked, levels: r.levels || [] }; });
         if (selectedId && !people.some((p) => p.id === selectedId)) selectedId = null;
       } catch (err) {
         toast('ac-msg', String(err.message || err), true);
@@ -199,15 +203,17 @@ if (employee) {
     await load();
     subscribeToChanges('access_checklist_verifications', load);
 
-    // Effective level for a row: 'none' | 'view' | 'edit' | 'approver' -- the override
-    // if Ren has set one, otherwise the computed default.
-    function effectiveLevel(personId, item) {
+    // Effective levels for a row: an array, any combination of view/encode/edit/
+    // approver, empty means No access -- the override if Ren has set one, otherwise
+    // the computed default. Ren can pick more than one (e.g. Edit AND Approver) --
+    // entirely his call, not something the system infers.
+    function effectiveLevels(personId, item) {
       const key = personId + ':' + item.id;
       const ov = overrides[key];
-      if (ov) return ov.checked ? (ov.level || 'view') : 'none';
-      return item.access ? (item.level || 'view') : 'none';
+      if (ov) return ov.checked ? ov.levels : [];
+      return item.access ? item.levels : [];
     }
-    function accessCount(p) { return p.items.filter((it) => effectiveLevel(p.id, it) !== 'none').length; }
+    function accessCount(p) { return p.items.filter((it) => effectiveLevels(p.id, it).length > 0).length; }
 
     function render() {
       const empListHtml = !people.length ? '<p class="muted">No non-Admin employees yet.</p>' : people.map((p) =>
@@ -235,12 +241,17 @@ if (employee) {
             '<h4>' + esc(CATEGORY_LABEL[catKey]) + '</h4>' +
             items.map((it) => {
               const key = selected.id + ':' + it.id;
-              const current = effectiveLevel(selected.id, it);
-              const pill = (lvl, label) => '<button type="button" class="lvl-pill ' + lvl + (current === lvl ? ' active' : '') + '" data-key="' + key + '" data-level="' + lvl + '">' + label + '</button>';
+              const current = effectiveLevels(selected.id, it);
+              // "No access" resets the whole row (exclusive); the other four toggle
+              // independently -- Ren can combine any of them, e.g. Edit + Approver.
+              const pill = (lvl, label) => {
+                const active = lvl === 'none' ? current.length === 0 : current.includes(lvl);
+                return '<button type="button" class="lvl-pill ' + lvl + (active ? ' active' : '') + '" data-key="' + key + '" data-level="' + lvl + '">' + label + '</button>';
+              };
               return '<div class="ac-item">' +
                 '<span class="lbl-text">' + esc(it.label) + '</span>' +
                 '<div class="lvl-picker">' +
-                  pill('none', 'No access') + pill('view', 'View only') + pill('edit', 'Edit') + pill('approver', 'Approver') +
+                  pill('none', 'No access') + pill('view', 'View only') + pill('encode', 'Encode') + pill('edit', 'Edit') + pill('approver', 'Approver') +
                 '</div>' +
               '</div>';
             }).join('') +
@@ -263,7 +274,7 @@ if (employee) {
 
       root.innerHTML =
         '<h2>Access Verification Checklist</h2>' +
-        '<p class="muted">Pick an employee on the left. Each task shows its current access level — No access, View only, Edit, or Approver — starting from what their role/position actually grants. Click a different option only if what you see on their real account doesn\'t match.</p>' +
+        '<p class="muted">Pick an employee on the left. Each task starts from what their role/position actually grants — click No access, View only, Encode (can add an entry but not edit/delete), Edit, or Approver to correct it if what you see on their real account is different. More than one can be active on the same task (e.g. Edit + Approver) — that\'s entirely your call.</p>' +
         '<div class="ac-layout">' +
           '<div class="card ac-emp-list">' + empListHtml + '</div>' +
           '<div class="ac-emp-main">' + mainHtml + '</div>' +
@@ -306,15 +317,22 @@ if (employee) {
 
       root.querySelectorAll('.lvl-pill').forEach((btn) => btn.addEventListener('click', async () => {
         const key = btn.dataset.key;
-        const newLevel = btn.dataset.level; // 'none' | 'view' | 'edit' | 'approver'
-        const newChecked = newLevel !== 'none';
+        const clicked = btn.dataset.level; // 'none' | 'view' | 'encode' | 'edit' | 'approver'
+        const sep = key.indexOf(':');
+        const employeeId = key.slice(0, sep), itemKey = key.slice(sep + 1);
+        const person = people.find((p) => p.id === employeeId);
+        const item = person && person.items.find((it) => it.id === itemKey);
+        if (!item) return;
+        const current = effectiveLevels(employeeId, item);
+        // "No access" resets the row; any other pill toggles independently -- Ren can
+        // have more than one active at once (e.g. Edit + Approver), entirely his call.
+        const newLevels = clicked === 'none' ? [] : (current.includes(clicked) ? current.filter((l) => l !== clicked) : [...current, clicked]);
+        const newChecked = newLevels.length > 0;
         const prevOverride = overrides.hasOwnProperty(key) ? overrides[key] : undefined;
-        overrides[key] = { checked: newChecked, level: newChecked ? newLevel : null };
+        overrides[key] = { checked: newChecked, levels: newLevels };
         render();
         try {
-          const sep = key.indexOf(':');
-          const employeeId = key.slice(0, sep), itemKey = key.slice(sep + 1);
-          await setAccessChecklistItem(employeeId, itemKey, newChecked, newChecked ? newLevel : null);
+          await setAccessChecklistItem(employeeId, itemKey, newChecked, newLevels);
         } catch (err) {
           if (prevOverride === undefined) delete overrides[key]; else overrides[key] = prevOverride;
           render();

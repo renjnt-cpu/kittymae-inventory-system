@@ -711,18 +711,20 @@ export async function getEmployeesForChecklist() {
 }
 
 export async function getAccessChecklist() {
-  const { data, error } = await supabase.from('access_checklist_verifications').select('employee_id, item_key, checked, level');
+  const { data, error } = await supabase.from('access_checklist_verifications').select('employee_id, item_key, checked, levels');
   if (error) throw new Error(error.message);
   return data;
 }
 
-/** level is 'view'|'edit'|'approver' when checked (has access), or null for
- * "No access". A row's mere existence means Ren has an explicit override recorded
- * for this task -- absence means the page falls back to the computed default. */
-export async function setAccessChecklistItem(employeeId, itemKey, checked, level) {
+/** levels is an array of any combination of 'view'|'encode'|'edit'|'approver' -- Ren
+ * can pick more than one for a task entirely at his own discretion (e.g. Edit AND
+ * Approver). Empty array means "No access." A row's mere existence means Ren has an
+ * explicit override recorded for this task -- absence means the page falls back to
+ * the computed default. */
+export async function setAccessChecklistItem(employeeId, itemKey, checked, levels) {
   const empId = checked ? await currentEmployeeId() : null;
   const { error } = await supabase.from('access_checklist_verifications').upsert({
-    employee_id: employeeId, item_key: itemKey, checked, level: checked ? (level || null) : null,
+    employee_id: employeeId, item_key: itemKey, checked, levels: checked ? (levels || []) : [],
     checked_by: empId,
     checked_at: checked ? new Date().toISOString() : null,
     updated_at: new Date().toISOString(),
