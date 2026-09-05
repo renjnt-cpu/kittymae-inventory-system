@@ -711,15 +711,18 @@ export async function getEmployeesForChecklist() {
 }
 
 export async function getAccessChecklist() {
-  const { data, error } = await supabase.from('access_checklist_verifications').select('employee_id, item_key, checked');
+  const { data, error } = await supabase.from('access_checklist_verifications').select('employee_id, item_key, checked, level');
   if (error) throw new Error(error.message);
   return data;
 }
 
-export async function setAccessChecklistItem(employeeId, itemKey, checked) {
+/** level is 'view'|'edit'|'approver' when checked (has access), or null for
+ * "No access". A row's mere existence means Ren has an explicit override recorded
+ * for this task -- absence means the page falls back to the computed default. */
+export async function setAccessChecklistItem(employeeId, itemKey, checked, level) {
   const empId = checked ? await currentEmployeeId() : null;
   const { error } = await supabase.from('access_checklist_verifications').upsert({
-    employee_id: employeeId, item_key: itemKey, checked,
+    employee_id: employeeId, item_key: itemKey, checked, level: checked ? (level || null) : null,
     checked_by: empId,
     checked_at: checked ? new Date().toISOString() : null,
     updated_at: new Date().toISOString(),
