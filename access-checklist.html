@@ -12,10 +12,22 @@
   .ac-item .lbl { flex:1; }
   .ac-item.checked .lbl-text { color:var(--muted); }
   .ac-progress { font-size:12px; color:var(--muted); }
-  .ac-roster-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:8px 0; border-bottom:1px solid #f0f0f0; }
-  .ac-roster-row:last-child { border-bottom:none; }
-  .ac-task-card h3 { margin:0 0 2px; }
+  .ac-task-card h4 { margin:0 0 2px; }
   .ac-task-card .ac-task-progress { font-size:12px; color:var(--muted); margin-bottom:8px; }
+
+  .ac-layout { display:flex; gap:16px; align-items:flex-start; }
+  .ac-emp-list { flex:0 0 260px; max-height:calc(100vh - 220px); overflow-y:auto; padding:6px; }
+  .ac-emp-main { flex:1 1 auto; min-width:0; }
+  .ac-emp-row { display:block; width:100%; text-align:left; background:none; border:none; border-radius:8px; padding:10px 12px; cursor:pointer; font:inherit; color:inherit; }
+  .ac-emp-row:hover { background:#f7f5f0; }
+  .ac-emp-row.active { background:var(--rose); }
+  .ac-emp-row .name { font-weight:600; }
+  .ac-emp-row .sub { font-size:12px; color:var(--muted); }
+  .ac-emp-row .progress { font-size:11px; color:var(--muted); margin-top:2px; }
+  @media (max-width:760px) {
+    .ac-layout { flex-direction:column; }
+    .ac-emp-list { flex:0 0 auto; max-height:300px; width:100%; }
+  }
 </style>
 </head>
 <body>
@@ -40,8 +52,9 @@ const positionOptions = (selected) => '<option value="">— None —</option>' +
 const POSITION_MANAGERS = ['Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
 
 // Fixed set of task categories, in the order they're shown -- every item pushed
-// below is tagged with one of these keys so the checklist can be organized by task
-// (one section per key, every employee's row under it) instead of by person.
+// below is tagged with one of these keys so a selected employee's checklist can be
+// broken into one section per task (Inventory, Branches, Capital, ...) instead of
+// one long undifferentiated list.
 const CATEGORY_ORDER = ['inventory', 'movement', 'transfers', 'branches', 'capital', 'payments', 'assets', 'lbc', 'refund', 'bills', 'extra'];
 const CATEGORY_LABEL = {
   inventory: 'Inventory Visibility',
@@ -167,6 +180,7 @@ if (employee) {
   } else {
     let people = [];
     let checked = {};
+    let selectedId = null;
 
     async function load() {
       try {
@@ -174,6 +188,7 @@ if (employee) {
         people = emps.map((e) => ({ id: e.id, name: e.full_name, role: e.role, position: e.position, items: itemsForEmployee(e) }));
         checked = {};
         rows.forEach((r) => { if (r.checked) checked[r.employee_id + ':' + r.item_key] = true; });
+        if (selectedId && !people.some((p) => p.id === selectedId)) selectedId = null;
       } catch (err) {
         toast('ac-msg', String(err.message || err), true);
       }
@@ -183,60 +198,80 @@ if (employee) {
     await load();
     subscribeToChanges('access_checklist_verifications', load);
 
+    function personProgress(p) {
+      const doneCt = p.items.filter((it) => checked[p.id + ':' + it.id]).length;
+      return doneCt + ' / ' + p.items.length;
+    }
+
     function render() {
       let total = 0, done = 0;
       people.forEach((p) => p.items.forEach((it) => { total++; if (checked[p.id + ':' + it.id]) done++; }));
 
-      // Group every person's items by task category, in a fixed display order, so
-      // Ren can work through one task at a time ("does everyone's Branch Capital
-      // access look right?") instead of paging through each person's full list.
-      const rowsByCategory = {};
-      CATEGORY_ORDER.forEach((c) => { rowsByCategory[c] = []; });
-      people.forEach((p) => p.items.forEach((it) => {
-        (rowsByCategory[it.category] || rowsByCategory.extra).push({ person: p, item: it });
-      }));
+      const empListHtml = !people.length ? '<p class="muted">No non-Admin employees yet.</p>' : people.map((p) =>
+        '<button type="button" class="ac-emp-row' + (p.id === selectedId ? ' active' : '') + '" data-select-emp="' + p.id + '">' +
+          '<div class="name">' + esc(p.name) + '</div>' +
+          '<div class="sub">' + esc(p.role) + (p.position ? ' · ' + esc(p.position) : '') + '</div>' +
+          '<div class="progress">' + personProgress(p) + ' verified</div>' +
+        '</button>'
+      ).join('');
 
-      const rosterHtml =
-        '<div class="card">' +
-          '<h3 style="margin:0 0 4px;">Employee Roster &amp; Positions</h3>' +
-          '<p class="muted" style="margin-top:-2px;">Set or change someone’s Position here — several tasks below (and pages like Branches, Transactions, Branch Capital) key off it directly, so a change here takes effect immediately.</p>' +
-          (!people.length ? '<p class="muted">No non-Admin employees yet.</p>' : people.map((p) =>
-            '<div class="ac-roster-row">' +
-              '<span>' + esc(p.name) + ' <span class="muted" style="font-size:13px;">— ' + esc(p.role) + '</span></span>' +
+      const selected = people.find((p) => p.id === selectedId);
+
+      let mainHtml;
+      if (!selected) {
+        mainHtml = '<div class="card"><p class="muted">Select an employee on the left to see their access checklist.</p></div>';
+      } else {
+        const byCategory = {};
+        CATEGORY_ORDER.forEach((c) => { byCategory[c] = []; });
+        selected.items.forEach((it) => { (byCategory[it.category] || byCategory.extra).push(it); });
+
+        const taskCardsHtml = CATEGORY_ORDER.map((catKey) => {
+          const items = byCategory[catKey];
+          if (!items.length) return '';
+          const catDone = items.filter((it) => checked[selected.id + ':' + it.id]).length;
+          return '<div class="card ac-task-card">' +
+            '<h4>' + esc(CATEGORY_LABEL[catKey]) + '</h4>' +
+            '<div class="ac-task-progress">' + catDone + ' / ' + items.length + ' verified</div>' +
+            items.map((it) => {
+              const key = selected.id + ':' + it.id;
+              const isChecked = !!checked[key];
+              return '<label class="ac-item' + (isChecked ? ' checked' : '') + '">' +
+                '<input type="checkbox" data-key="' + key + '"' + (isChecked ? ' checked' : '') + '>' +
+                '<span class="lbl"><span class="lbl-text">' + esc(it.label) + '</span> ' +
+                  '<span class="badge ' + (it.expect ? 'ok' : 'low') + '">' + (it.expect ? 'Should have access' : 'Should NOT have access') + '</span>' +
+                '</span>' +
+              '</label>';
+            }).join('') +
+          '</div>';
+        }).join('');
+
+        mainHtml =
+          '<div class="card">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
+              '<h3 style="margin:0;">' + esc(selected.name) + ' <span class="muted" style="font-weight:normal;font-size:13px;">— ' + esc(selected.role) + '</span></h3>' +
               '<span style="display:flex;align-items:center;gap:6px;">' +
                 '<label class="muted" style="font-size:12px;">Position</label>' +
-                '<select data-position-for="' + p.id + '" style="padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' + positionOptions(p.position) + '</select>' +
+                '<select data-position-for="' + selected.id + '" style="padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' + positionOptions(selected.position) + '</select>' +
               '</span>' +
-            '</div>'
-          ).join('')) +
-        '</div>';
-
-      const taskCardsHtml = CATEGORY_ORDER.map((catKey) => {
-        const rows = rowsByCategory[catKey];
-        if (!rows.length) return '';
-        const catDone = rows.filter(({ person, item }) => checked[person.id + ':' + item.id]).length;
-        return '<div class="card ac-task-card">' +
-          '<h3>' + esc(CATEGORY_LABEL[catKey]) + '</h3>' +
-          '<div class="ac-task-progress">' + catDone + ' / ' + rows.length + ' verified</div>' +
-          rows.map(({ person, item }) => {
-            const key = person.id + ':' + item.id;
-            const isChecked = !!checked[key];
-            return '<label class="ac-item' + (isChecked ? ' checked' : '') + '">' +
-              '<input type="checkbox" data-key="' + key + '"' + (isChecked ? ' checked' : '') + '>' +
-              '<span class="lbl"><span class="lbl-text"><b>' + esc(person.name) + '</b> — ' + esc(item.label) + '</span> ' +
-                '<span class="badge ' + (item.expect ? 'ok' : 'low') + '">' + (item.expect ? 'Should have access' : 'Should NOT have access') + '</span>' +
-              '</span>' +
-            '</label>';
-          }).join('') +
-        '</div>';
-      }).join('');
+            '</div>' +
+            '<p class="muted" style="margin-bottom:0;">Changing Position here takes effect immediately — several tasks below (and pages like Branches, Transactions, Branch Capital) key off it directly.</p>' +
+          '</div>' +
+          taskCardsHtml;
+      }
 
       root.innerHTML =
         '<h2>Access Verification Checklist</h2>' +
-        '<p class="muted">Tick each item off only after you’ve personally confirmed it with that person’s real account. Organized by task — each section below covers one thing the system does, listing everyone it applies to. This list is built from each person’s current role, position, and branch, so it updates on its own whenever any of those change — Ren isn’t listed since Admin already has full access by definition.</p>' +
+        '<p class="muted">Pick an employee on the left, then tick each task off only after you’ve personally confirmed it with their real account. Each person’s list is built from their current role, position, and branch, so it updates on its own whenever any of those change — Ren isn’t listed since Admin already has full access by definition.</p>' +
         '<div class="tiles"><div class="tile"><div class="num">' + done + ' / ' + total + '</div><div class="lbl">Verified</div></div></div>' +
-        rosterHtml +
-        (!people.length ? '' : taskCardsHtml);
+        '<div class="ac-layout">' +
+          '<div class="card ac-emp-list">' + empListHtml + '</div>' +
+          '<div class="ac-emp-main">' + mainHtml + '</div>' +
+        '</div>';
+
+      root.querySelectorAll('[data-select-emp]').forEach((btn) => btn.addEventListener('click', () => {
+        selectedId = btn.dataset.selectEmp;
+        render();
+      }));
 
       root.querySelectorAll('[data-position-for]').forEach((sel) => sel.addEventListener('change', async (ev) => {
         const employeeId = ev.target.dataset.positionFor;
