@@ -185,7 +185,10 @@ if (employee) {
     async function load() {
       try {
         const [emps, rows] = await Promise.all([getEmployeesForChecklist(), getAccessChecklist()]);
-        people = emps.map((e) => ({ id: e.id, name: e.full_name, role: e.role, position: e.position, items: itemsForEmployee(e) }));
+        // Keeps the raw record (raw) alongside the derived fields so a position change
+        // can recompute this one person's items locally (itemsForEmployee needs branch,
+        // bills_access, refund_approval_access, extra_page_access -- not just position).
+        people = emps.map((e) => ({ id: e.id, name: e.full_name, role: e.role, position: e.position, raw: e, items: itemsForEmployee(e) }));
         checked = {};
         rows.forEach((r) => { if (r.checked) checked[r.employee_id + ':' + r.item_key] = true; });
         if (selectedId && !people.some((p) => p.id === selectedId)) selectedId = null;
@@ -276,11 +279,29 @@ if (employee) {
       root.querySelectorAll('[data-position-for]').forEach((sel) => sel.addEventListener('change', async (ev) => {
         const employeeId = ev.target.dataset.positionFor;
         const newPosition = ev.target.value;
+        const person = people.find((p) => p.id === employeeId);
+        const prevPosition = person ? person.position : null;
+        // Optimistic update: recompute this person's task list from the new position
+        // immediately and re-render, instead of waiting on the save + a full reload
+        // round-trip -- their checklist should change the instant you pick a position,
+        // not a beat later.
+        if (person) {
+          person.position = newPosition;
+          person.raw.position = newPosition;
+          person.items = itemsForEmployee(person.raw);
+        }
+        render();
         try {
           await updateEmployeePosition(employeeId, newPosition);
           toast('ac-msg', 'Position updated.', false);
-          await load();
+          await load(); // reconciles with the server (also picks up anyone else's concurrent edits)
         } catch (err) {
+          if (person) {
+            person.position = prevPosition;
+            person.raw.position = prevPosition;
+            person.items = itemsForEmployee(person.raw);
+          }
+          render();
           toast('ac-msg', String(err.message || err), true);
         }
       }));
