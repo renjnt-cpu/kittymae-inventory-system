@@ -14,7 +14,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { listRefunds, createRefund, setRefundStatus, deleteRefund, addRefundAttachment, removeRefundAttachment, getRefundAttachmentUrl, subscribeToChanges } from './js/api.js';
+import { listRefunds, createRefund, uploadRefundRequestPhoto, setRefundStatus, deleteRefund, addRefundAttachment, removeRefundAttachment, getRefundAttachmentUrl, subscribeToChanges } from './js/api.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const STATUS_BADGE = { 'Pending Approval': 'pending', 'Approved': 'transit', 'Completed': 'ok' };
@@ -35,6 +35,14 @@ function nameOrderLabel(r, dupKeys) {
   const key = r.customer_name.trim().toLowerCase() + '|' + (r.order_reference || '').trim().toLowerCase();
   const text = esc(r.order_reference || '(no Order ID)') + ' — ' + esc(r.customer_name);
   return dupKeys.has(key) ? '<span style="color:var(--warn);font-weight:bold;" title="Possible duplicate: same Order ID + name appears more than once">' + text + ' ⚠</span>' : text;
+}
+
+/** The optional photo attached to the request itself (proof of purchase, the item,
+ * etc.) -- separate from refund_attachments' proof-of-payment photos. */
+function requestPhotoBtn(r) {
+  return r.request_attachment_path
+    ? ' <button class="btn small secondary" type="button" data-view-id="req-' + r.id + '" data-path="' + esc(r.request_attachment_path) + '">View Photo</button>'
+    : '';
 }
 
 /** Any active employee lands here to request a refund. Only the approval group --
@@ -61,7 +69,8 @@ const REFUND_FORM_FIELDS =
   '<div class="field"><label>Account Name</label><input type="text" name="accountName" placeholder="Payout account name"></div>' +
   '<div class="field"><label>Account Number</label><input type="text" name="accountNumber" placeholder="Payout account number"></div>' +
   '<div class="field"><label>Amount to Refund (PHP) *</label><input type="number" name="refundAmount" step="0.01" min="0.01" required></div>' +
-  '<div class="field"><label>Notes</label><input type="text" name="notes"></div>';
+  '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+  '<div class="field"><label>Photo (optional)</label><input type="file" name="requestPhoto" accept="image/*"></div>';
 
 function readRefundForm(f) {
   return {
@@ -90,7 +99,7 @@ if (employee) {
         '<div class="layout-2col-side">' +
           '<div class="card">' +
             '<h3>Add Refund Request</h3>' +
-            '<p class="muted" style="margin-top:-4px;">Submit here — an approver will review it. No photo needed yet, that comes after approval.</p>' +
+            '<p class="muted" style="margin-top:-4px;">Submit here — an approver will review it. A photo is optional (e.g. proof of purchase or the item itself).</p>' +
             '<form id="ref-form" style="flex-direction:column;align-items:stretch;">' + REFUND_FORM_FIELDS +
               '<button class="btn" type="submit">Add Refund Request</button>' +
             '</form>' +
@@ -106,7 +115,8 @@ if (employee) {
       ev.preventDefault();
       const f = ev.target;
       try {
-        await createRefund(readRefundForm(f));
+        const newId = await createRefund(readRefundForm(f));
+        if (f.requestPhoto.files[0]) await uploadRefundRequestPhoto(newId, f.requestPhoto.files[0]);
         toast('ref-msg', 'Refund request added — pending approval.', false);
         f.reset();
         await loadMine();
@@ -148,7 +158,7 @@ if (employee) {
           '<td>' + nameOrderLabel(r, dupKeys) + '</td>' +
           '<td><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
           '<td>' + (r.date_requested || '—') + '<div class="muted" style="font-size:10px;">Purchased: ' + (r.purchase_date || '—') + '</div></td>' +
-          '<td style="font-size:11px;">' + esc(r.item_description || '—') + (r.reason ? '<div class="muted">' + esc(r.reason) + '</div>' : '') + '</td>' +
+          '<td style="font-size:11px;">' + esc(r.item_description || '—') + (r.reason ? '<div class="muted">' + esc(r.reason) + '</div>' : '') + requestPhotoBtn(r) + '</td>' +
           '<td>' + money(r.refund_amount) +
             (photos.length ? '<div class="muted" style="font-size:10px;">' + money(paidSoFar) + (remaining > 0 ? ' paid · ' + money(remaining) + ' left' : ' paid · fully covered') + '</div>' : '') +
           '</td>' +
@@ -186,7 +196,7 @@ if (employee) {
         '<div class="layout-3col-side">' +
           '<div class="card">' +
             '<h3>Add Refund Request</h3>' +
-            '<p class="muted" style="margin-top:-4px;">No photo here — proof-of-payment gets attached after approval, once it\'s actually paid out.</p>' +
+            '<p class="muted" style="margin-top:-4px;">A photo here is optional (e.g. proof of purchase or the item itself) — separate from proof-of-payment, which gets attached after approval once it\'s actually paid out.</p>' +
             '<form id="ref-form" style="flex-direction:column;align-items:stretch;">' + REFUND_FORM_FIELDS +
               '<button class="btn" type="submit">Add Refund Request</button>' +
             '</form>' +
@@ -216,7 +226,8 @@ if (employee) {
       ev.preventDefault();
       const f = ev.target;
       try {
-        await createRefund(readRefundForm(f));
+        const newId = await createRefund(readRefundForm(f));
+        if (f.requestPhoto.files[0]) await uploadRefundRequestPhoto(newId, f.requestPhoto.files[0]);
         toast('ref-msg', 'Refund request added — pending approval.', false);
         f.reset();
         await load();
@@ -265,7 +276,7 @@ if (employee) {
         const photos = r.refund_attachments || [];
         total += Number(r.refund_amount || 0);
         return '<tr>' +
-          '<td>' + nameOrderLabel(r, dupKeys) +
+          '<td>' + nameOrderLabel(r, dupKeys) + requestPhotoBtn(r) +
             '<div class="muted" style="font-size:10px;">' + esc(r.item_description || '') + '</div>' +
           '</td>' +
           '<td>' + money(r.refund_amount) + '<div class="muted" style="font-size:10px;">' + esc(r.refund_method) + '</div></td>' +
@@ -334,7 +345,7 @@ if (employee) {
         const canAttach = r.status !== 'Pending Approval';
         const canComplete = r.status === 'Approved' && remaining <= 0;
         return '<tr' + (r.status === 'Pending Approval' ? ' style="background:#fff8e8;"' : '') + '>' +
-          '<td>' + nameOrderLabel(r, dupKeys) +
+          '<td>' + nameOrderLabel(r, dupKeys) + requestPhotoBtn(r) +
             '<div class="muted" style="font-size:10px;">' + esc(r.item_description || '') + (r.reason ? ' · ' + esc(r.reason) : '') + '</div>' +
           '</td>' +
           '<td><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
@@ -413,6 +424,16 @@ if (employee) {
         const referenceNumber = form.referenceNumber.value.trim();
         try {
           await addRefundAttachment(refundId, amount, file, referenceNumber);
+          // Auto-complete once the attached proof-of-payment fully covers the refund
+          // amount -- no separate manual "Mark Completed" click needed. The "Mark
+          // Completed" button stays as a manual fallback for edge cases.
+          const refund = allRefunds.find((x) => String(x.id) === String(refundId));
+          if (refund) {
+            const paidSoFar = (refund.refund_attachments || []).reduce((s, a) => s + Number(a.amount || 0), 0) + amount;
+            if (refund.status === 'Approved' && paidSoFar >= Number(refund.refund_amount || 0)) {
+              await setRefundStatus(refundId, 'Completed');
+            }
+          }
           toast('ref-msg', 'Proof of payment added.', false);
           await load();
         } catch (err) {

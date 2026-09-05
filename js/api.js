@@ -481,9 +481,10 @@ export async function listRefunds() {
   return data;
 }
 
-/** No photo field here on purpose — a refund starts as a request awaiting Manager/Admin
- * approval, and proof-of-payment photos only make sense once it's actually been paid
- * out, which can't happen before approval. */
+/** Returns the new refund's id so an optional request-time photo (proof of purchase,
+ * photo of the item, etc.) picked in the same Add form submit can be uploaded and
+ * linked right after -- separate from refund_attachments, which is the approver's
+ * later "proof of payment" once it's actually been paid out. */
 export async function createRefund({ customerName, orderReference, itemDescription, purchaseDate, dateRequested, refundAmount, refundMethod, accountName, accountNumber, reason, notes }) {
   const empId = await currentEmployeeId();
   const { data, error } = await supabase.from('refunds').insert({
@@ -496,6 +497,18 @@ export async function createRefund({ customerName, orderReference, itemDescripti
   }).select('id').single();
   if (error) throw new Error(error.message);
   return data.id;
+}
+
+/** Path is "<refund_id>/request_<timestamp>_<file>" -- distinguishable from
+ * refund_attachments' "<refund_id>/<timestamp>_<file>" proof-of-payment paths in the
+ * same bucket, though they'd never collide anyway. */
+export async function uploadRefundRequestPhoto(refundId, file) {
+  const path = refundId + '/request_' + Date.now() + '_' + file.name;
+  const { error: upErr } = await supabase.storage.from('refund-attachments').upload(path, file, { upsert: true });
+  if (upErr) throw new Error(upErr.message);
+  const { error } = await supabase.from('refunds').update({ request_attachment_path: path }).eq('id', refundId);
+  if (error) throw new Error(error.message);
+  return path;
 }
 
 /** Records who clicked Approve (mirrors bills.paid_by) -- once set, later status changes
@@ -512,8 +525,10 @@ export async function setRefundStatus(id, status) {
 
 export async function deleteRefund(id) {
   const { data: attachments } = await supabase.from('refund_attachments').select('attachment_path').eq('refund_id', id);
-  if (attachments && attachments.length) {
-    await supabase.storage.from('refund-attachments').remove(attachments.map((a) => a.attachment_path));
+  const { data: refund } = await supabase.from('refunds').select('request_attachment_path').eq('id', id).single();
+  const paths = (attachments || []).map((a) => a.attachment_path).concat(refund && refund.request_attachment_path ? [refund.request_attachment_path] : []);
+  if (paths.length) {
+    await supabase.storage.from('refund-attachments').remove(paths);
   }
   const { error } = await supabase.from('refunds').delete().eq('id', id);
   if (error) throw new Error(error.message);
