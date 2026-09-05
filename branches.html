@@ -83,6 +83,32 @@ if (employee) {
     let selectedBranch = isScoped ? employee.branch_id : branches[0].id;
     const branchName = (id) => (branches.find((b) => b.id === id) || {}).name || '';
 
+    // Shared by every row's Edit/Delete buttons -- mirrors the backend RLS exactly
+    // (Admin/Manager anywhere, Branch Supervisor only their own branch, or the
+    // Operations Supervisor/Inventory Supervisor/Admin Assistant position group
+    // anywhere -- is_position_manager() in 62_position_managers_refund_scrap_subasta.sql)
+    // so a button is never shown enabled only to fail with a permission error.
+    // Declared here (not further down, near where it's read) because
+    // renderBranchButtons() -- called below, before the rest of this block runs --
+    // calls canAddHere() -> canWriteHere() -> POSITION_MANAGERS; a `const` declared
+    // after that first call site would throw "Cannot access before initialization"
+    // on every single page load, for every employee.
+    const POSITION_MANAGERS = ['Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
+    function canWriteHere() {
+      return ['Admin', 'Manager'].includes(employee.role) || (isScoped && selectedBranch === employee.branch_id) ||
+        POSITION_MANAGERS.includes(employee.position);
+    }
+
+    // Add gate: everything canWriteHere() allows, plus literally any active employee
+    // for their own branch (scrap_any_employee_own_branch_insert /
+    // subasta_any_employee_own_branch_insert), plus Sales Executive company-wide
+    // (scrap_sales_executive_insert -- she doesn't have a fixed branch_id, rotates
+    // weekly) -- "whole staff" can add, only the position-manager group above (or
+    // Admin/Manager/own-branch Supervisor) can edit or delete afterward.
+    function canAddHere() {
+      return canWriteHere() || employee.branch_id === selectedBranch || employee.position === 'Sales Executive';
+    }
+
     root.innerHTML =
       '<div class="card">' +
         '<h3>Branch</h3>' +
@@ -248,27 +274,6 @@ if (employee) {
       document.getElementById('scrap-f-to').value = '';
       renderScrap();
     });
-
-    // Shared by every row's Edit/Delete buttons -- mirrors the backend RLS exactly
-    // (Admin/Manager anywhere, Branch Supervisor only their own branch, or the
-    // Operations Supervisor/Inventory Supervisor/Admin Assistant position group
-    // anywhere -- is_position_manager() in 62_position_managers_refund_scrap_subasta.sql)
-    // so a button is never shown enabled only to fail with a permission error.
-    const POSITION_MANAGERS = ['Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
-    function canWriteHere() {
-      return ['Admin', 'Manager'].includes(employee.role) || (isScoped && selectedBranch === employee.branch_id) ||
-        POSITION_MANAGERS.includes(employee.position);
-    }
-
-    // Add gate: everything canWriteHere() allows, plus literally any active employee
-    // for their own branch (scrap_any_employee_own_branch_insert /
-    // subasta_any_employee_own_branch_insert), plus Sales Executive company-wide
-    // (scrap_sales_executive_insert -- she doesn't have a fixed branch_id, rotates
-    // weekly) -- "whole staff" can add, only the position-manager group above (or
-    // Admin/Manager/own-branch Supervisor) can edit or delete afterward.
-    function canAddHere() {
-      return canWriteHere() || employee.branch_id === selectedBranch || employee.position === 'Sales Executive';
-    }
 
     function renderBranchButtons() {
       const box = document.getElementById('branch-buttons');
