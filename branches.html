@@ -350,16 +350,16 @@ if (employee) {
             ? payments.map((p) => esc(p.payment_method) + ': ' + money(p.amount)).join('<br>')
             : esc(r.payment_method || '—');
           return '<tr>' +
-            '<td>' + esc(r.item_description) + (r.sku ? '<div class="muted" style="font-size:10px;">' + esc(r.sku) + '</div>' : '') + '</td>' +
-            '<td>' + (r.weight_grams ? Number(r.weight_grams).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g' : '—') + '</td>' +
-            '<td>' + esc(r.pawn_reference || '—') + '</td>' +
-            '<td>' + (r.pawn_date || '—') + '</td>' +
-            '<td>' + (r.auction_eligible_date || '—') + '</td>' +
-            '<td><span class="badge ' + (SUB_STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
-            '<td>' + (r.sale_date || '—') + '</td>' +
-            '<td>' + money(r.sale_price) + '</td>' +
-            '<td style="font-size:11px;">' + paymentDetail + '</td>' +
-            '<td style="font-size:11px;">' + esc(r.buyer_name || '') + (r.notes ? '<div class="muted">' + esc(r.notes) + '</div>' : '') +
+            '<td data-label="Item">' + esc(r.item_description) + (r.sku ? '<div class="muted" style="font-size:10px;">' + esc(r.sku) + '</div>' : '') + '</td>' +
+            '<td data-label="Weight">' + (r.weight_grams ? Number(r.weight_grams).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g' : '—') + '</td>' +
+            '<td data-label="Pawn Ref">' + esc(r.pawn_reference || '—') + '</td>' +
+            '<td data-label="Pawn Date">' + (r.pawn_date || '—') + '</td>' +
+            '<td data-label="Eligible">' + (r.auction_eligible_date || '—') + '</td>' +
+            '<td data-label="Status"><span class="badge ' + (SUB_STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
+            '<td data-label="Sale Date">' + (r.sale_date || '—') + '</td>' +
+            '<td data-label="Sale Price">' + money(r.sale_price) + '</td>' +
+            '<td data-label="Payment" style="font-size:11px;">' + paymentDetail + '</td>' +
+            '<td data-label="Buyer/Notes" style="font-size:11px;">' + esc(r.buyer_name || '') + (r.notes ? '<div class="muted">' + esc(r.notes) + '</div>' : '') +
               '<div class="muted" style="font-size:10px;">' + (r.creator ? 'Added by ' + esc(r.creator.full_name) : '') + '</div>' +
             '</td>' +
             '<td style="white-space:nowrap;">' +
@@ -531,15 +531,15 @@ if (employee) {
             ? payments.map((p) => esc(p.payment_method) + ': ' + money(p.amount)).join('<br>')
             : esc(r.payment_method || '—');
           return '<tr>' +
-            '<td>' + (r.entry_date || '—') + '<div class="muted" style="font-size:10px;">' + esc(r.contact_number || '') + '</div></td>' +
-            '<td>' + esc(r.customer_name || 'Walk-in') + '</td>' +
-            '<td>' + esc(r.metal_type) + ' ' + esc(r.karat || '') + '</td>' +
-            '<td><span class="badge ' + (r.entry_type === 'In' ? 'ok' : 'pending') + '">' + esc(r.entry_type) + '</span></td>' +
-            '<td>' + weight(r.weight_grams) + '</td>' +
-            '<td>' + money(r.price_per_gram) + '</td>' +
-            '<td>' + money(r.total_amount) + '</td>' +
-            '<td style="font-size:11px;">' + paymentDetail + '</td>' +
-            '<td style="font-size:11px;">' + esc(r.source || '') + (r.notes ? '<div class="muted">' + esc(r.notes) + '</div>' : '') +
+            '<td data-label="Date">' + (r.entry_date || '—') + '<div class="muted" style="font-size:10px;">' + esc(r.contact_number || '') + '</div></td>' +
+            '<td data-label="Customer">' + esc(r.customer_name || 'Walk-in') + '</td>' +
+            '<td data-label="Metal/Karat">' + esc(r.metal_type) + ' ' + esc(r.karat || '') + '</td>' +
+            '<td data-label="Type"><span class="badge ' + (r.entry_type === 'In' ? 'ok' : 'pending') + '">' + esc(r.entry_type) + '</span></td>' +
+            '<td data-label="Weight">' + weight(r.weight_grams) + '</td>' +
+            '<td data-label="Price/g">' + money(r.price_per_gram) + '</td>' +
+            '<td data-label="Total">' + money(r.total_amount) + '</td>' +
+            '<td data-label="Payment" style="font-size:11px;">' + paymentDetail + '</td>' +
+            '<td data-label="Source/Notes" style="font-size:11px;">' + esc(r.source || '') + (r.notes ? '<div class="muted">' + esc(r.notes) + '</div>' : '') +
               '<div class="muted" style="font-size:10px;">' + (r.creator ? 'Added by ' + esc(r.creator.full_name) : '') + '</div>' +
             '</td>' +
             '<td style="white-space:nowrap;">' +

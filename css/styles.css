@@ -84,7 +84,12 @@ button.btn.small { padding:4px 10px; font-size:12px; }
   main { padding:12px 12px 50px; }
 
   .table-scroll table, .table-scroll tr, .table-scroll td { display:block; width:100%; }
-  .table-scroll tr:first-child { display:none; }
+  /* Must be scoped to thead specifically, not tr:first-child -- :first-child matches
+     the first row of EACH section (thead/tbody/tfoot separately), so tr:first-child
+     was also hiding the first real data row and the entire tfoot totals row (tfoot
+     always has exactly one row, which is always its own first child). With only one
+     entry, that hid the whole list. */
+  .table-scroll thead tr { display:none; }
   .table-scroll tr:not(.edit-row) { margin-bottom:10px; border:1px solid #eee; border-radius:8px; overflow:hidden; }
   .table-scroll td { border-bottom:1px solid #f5f5f5; padding:8px 12px; white-space:normal !important; }
   .table-scroll td:last-child { border-bottom:none; }
