@@ -23,7 +23,10 @@ export async function initShell(activePage) {
   const pages = [
     { id: 'dashboard', label: 'Dashboard', href: 'dashboard.html' },
   ];
-  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Sales Executive', 'Admin Assistant'].includes(employee.position)) {
+  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Sales Executive', 'Admin Assistant', 'Personal Assistant'].includes(employee.position)) {
+    // Personal Assistant is view-only here -- branches.html has no add/edit RLS grant
+    // for this position (no branch_id, not in POSITION_MANAGERS), so canAddHere()/
+    // canWriteHere() already resolve to false for her; this just lets her find the page.
     pages.push({ id: 'branches', label: 'Branches', href: 'branches.html' });
   }
   pages.push(
