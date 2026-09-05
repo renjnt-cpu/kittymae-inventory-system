@@ -96,7 +96,7 @@ function itemsForEmployee(emp) {
     items.push({ id: 'movement', label: 'Cannot record any stock movement', expect: false });
     items.push({ id: 'transfers', label: 'Cannot see or act on transfers', expect: false });
     items.push({ id: 'branches', label: 'Can view Subasta/Scrap for every branch (view only) — cannot add, edit, or delete', expect: true });
-    items.push({ id: 'capital', label: 'Can add Branch Capital entries (pending approval) — sees only their own submissions, not company-wide', expect: true });
+    items.push({ id: 'capital', label: 'Can view remaining balance (Total Capital tiles) for every branch, and add entries (pending approval) — sees only their own submissions in the list, not the full company-wide log', expect: true });
     items.push({ id: 'payments', label: 'Cannot see Transactions', expect: false });
   } else if (emp.role === 'None') {
     items.push({ id: 'inventory', label: 'Cannot see any branch’s inventory', expect: false });

@@ -29,6 +29,11 @@ if (employee) {
   // company-wide balances/browsing stays limited to the roles/positions that already
   // had it -- everyone else just sees their own requests (like Refunds' "My Requests").
   const canFullView = ['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Sales Executive', 'Admin Assistant'].includes(employee.position);
+  // Personal Assistant is view-only here (same spirit as her Branches access): she
+  // should see the remaining-balance tiles for every branch, but not the full
+  // company-wide entries list/filters -- just tiles plus her own "My Capital Requests"
+  // below, same as everyone outside canFullView already sees.
+  const canViewBalance = canFullView || employee.position === 'Personal Assistant';
   const canDelete = ['Admin', 'Manager'].includes(employee.role);
   const canApproveRow = (r) => isManagerial || (employee.role === 'Branch Supervisor' && r.branch_id === employee.branch_id);
   const branches = await getBranches();
@@ -58,9 +63,9 @@ if (employee) {
     '<div class="layout-2col">' +
       '<div class="layout-2col-side">' + addFormHtml + '</div>' +
       '<div class="layout-2col-main">' +
+        (canViewBalance ? '<h3>Total Capital <span class="muted" style="font-weight:normal;">— per branch</span></h3><div class="tiles" id="cap-tiles"></div>' : '') +
         (canFullView
-          ? '<h3>Total Capital <span class="muted" style="font-weight:normal;">— per branch</span></h3><div class="tiles" id="cap-tiles"></div>' +
-            '<div class="card">' +
+          ? '<div class="card">' +
               '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
                 '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Purpose, notes…"></div>' +
                 (isAdmin ? '<div class="field"><label>Branch</label><select id="f-branch"><option value="all">All Branches</option>' + branchOptions() + '</select></div>' : '') +
@@ -116,6 +121,10 @@ if (employee) {
       if (canFullView) {
         const [entries, balances] = await Promise.all([listBranchCapitalEntries(), getBranchCapitalBalances()]);
         allEntries = entries;
+        renderTiles(balances);
+      } else if (canViewBalance) {
+        const [entries, balances] = await Promise.all([listBranchCapitalEntries(), getBranchCapitalBalances()]);
+        allEntries = entries; // RLS still scopes this to just the caller's own rows -- only the tiles are company-wide
         renderTiles(balances);
       } else {
         allEntries = await listBranchCapitalEntries(); // RLS already scopes this to just the caller's own rows
