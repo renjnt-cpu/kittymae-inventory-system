@@ -272,28 +272,30 @@ if (employee) {
 
       const dupKeys = duplicateKeySet(allRefunds);
       let total = 0;
-      const rowsHtml = completed.map((r) => {
+      // Stacked cards, not a table -- this panel is a fixed 280px-wide sidebar
+      // (css/styles.css .layout-3col-right) at every viewport width, and the old
+      // min-width:420px table never actually fit it, forcing an internal horizontal
+      // scrollbar that crowded/overlapped the rest of the card. A narrow panel showing
+      // a handful of fields per completed refund reads fine stacked; it never needs to
+      // be a grid.
+      const itemsHtml = completed.map((r) => {
         const photos = r.refund_attachments || [];
         total += Number(r.refund_amount || 0);
-        return '<tr>' +
-          '<td>' + nameOrderLabel(r, dupKeys) + requestPhotoBtn(r) +
-            '<div class="muted" style="font-size:10px;">' + esc(r.item_description || '') + '</div>' +
-          '</td>' +
-          '<td>' + money(r.refund_amount) + '<div class="muted" style="font-size:10px;">' + esc(r.refund_method) + '</div></td>' +
-          '<td style="font-size:11px;">' +
+        return '<div class="completed-item">' +
+          '<div>' + nameOrderLabel(r, dupKeys) + requestPhotoBtn(r) + '</div>' +
+          '<div class="muted" style="font-size:10px;">' + esc(r.item_description || '') + '</div>' +
+          '<div style="margin-top:4px;"><b>' + money(r.refund_amount) + '</b> <span class="muted">— ' + esc(r.refund_method) + '</span></div>' +
+          '<div style="font-size:11px;margin-top:2px;">' +
             (photos.length
               ? photos.map((a) => '<div>' + money(a.amount) + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button>' : '') + '</div>').join('')
-              : '<span class="muted">None</span>') +
-            '<div class="muted" style="font-size:10px;">By ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
-          '</td>' +
-          '<td style="white-space:nowrap;"><button class="btn small secondary" type="button" data-id="' + r.id + '" data-act="reopen">Reopen</button></td>' +
-        '</tr>';
+              : '<span class="muted">No proof of payment</span>') +
+          '</div>' +
+          '<div class="muted" style="font-size:10px;margin-top:2px;">By ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
+          '<button class="btn small secondary" type="button" data-id="' + r.id + '" data-act="reopen" style="margin-top:6px;">Reopen</button>' +
+        '</div>';
       }).join('');
-      box.innerHTML = '<div class="table-scroll"><table style="min-width:420px;">' +
-        '<thead><tr><th>Order ID / Customer</th><th>Amount</th><th>Proof of Payment</th><th></th></tr></thead>' +
-        '<tbody>' + rowsHtml + '</tbody>' +
-        '<tfoot><tr style="font-weight:bold;background:#f7f7f7;"><td>Qty: ' + completed.length + '</td><td>' + money(total) + '</td><td colspan="2"></td></tr></tfoot>' +
-        '</table></div>';
+      box.innerHTML = itemsHtml +
+        '<div class="completed-item" style="font-weight:bold;background:#f7f7f7;margin:0 -16px -16px;padding:10px 16px;border-radius:0 0 10px 10px;">Qty: ' + completed.length + ' · ' + money(total) + '</div>';
 
       box.querySelectorAll('[data-view-id]').forEach((btn) => btn.addEventListener('click', async () => {
         try { window.open(await getRefundAttachmentUrl(btn.dataset.path), '_blank'); }
