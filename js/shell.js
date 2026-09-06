@@ -32,6 +32,7 @@ export async function initShell(activePage) {
   pages.push(
     { id: 'movement', label: 'Record Movement', href: 'movement.html' },
     { id: 'transfers', label: 'Transfers', href: 'transfers.html' },
+    { id: 'layaway', label: 'Layaway', href: 'layaway.html' },
     { id: 'bills', label: 'Bills', href: 'bills.html' },
   );
   // Refunds: anyone can request one, so it's not role-gated like the rest of this

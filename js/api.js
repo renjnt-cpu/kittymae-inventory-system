@@ -798,3 +798,51 @@ export async function setAccessChecklistItem(employeeId, itemKey, checked, level
   }, { onConflict: 'employee_id,item_key' });
   if (error) throw new Error(error.message);
 }
+
+// ---- Layaway (67_layaway.sql) -- an item held for a customer while they pay it off
+// in installments. Every write goes through the SECURITY DEFINER functions below;
+// direct table writes are closed by default-deny RLS, same as inventory/sales.
+
+export async function listLayaways(branchId) {
+  let query = supabase.from('layaway_holds')
+    .select('*, branches(name), creator:employees!layaway_holds_created_by_fkey(full_name), layaway_payments(*)')
+    .order('hold_date', { ascending: false });
+  if (branchId != null) query = query.eq('branch_id', branchId);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createLayawayHold({ sku, branchId, qty, customerName, contactNumber, unitPrice, notes }) {
+  const { data, error } = await supabase.rpc('create_layaway_hold', {
+    p_sku: sku, p_branch_id: branchId, p_qty: qty, p_customer_name: customerName,
+    p_contact_number: contactNumber || null, p_unit_price: unitPrice || null, p_notes: notes || null,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function addLayawayPayment(holdId, amount, paymentMethod, referenceNumber) {
+  const { data, error } = await supabase.rpc('add_layaway_payment', {
+    p_hold_id: holdId, p_amount: amount, p_payment_method: paymentMethod, p_reference_number: referenceNumber || null,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function completeLayaway(holdId, orderNumber) {
+  const { error } = await supabase.rpc('complete_layaway', { p_hold_id: holdId, p_order_number: orderNumber || null });
+  if (error) throw new Error(error.message);
+}
+
+export async function cancelLayaway(holdId, reason) {
+  const { error } = await supabase.rpc('cancel_layaway', { p_hold_id: holdId, p_reason: reason || null });
+  if (error) throw new Error(error.message);
+}
+
+/** Managerial-only correction, matching scrap_payments_managerial_delete's pattern --
+ * fixing a mistaken payment entry, not part of the normal add-payment flow. */
+export async function deleteLayawayPayment(paymentId) {
+  const { error } = await supabase.from('layaway_payments').delete().eq('id', paymentId);
+  if (error) throw new Error(error.message);
+}
