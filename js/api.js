@@ -64,7 +64,11 @@ export async function searchProducts(query) {
  * The one Record-a-Movement entry point for Phase 1's frontend — covers Stock In /
  * Stock Out / Damage / Missing / Adjustment / Correction. Sale and the two Transfer
  * types are deliberately not reachable through this function (see 06_functions.sql's
- * own guard against posting them directly, and the plan's "Sales deduction" section).
+ * own guard against posting them directly). Sale now goes through recordSale() below
+ * instead (66_sales_recording.sql) — it needs customer/price fields this function
+ * doesn't have, and its own branch-scope rule (whole staff/own branch + Sales
+ * Executive/position-managers unscoped) rather than record_inventory_transaction's
+ * plain Branch-Supervisor/Staff-only gate.
  */
 export async function recordMovement({ sku, branchId, transactionType, qtyChange, referenceNumber, reason, notes }) {
   const { data, error } = await supabase.rpc('record_inventory_transaction', {
@@ -76,6 +80,41 @@ export async function recordMovement({ sku, branchId, transactionType, qtyChange
     p_reason: reason || null,
     p_notes: notes || null,
   });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Deducts inventory and logs the sale atomically (record_sale() in
+ * 66_sales_recording.sql) — the same function backs both this page's Sale movement
+ * type and a completed Layaway (see completeLayaway() further down, which calls the
+ * DB's complete_layaway() instead since that path must NOT deduct inventory a second
+ * time -- the layaway hold already removed it from qty_available). */
+export async function recordSale({ sku, branchId, qty, orderNumber, unitPrice, customerName, contactNumber }) {
+  const { data, error } = await supabase.rpc('record_sale', {
+    p_sku: sku,
+    p_branch_id: branchId,
+    p_qty: qty,
+    p_order_number: orderNumber || null,
+    p_unit_price: unitPrice || null,
+    p_customer_name: customerName || null,
+    p_contact_number: contactNumber || null,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Raw sales rows for the Dashboard's per-branch sales analytics — joined with
+ * products for item name and branches for the name label, same shape as
+ * getInventory(). RLS scopes this to whatever the caller is allowed to see
+ * (sales_movements_read_scoped / sales_movements_sales_exec_view). */
+export async function listSales({ branchId, fromDate, toDate } = {}) {
+  let query = supabase.from('sales_inventory_movements')
+    .select('*, products(item_name, product_line), branches(name)')
+    .order('sale_date', { ascending: false });
+  if (branchId != null) query = query.eq('branch_id', branchId);
+  if (fromDate) query = query.gte('sale_date', fromDate);
+  if (toDate) query = query.lte('sale_date', toDate + 'T23:59:59');
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data;
 }
@@ -673,8 +712,11 @@ export async function listBranchCapitalEntries() {
   return data;
 }
 
-export async function getBranchCapitalBalances() {
-  const { data, error } = await supabase.from('v_branch_capital_balance').select('*');
+/** fromDate/toDate optional (both omitted = all-time, same numbers the old fixed
+ * view always showed) -- get_branch_capital_totals() in
+ * 69_branch_capital_total_time_range.sql. */
+export async function getBranchCapitalBalances(fromDate, toDate) {
+  const { data, error } = await supabase.rpc('get_branch_capital_totals', { p_from: fromDate || null, p_to: toDate || null });
   if (error) throw new Error(error.message);
   return data;
 }

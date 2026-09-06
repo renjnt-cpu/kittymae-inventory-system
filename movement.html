@@ -11,12 +11,13 @@
   <div id="mv-msg"></div>
   <div class="card">
     <h3>Record a Movement</h3>
-    <p class="muted">Covers receiving, non-sale stock out, damage, missing items, and corrections. Sales and branch transfers are handled elsewhere (see Transfers page; sales stay in the existing Kittymae app for now).</p>
+    <p class="muted">Covers receiving, sales, non-sale stock out, damage, missing items, and corrections. Branch transfers and layaway holds are handled on their own pages (see Transfers / Layaway).</p>
     <form id="mv-form">
       <div class="field"><label>SKU *</label><input type="text" name="sku" required></div>
       <div class="field" id="branch-field"></div>
       <div class="field"><label>Movement Type *</label>
-        <select name="transactionType" required>
+        <select name="transactionType" required id="mv-type">
+          <option value="Sale">Sale</option>
           <option value="Stock In">Stock In (receiving)</option>
           <option value="Stock Out">Stock Out (non-sale)</option>
           <option value="Damage">Damage</option>
@@ -28,54 +29,113 @@
         </select>
       </div>
       <div class="field"><label>Qty *</label><input type="number" name="qty" min="1" required></div>
-      <div class="field"><label>Reference #</label><input type="text" name="referenceNumber"></div>
-      <div class="field"><label>Reason</label><input type="text" name="reason"></div>
+      <div id="mv-sale-fields" style="display:contents;">
+        <div class="field"><label>Unit Price (PHP)</label><input type="number" name="unitPrice" step="0.01" min="0"></div>
+        <div class="field"><label>Customer Name</label><input type="text" name="customerName"></div>
+        <div class="field"><label>Contact Number</label><input type="text" name="contactNumber"></div>
+      </div>
+      <div class="field"><label id="mv-ref-label">Reference # / Order ID</label><input type="text" name="referenceNumber"></div>
+      <div class="field" id="mv-reason-field"><label>Reason</label><input type="text" name="reason"></div>
       <div class="field"><label>Notes</label><input type="text" name="notes"></div>
       <button class="btn" type="submit">Record</button>
     </form>
-    <p class="muted" style="margin-top:8px;">Stock In / Customer Return add to inventory; Stock Out / Damage / Missing / Supplier Return remove from it. Adjustment/Correction can go either way and require Admin or Manager.</p>
+    <p class="muted" style="margin-top:8px;">Sale / Customer Return add nothing extra to reporting beyond the ledger; Stock In / Customer Return add to inventory; Sale / Stock Out / Damage / Missing / Supplier Return remove from it. Adjustment/Correction can go either way and require Admin or Manager.</p>
   </div>
+  <div class="tiles" id="mv-tiles"></div>
 </main>
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { getBranches, recordMovement } from './js/api.js';
+import { getBranches, recordMovement, recordSale, listSales } from './js/api.js';
 
-const REMOVES = new Set(['Stock Out', 'Damage', 'Missing', 'Supplier Return']);
+const REMOVES = new Set(['Stock Out', 'Damage', 'Missing', 'Supplier Return', 'Sale']);
+const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+// Mirrors assert_can_act_on_branch() in 67_layaway.sql / the inline check in
+// record_sale() (66_sales_recording.sql) -- so the branch field locks to "own branch
+// only" for the exact same set of people the backend would otherwise reject.
+const UNSCOPED_POSITIONS = ['Sales Executive', 'Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
+function tile(num, label) { return '<div class="tile"><div class="num">' + esc(num) + '</div><div class="lbl">' + esc(label) + '</div></div>'; }
 
 const employee = await initShell('movement');
 if (employee) {
   const branches = await getBranches();
-  const isScoped = employee.role === 'Branch Supervisor' || employee.role === 'Staff';
+  const isScoped = ['Admin', 'Manager'].includes(employee.role) ? false : !UNSCOPED_POSITIONS.includes(employee.position);
   const branchField = document.getElementById('branch-field');
   if (isScoped) {
     const b = branches.find((x) => x.id === employee.branch_id);
-    branchField.innerHTML = '<label>Branch</label><input type="text" value="' + esc(b?.name || '') + '" disabled>';
+    branchField.innerHTML = '<label>Branch</label><input type="text" value="' + esc(b?.name || 'None assigned') + '" disabled>';
   } else {
     branchField.innerHTML = '<label>Branch *</label><select name="branchId" required>' +
       branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('') + '</select>';
   }
+  const branchName = (id) => (branches.find((b) => b.id === id) || {}).name || '';
+
+  const saleFields = document.getElementById('mv-sale-fields');
+  const reasonField = document.getElementById('mv-reason-field');
+  const refLabel = document.getElementById('mv-ref-label');
+  function syncFieldsToType() {
+    const isSale = document.getElementById('mv-type').value === 'Sale';
+    saleFields.style.display = isSale ? 'contents' : 'none';
+    reasonField.style.display = isSale ? 'none' : '';
+    refLabel.textContent = isSale ? 'Order ID' : 'Reference #';
+  }
+  document.getElementById('mv-type').addEventListener('change', syncFieldsToType);
+  syncFieldsToType();
+
+  async function loadSalesTiles() {
+    const box = document.getElementById('mv-tiles');
+    try {
+      const branchId = isScoped ? employee.branch_id : null;
+      if (branchId == null && isScoped) { box.innerHTML = ''; return; }
+      const today = new Date().toISOString().slice(0, 10);
+      const rows = await listSales({ branchId: branchId ?? undefined, fromDate: today, toDate: today });
+      const totalQty = rows.reduce((s, r) => s + r.qty, 0);
+      const totalAmount = rows.reduce((s, r) => s + Number(r.qty) * Number(r.unit_price || 0), 0);
+      box.innerHTML = tile(totalQty, 'Sold Today' + (branchId ? ' — ' + esc(branchName(branchId)) : ' — All Branches')) +
+        tile(money(totalAmount), 'Sales Total Today');
+    } catch (err) {
+      // Sales visibility is more restricted than movement-recording itself (see
+      // sales_movements_read_scoped/_sales_exec_view in 66_sales_recording.sql) --
+      // someone who can record a sale but can't yet see the summary just gets no
+      // tiles instead of an error.
+      document.getElementById('mv-tiles').innerHTML = '';
+    }
+  }
+  await loadSalesTiles();
 
   document.getElementById('mv-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const f = ev.target;
     const branchId = isScoped ? employee.branch_id : Number(f.branchId.value);
     const qty = Number(f.qty.value);
-    const removes = REMOVES.has(f.transactionType.value);
+    const type = f.transactionType.value;
     const btn = f.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
-      await recordMovement({
-        sku: f.sku.value.trim(),
-        branchId,
-        transactionType: f.transactionType.value,
-        qtyChange: removes ? -qty : qty,
-        referenceNumber: f.referenceNumber.value,
-        reason: f.reason.value,
-        notes: f.notes.value,
-      });
+      if (type === 'Sale') {
+        await recordSale({
+          sku: f.sku.value.trim(), branchId, qty,
+          orderNumber: f.referenceNumber.value.trim(),
+          unitPrice: f.unitPrice.value ? Number(f.unitPrice.value) : null,
+          customerName: f.customerName.value.trim(),
+          contactNumber: f.contactNumber.value.trim(),
+        });
+      } else {
+        const removes = REMOVES.has(type);
+        await recordMovement({
+          sku: f.sku.value.trim(),
+          branchId,
+          transactionType: type,
+          qtyChange: removes ? -qty : qty,
+          referenceNumber: f.referenceNumber.value,
+          reason: f.reason.value,
+          notes: f.notes.value,
+        });
+      }
       toast('mv-msg', 'Movement recorded.', false);
       f.reset();
+      syncFieldsToType();
+      await loadSalesTiles();
     } catch (err) {
       toast('mv-msg', String(err.message || err), true);
     } finally {

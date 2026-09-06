@@ -63,7 +63,16 @@ if (employee) {
     '<div class="layout-2col">' +
       '<div class="layout-2col-side">' + addFormHtml + '</div>' +
       '<div class="layout-2col-main">' +
-        (canViewBalance ? '<h3>Total Capital <span class="muted" style="font-weight:normal;">— per branch</span></h3><div class="tiles" id="cap-tiles"></div>' : '') +
+        (canViewBalance
+          ? '<h3>Remaining Cash <span class="muted" style="font-weight:normal;">— per branch, right now</span></h3><div class="tiles" id="cap-tiles-remaining"></div>' +
+            '<h3 style="margin-top:16px;">Total Capital <span class="muted" style="font-weight:normal;">— per branch</span></h3>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">' +
+              '<div class="field"><label>From</label><input type="date" id="cap-tot-from"></div>' +
+              '<div class="field"><label>To</label><input type="date" id="cap-tot-to"></div>' +
+              '<button type="button" class="btn small secondary" id="cap-tot-clear">All Time</button>' +
+            '</div>' +
+            '<div class="tiles" id="cap-tiles-total"></div>'
+          : '') +
         (canFullView
           ? '<div class="card">' +
               '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
@@ -113,19 +122,28 @@ if (employee) {
       render();
     });
   }
+  if (canViewBalance) {
+    document.getElementById('cap-tot-from').addEventListener('change', loadTotalTiles);
+    document.getElementById('cap-tot-to').addEventListener('change', loadTotalTiles);
+    document.getElementById('cap-tot-clear').addEventListener('click', () => {
+      document.getElementById('cap-tot-from').value = '';
+      document.getElementById('cap-tot-to').value = '';
+      loadTotalTiles();
+    });
+  }
 
   async function load() {
     const list = document.getElementById('cap-list');
     list.innerHTML = '<div class="muted">Loading…</div>';
     try {
       if (canFullView) {
-        const [entries, balances, remaining] = await Promise.all([listBranchCapitalEntries(), getBranchCapitalBalances(), getBranchCapitalRemaining()]);
+        const entries = await listBranchCapitalEntries();
         allEntries = entries;
-        renderTiles(balances, remaining);
+        await Promise.all([loadTotalTiles(), loadRemainingTiles()]);
       } else if (canViewBalance) {
-        const [entries, balances, remaining] = await Promise.all([listBranchCapitalEntries(), getBranchCapitalBalances(), getBranchCapitalRemaining()]);
+        const entries = await listBranchCapitalEntries();
         allEntries = entries; // RLS still scopes this to just the caller's own rows -- only the tiles are company-wide
-        renderTiles(balances, remaining);
+        await Promise.all([loadTotalTiles(), loadRemainingTiles()]);
       } else {
         allEntries = await listBranchCapitalEntries(); // RLS already scopes this to just the caller's own rows
       }
@@ -135,15 +153,22 @@ if (employee) {
     }
   }
 
-  function renderTiles(balances, remaining) {
-    const box = document.getElementById('cap-tiles');
-    if (!balances.length) { box.innerHTML = '<p class="muted">No capital entries yet.</p>'; return; }
-    const remainingByBranch = Object.fromEntries((remaining || []).map((r) => [r.branch_id, r.remaining_cash]));
-    box.innerHTML = balances.map((b) => {
-      const name = branchById[b.branch_id] || 'Branch #' + b.branch_id;
-      return tile(money(b.total_capital), 'Total Capital — ' + name) +
-        tile(money(remainingByBranch[b.branch_id]), 'Remaining Cash — ' + name);
-    }).join('');
+  // Separate from Remaining Cash (a live snapshot, never time-ranged) so the two
+  // don't get refetched together every time one filter changes.
+  async function loadTotalTiles() {
+    const fromDate = document.getElementById('cap-tot-from').value || null;
+    const toDate = document.getElementById('cap-tot-to').value || null;
+    const balances = await getBranchCapitalBalances(fromDate, toDate);
+    const box = document.getElementById('cap-tiles-total');
+    if (!balances.length) { box.innerHTML = '<p class="muted">No capital entries for this range.</p>'; return; }
+    box.innerHTML = balances.map((b) => tile(money(b.total_capital), branchById[b.branch_id] || 'Branch #' + b.branch_id)).join('');
+  }
+
+  async function loadRemainingTiles() {
+    const remaining = await getBranchCapitalRemaining();
+    const box = document.getElementById('cap-tiles-remaining');
+    if (!remaining.length) { box.innerHTML = '<p class="muted">No capital entries yet.</p>'; return; }
+    box.innerHTML = remaining.map((r) => tile(money(r.remaining_cash), branchById[r.branch_id] || 'Branch #' + r.branch_id)).join('');
   }
 
   function render() {
