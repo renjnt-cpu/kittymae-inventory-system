@@ -679,6 +679,16 @@ export async function getBranchCapitalBalances() {
   return data;
 }
 
+/** Total Capital (above) is cumulative money ever put in, never reduced by anything
+ * spent. This is what's actually left -- total capital minus the one outflow this app
+ * tracks (net Cash spent/received on Scrap), same formula as v_scrap_cash_balance but
+ * covering every purpose, not just Scrap-purpose entries. */
+export async function getBranchCapitalRemaining() {
+  const { data, error } = await supabase.from('v_branch_capital_remaining').select('*');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function createBranchCapitalEntry({ branchId, entryDate, amount, purpose, notes, status }) {
   const empId = await currentEmployeeId();
   const { error } = await supabase.from('branch_capital_entries').insert({

@@ -14,7 +14,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { getBranches, listBranchCapitalEntries, getBranchCapitalBalances, createBranchCapitalEntry, approveBranchCapitalEntry, deleteBranchCapitalEntry, subscribeToChanges } from './js/api.js';
+import { getBranches, listBranchCapitalEntries, getBranchCapitalBalances, getBranchCapitalRemaining, createBranchCapitalEntry, approveBranchCapitalEntry, deleteBranchCapitalEntry, subscribeToChanges } from './js/api.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
@@ -119,13 +119,13 @@ if (employee) {
     list.innerHTML = '<div class="muted">Loading…</div>';
     try {
       if (canFullView) {
-        const [entries, balances] = await Promise.all([listBranchCapitalEntries(), getBranchCapitalBalances()]);
+        const [entries, balances, remaining] = await Promise.all([listBranchCapitalEntries(), getBranchCapitalBalances(), getBranchCapitalRemaining()]);
         allEntries = entries;
-        renderTiles(balances);
+        renderTiles(balances, remaining);
       } else if (canViewBalance) {
-        const [entries, balances] = await Promise.all([listBranchCapitalEntries(), getBranchCapitalBalances()]);
+        const [entries, balances, remaining] = await Promise.all([listBranchCapitalEntries(), getBranchCapitalBalances(), getBranchCapitalRemaining()]);
         allEntries = entries; // RLS still scopes this to just the caller's own rows -- only the tiles are company-wide
-        renderTiles(balances);
+        renderTiles(balances, remaining);
       } else {
         allEntries = await listBranchCapitalEntries(); // RLS already scopes this to just the caller's own rows
       }
@@ -135,10 +135,15 @@ if (employee) {
     }
   }
 
-  function renderTiles(balances) {
+  function renderTiles(balances, remaining) {
     const box = document.getElementById('cap-tiles');
     if (!balances.length) { box.innerHTML = '<p class="muted">No capital entries yet.</p>'; return; }
-    box.innerHTML = balances.map((b) => tile(money(b.total_capital), branchById[b.branch_id] || 'Branch #' + b.branch_id)).join('');
+    const remainingByBranch = Object.fromEntries((remaining || []).map((r) => [r.branch_id, r.remaining_cash]));
+    box.innerHTML = balances.map((b) => {
+      const name = branchById[b.branch_id] || 'Branch #' + b.branch_id;
+      return tile(money(b.total_capital), 'Total Capital — ' + name) +
+        tile(money(remainingByBranch[b.branch_id]), 'Remaining Cash — ' + name);
+    }).join('');
   }
 
   function render() {
