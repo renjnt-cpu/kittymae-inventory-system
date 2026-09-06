@@ -13,6 +13,18 @@
     <h3>Branch</h3>
     <div id="branch-buttons" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
   </div>
+  <div class="card">
+    <h3>Sales Overview</h3>
+    <p class="muted" style="margin-top:-4px;">Every Sale recorded on Record Movement or completed as a Layaway, by branch.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <div class="field"><label>From</label><input type="date" id="sales-from"></div>
+      <div class="field"><label>To</label><input type="date" id="sales-to"></div>
+      <button type="button" class="btn small secondary" id="sales-clear">All Time</button>
+    </div>
+  </div>
+  <div class="tiles" id="sales-tiles"></div>
+  <div id="sales-top-branch" class="muted" style="margin:-8px 0 16px;"></div>
+  <div id="sales-top-items"></div>
   <div class="tiles" id="tiles"></div>
   <div class="card">
     <div class="field"><label>Search SKU / Item Name</label><input type="text" id="search" oninput="window.__runSearch()"></div>
@@ -22,7 +34,9 @@
 
 <script type="module">
 import { initShell, esc, toast } from './js/shell.js';
-import { getBranches, getInventory, subscribeToChanges } from './js/api.js';
+import { getBranches, getInventory, listSales, subscribeToChanges } from './js/api.js';
+
+const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
 const employee = await initShell('dashboard');
 if (employee) {
@@ -35,8 +49,64 @@ if (employee) {
   let selectedBranch = isScoped ? employee.branch_id : null; // null = All Branches
 
   renderBranchButtons();
-  await loadStock();
+  await Promise.all([loadStock(), loadSales()]);
   subscribeToChanges(['inventory', 'inventory_transactions'], loadStock);
+  subscribeToChanges('sales_inventory_movements', loadSales);
+
+  document.getElementById('sales-from').addEventListener('change', loadSales);
+  document.getElementById('sales-to').addEventListener('change', loadSales);
+  document.getElementById('sales-clear').addEventListener('click', () => {
+    document.getElementById('sales-from').value = '';
+    document.getElementById('sales-to').value = '';
+    loadSales();
+  });
+
+  async function loadSales() {
+    try {
+      const fromDate = document.getElementById('sales-from').value || undefined;
+      const toDate = document.getElementById('sales-to').value || undefined;
+      const rows = await listSales({ fromDate, toDate });
+      renderSales(rows);
+    } catch (err) {
+      // Sales visibility is narrower than inventory visibility (see
+      // sales_movements_read_scoped/_sales_exec_view in 66_sales_recording.sql) --
+      // someone who can't see sales data just gets an empty section, not an error,
+      // since the rest of the dashboard (inventory) is still fully usable to them.
+      document.getElementById('sales-tiles').innerHTML = '';
+      document.getElementById('sales-top-branch').innerHTML = '';
+      document.getElementById('sales-top-items').innerHTML = '';
+    }
+  }
+
+  function renderSales(rows) {
+    const byBranch = {};
+    rows.forEach((r) => {
+      const b = byBranch[r.branch_id] || (byBranch[r.branch_id] = { qty: 0, revenue: 0, name: r.branches?.name || 'Branch #' + r.branch_id });
+      b.qty += r.qty;
+      b.revenue += r.qty * Number(r.unit_price || 0);
+    });
+    const branchStats = Object.values(byBranch).sort((a, b) => b.revenue - a.revenue);
+    document.getElementById('sales-tiles').innerHTML = branchStats.length
+      ? branchStats.map((b) => tile(money(b.revenue), 'Sold — ' + b.name + ' (' + b.qty + ' pcs)')).join('')
+      : '<p class="muted">No sales for this range.</p>';
+
+    document.getElementById('sales-top-branch').textContent = branchStats.length
+      ? branchStats[0].name + ' sold the most in this range: ' + money(branchStats[0].revenue) + ' across ' + branchStats[0].qty + ' pieces.'
+      : '';
+
+    const byItem = {};
+    rows.forEach((r) => {
+      const it = byItem[r.sku] || (byItem[r.sku] = { qty: 0, revenue: 0, name: r.products?.item_name || '' });
+      it.qty += r.qty;
+      it.revenue += r.qty * Number(r.unit_price || 0);
+    });
+    const topItems = Object.entries(byItem).map(([sku, v]) => ({ sku, ...v })).sort((a, b) => b.qty - a.qty).slice(0, 10);
+    const box = document.getElementById('sales-top-items');
+    if (!topItems.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<h3>Top-Selling Items <span class="muted" style="font-weight:normal;">— this range</span></h3><div class="table-scroll"><table><tr><th>SKU</th><th>Item</th><th>Qty Sold</th><th>Revenue</th></tr>' +
+      topItems.map((it) => '<tr><td data-label="SKU">' + esc(it.sku) + '</td><td data-label="Item">' + esc(it.name) + '</td><td data-label="Qty Sold">' + it.qty + '</td><td data-label="Revenue">' + money(it.revenue) + '</td></tr>').join('') +
+      '</table></div>';
+  }
 
   window.__runSearch = () => renderTable(window.__allRows || []);
 
