@@ -157,7 +157,10 @@ if (employee) {
               '<div style="font-size:13px;font-weight:bold;">' + esc(b.name) + '</div>' +
               '<div class="muted" style="font-size:12px;">' + (b.due_date || 'no date set') + ' · ' + money(b.amount) + '</div>' +
               (b.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(b.creator.full_name) + '</div>' : '') +
-              (b.attachment_path ? '<button class="btn small secondary" style="margin-top:4px;" data-id="' + b.id + '" data-act="view-recurring-photo">View Photo</button>' : '') +
+              '<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;">' +
+                (b.attachment_path ? '<button class="btn small secondary" data-id="' + b.id + '" data-act="view-recurring-photo">View Photo</button>' : '') +
+                (b.due_date ? '<button class="btn small secondary" data-id="' + b.id + '" data-act="next-month">Next Month →</button>' : '') +
+              '</div>' +
             '</div>'
           ).join('') +
         '</div>'
@@ -171,6 +174,36 @@ if (employee) {
           toast('bill-msg', String(err.message || err), true);
         }
       }));
+
+      // One click to roll a recurring bill forward instead of opening Edit and retyping
+      // everything -- same day-of-month next month (clamped if that month is shorter,
+      // e.g. the 31st rolls to the 28th/29th/30th), reset to Unpaid for the new cycle.
+      box.querySelectorAll('[data-act="next-month"]').forEach((btn) => btn.addEventListener('click', async () => {
+        const b = recurring.find((r) => String(r.id) === btn.dataset.id);
+        const nextDate = addOneMonth(b.due_date);
+        if (!confirm('Move "' + b.name + '" to ' + nextDate + ' and mark it Unpaid?')) return;
+        try {
+          await updateBill(b.id, {
+            name: b.name, category: b.category, accountName: b.account_name, accountNumber: b.account_number,
+            amount: b.amount, dueDate: nextDate, status: 'Unpaid', isRecurring: b.is_recurring, notes: b.notes,
+          });
+          toast('bill-msg', 'Moved to ' + nextDate + '.', false);
+          await load();
+        } catch (err) {
+          toast('bill-msg', String(err.message || err), true);
+        }
+      }));
+    }
+
+    /** Same day-of-month, one month later -- clamped to that month's last day if it's
+     * shorter (e.g. Jan 31 -> Feb 28/29), so a bill due on a high day-of-month doesn't
+     * silently roll into the wrong month. */
+    function addOneMonth(dateStr) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const daysInNextMonth = new Date(y, m + 1, 0).getDate();
+      const day = Math.min(d, daysInNextMonth);
+      const next = new Date(y, m, day);
+      return next.getFullYear() + '-' + String(next.getMonth() + 1).padStart(2, '0') + '-' + String(next.getDate()).padStart(2, '0');
     }
 
     /** Pastel red if any bill due that month is still Unpaid/Overdue, pastel green if

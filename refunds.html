@@ -31,11 +31,12 @@ function duplicateKeySet(rows) {
   });
   return new Set(Object.keys(counts).filter((k) => counts[k] > 1));
 }
-function nameOrderLabel(r, dupKeys) {
+function dupWarn(r, dupKeys, text) {
   const key = r.customer_name.trim().toLowerCase() + '|' + (r.order_reference || '').trim().toLowerCase();
-  const text = esc(r.order_reference || '(no Order ID)') + ' — ' + esc(r.customer_name);
   return dupKeys.has(key) ? '<span style="color:var(--warn);font-weight:bold;" title="Possible duplicate: same Order ID + name appears more than once">' + text + ' ⚠</span>' : text;
 }
+function orderIdLabel(r, dupKeys) { return dupWarn(r, dupKeys, esc(r.order_reference || '(no Order ID)')); }
+function customerLabel(r, dupKeys) { return dupWarn(r, dupKeys, esc(r.customer_name)); }
 
 /** The optional photo attached to the request itself (proof of purchase, the item,
  * etc.) -- separate from refund_attachments' proof-of-payment photos. */
@@ -357,7 +358,8 @@ if (employee) {
         const canAttach = r.status !== 'Pending Approval';
         const canComplete = r.status === 'Approved' && remaining <= 0;
         return '<tr' + (r.status === 'Pending Approval' ? ' style="background:#fff8e8;"' : '') + '>' +
-          '<td>' + nameOrderLabel(r, dupKeys) + requestPhotoBtn(r) +
+          '<td>' + orderIdLabel(r, dupKeys) + requestPhotoBtn(r) + '</td>' +
+          '<td>' + customerLabel(r, dupKeys) +
             '<div class="muted" style="font-size:10px;">' + esc(r.item_description || '') + (r.reason ? ' · ' + esc(r.reason) : '') + '</div>' +
           '</td>' +
           '<td><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
@@ -403,11 +405,11 @@ if (employee) {
         return '<th><button type="button" class="btn small' + (active ? '' : ' secondary') + '" data-ref-sort="' + key + '" style="padding:2px 8px;">' + label + arrow + '</button></th>';
       };
       list.innerHTML = '<div class="table-scroll"><table style="min-width:1000px;">' +
-        '<thead><tr>' + sortTh('customer_name', 'Order ID / Customer') + sortTh('status', 'Status') + sortTh('date_requested', 'Dates') +
+        '<thead><tr>' + sortTh('order_reference', 'Order ID') + sortTh('customer_name', 'Customer') + sortTh('status', 'Status') + sortTh('date_requested', 'Dates') +
           sortTh('refund_amount', 'Amount') + '<th>Method / Account</th><th>Proof of Payment</th><th>Notes / By</th><th></th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +
         '<tfoot><tr style="font-weight:bold;background:#f7f7f7;">' +
-          '<td colspan="3">Qty: ' + rows.length + '</td>' +
+          '<td colspan="4">Qty: ' + rows.length + '</td>' +
           '<td>' + money(totalRequested) + '<div class="muted" style="font-size:10px;font-weight:normal;">' + money(totalPaid) + ' paid · ' + money(totalRemaining) + ' left</div></td>' +
           '<td colspan="4"></td>' +
         '</tr></tfoot>' +
