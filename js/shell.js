@@ -54,12 +54,13 @@ export async function initShell(activePage) {
     // COD parcels shipped via LBC for online orders -- company-wide, not per-branch.
     pages.push({ id: 'lbc', label: 'LBC Monitoring', href: 'lbc.html' });
   }
-  // Branch Capital: like Refunds, everyone gets in now -- Admin/Manager/Branch
-  // Supervisor/Sales Executive/Admin Assistant get the full company-wide (or own-
-  // branch) balance view, everyone else just a "My Capital Requests" list of their own
-  // submissions (see capital.html's canFullView split). Anyone who isn't Admin/Manager
-  // (or the relevant Branch Supervisor) has their entry sit as Pending Approval.
-  pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });
+  // Branch Capital: restricted to Manager, Branch Supervisor, and Personal Assistant
+  // (plus Admin) -- Sales Executive, Admin Assistant, and rank-and-file employees no
+  // longer get in at all (70_branch_capital_restricted_access.sql). Only Admin can
+  // approve or delete an entry now.
+  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Personal Assistant') {
+    pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });
+  }
   if (employee.role === 'Admin') {
     pages.push({ id: 'access-checklist', label: 'Access Checklist', href: 'access-checklist.html' });
   }

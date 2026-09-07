@@ -42,7 +42,9 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, subscribeToChanges } from './js/api.js';
+import { getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, listScrapEntries, subscribeToChanges } from './js/api.js';
+
+const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
 // Every position value that currently drives an access rule somewhere, plus the other
 // job titles already in use -- kept as a fixed list (not free text) so a typo here
@@ -76,9 +78,12 @@ const EXTRA_PAGE_CATEGORY = { transactions: 'payments', assets: 'assets', lbc: '
 const NO_ACCESS_LABEL = {
   inventory: 'Cannot see any branch’s inventory', movement: 'Cannot record any stock movement',
   transfers: 'Cannot see or act on transfers', branches: 'Cannot add Subasta/Scrap entries',
-  capital: 'Cannot add Branch Capital entries', payments: 'Cannot see Transactions',
+  capital: 'Cannot access Branch Capital', payments: 'Cannot see Transactions',
   assets: 'Cannot access Asset & Supplies Custodian', lbc: 'Cannot access LBC Monitoring',
 };
+// Branch Capital, restricted (70_branch_capital_restricted_access.sql): add + view is
+// Manager/Branch Supervisor/Personal Assistant only, approve/delete is Admin-only for
+// everyone (no one else gets an 'approver' or 'edit' level on this task anymore).
 
 /** Builds one row per task category from the employee's CURRENT role, position,
  * branch, and flags -- not a hardcoded name lookup -- so a role or task change shows
@@ -101,7 +106,7 @@ function itemsForEmployee(emp) {
     cat.movement  = { label: 'Can record stock movements at any branch', access: true, levels: ['encode'] };
     cat.transfers = { label: 'Can approve, ship, and receive transfers anywhere', access: true, levels: ['edit', 'approver'] };
     cat.branches  = { label: 'Can add, edit, and delete Subasta/Scrap for every branch', access: true, levels: ['edit'] };
-    cat.capital   = { label: 'Can add (auto-approved) and approve Branch Capital entries anywhere', access: true, levels: ['encode', 'approver'] };
+    cat.capital   = { label: 'Can add (pending Ren’s approval) and view Branch Capital for every branch — cannot approve or delete', access: true, levels: ['view', 'encode'] };
     cat.payments  = { label: 'Can see, add, and import Transactions', access: true, levels: ['edit'] };
     cat.assets    = { label: 'Can add/edit/delete Asset & Supplies Custodian items', access: true, levels: ['edit'] };
     cat.lbc       = { label: 'Can see and manage LBC Monitoring', access: true, levels: ['edit'] };
@@ -110,7 +115,7 @@ function itemsForEmployee(emp) {
     cat.movement  = { label: 'Can record Stock In/Out, Damage, Missing at ' + branch + ' (not Adjustment/Correction)', access: true, levels: ['encode'] };
     cat.transfers = { label: 'Can request, ship, and receive transfers involving ' + branch, access: true, levels: ['edit'] };
     cat.branches  = { label: 'Can add, edit, and delete Subasta/Scrap for ' + branch, access: true, levels: ['edit'] };
-    cat.capital   = { label: 'Can add and approve Branch Capital entries for ' + branch, access: true, levels: ['encode', 'approver'] };
+    cat.capital   = { label: 'Can add (pending Ren’s approval) and view Branch Capital for ' + branch + ' — cannot approve or delete', access: true, levels: ['view', 'encode'] };
     cat.payments  = { label: 'Can see Transactions and fill in FB Name/Customer/Order ID (not add/import/delete)', access: true, levels: ['edit'] };
     cat.assets    = { label: 'Can add/edit/delete Asset & Supplies Custodian items', access: true, levels: ['edit'] };
     cat.lbc       = { label: 'Can see and manage LBC Monitoring', access: true, levels: ['edit'] };
@@ -119,29 +124,26 @@ function itemsForEmployee(emp) {
     cat.movement  = { label: 'Can record Stock In/Out, Damage, Missing at ' + branch, access: true, levels: ['encode'] };
     cat.transfers = { label: 'Can view transfers involving ' + branch + ' (cannot request/approve)', access: true, levels: ['view'] };
     cat.branches  = { label: 'Can add Subasta/Scrap entries for ' + branch + ' (cannot edit/delete)', access: true, levels: ['encode'] };
-    cat.capital   = { label: 'Can add Branch Capital entries for ' + branch + ' (pending approval) — own submissions only', access: true, levels: ['encode'] };
   } else if (emp.role === 'None' && emp.position === 'Sales Executive') {
     cat.inventory = { label: 'Sees inventory for every branch', access: true, levels: ['view'] };
     cat.transfers = { label: 'Can request transfers (cannot approve)', access: true, levels: ['encode'] };
     cat.branches  = { label: 'Can view and add Subasta/Scrap for any branch (cannot edit/delete)', access: true, levels: ['encode'] };
-    cat.capital   = { label: 'Can view Branch Capital for every branch; add entries (pending approval)', access: true, levels: ['view', 'encode'] };
   } else if (emp.role === 'None' && isPosMgr) {
     // Admin Assistant, Operations Supervisor, Inventory Supervisor -- full manage
-    // (add/edit/delete) on Subasta/Scrap anywhere, not just add.
+    // (add/edit/delete) on Subasta/Scrap anywhere, not just add. No Branch Capital
+    // access at all now (70_branch_capital_restricted_access.sql).
     cat.branches = { label: 'Can add, edit, and delete Subasta/Scrap for any branch', access: true, levels: ['edit'] };
-    cat.capital  = { label: 'Can add Branch Capital entries for any branch (pending approval)', access: true, levels: ['encode'] };
     if (emp.position === 'Admin Assistant') {
       cat.payments = { label: 'Can see Transactions and fill in FB Name/Customer/Order ID (not add/import/delete)', access: true, levels: ['edit'] };
       cat.lbc      = { label: 'Can see and manage LBC Monitoring', access: true, levels: ['edit'] };
     }
   } else if (emp.role === 'None' && emp.position === 'Personal Assistant') {
     cat.branches = { label: 'Can view Subasta/Scrap for every branch (view only)', access: true, levels: ['view'] };
-    cat.capital  = { label: 'Can view remaining balance for every branch; add own entries (pending approval)', access: true, levels: ['view', 'encode'] };
+    cat.capital  = { label: 'Can add (pending Ren’s approval) and view Branch Capital for every branch', access: true, levels: ['view', 'encode'] };
   } else if (emp.role === 'None') {
     cat.branches = emp.branches
       ? { label: 'Can add Subasta/Scrap entries for ' + branch + ' (cannot edit/delete)', access: true, levels: ['encode'] }
       : { label: 'No branch assigned — cannot add Subasta/Scrap entries', access: false, levels: [] };
-    cat.capital = { label: 'Can add Branch Capital entries (pending approval) — own submissions only', access: true, levels: ['encode'] };
   }
 
   const autoRefundApprover = ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || isPosMgr;
@@ -184,6 +186,50 @@ if (employee) {
     // differs from the computed default.
     let overrides = {};
 
+    // Scrap Encoding Activity leaderboard -- who's actually encoding Scrap entries,
+    // ranked, with a time range. Kept as JS state (not read from the DOM at render
+    // time) because render() below rebuilds the whole page's innerHTML on every
+    // action (selecting an employee, changing a position, clicking a level pill) --
+    // without this, picking a date range here would reset the instant you clicked
+    // anything else on the page.
+    let scrapEntries = [];
+    let scrapFrom = '', scrapTo = '';
+
+    async function loadScrapEntries() {
+      try { scrapEntries = await listScrapEntries(); } catch (err) { scrapEntries = []; }
+      renderScrapLeaderboard();
+    }
+
+    function renderScrapLeaderboard() {
+      const box = document.getElementById('ac-scrap-leaderboard');
+      if (!box) return;
+      let rows = scrapEntries;
+      if (scrapFrom) rows = rows.filter((r) => r.entry_date >= scrapFrom);
+      if (scrapTo) rows = rows.filter((r) => r.entry_date <= scrapTo);
+
+      const byEmp = {};
+      rows.forEach((r) => {
+        const name = (r.creator && r.creator.full_name) || 'Unknown';
+        const e = byEmp[name] || (byEmp[name] = { count: 0, subtotal: 0 });
+        e.count += 1;
+        e.subtotal += Number(r.total_amount || 0);
+      });
+      const ranked = Object.entries(byEmp).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.count - a.count);
+      const grandTotal = rows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
+
+      box.innerHTML = !ranked.length
+        ? '<p class="muted">No scrap entries for this range.</p>'
+        : '<div class="table-scroll"><table><tr><th>Rank</th><th>Employee</th><th>Entries Encoded</th><th>Subtotal</th></tr>' +
+            ranked.map((r, i) => '<tr' + (i === 0 ? ' style="font-weight:bold;background:#fdf6e3;"' : '') + '>' +
+              '<td data-label="Rank">' + (i + 1) + (i === 0 ? ' 🏆' : '') + '</td>' +
+              '<td data-label="Employee">' + esc(r.name) + '</td>' +
+              '<td data-label="Entries Encoded">' + r.count + '</td>' +
+              '<td data-label="Subtotal">' + money(r.subtotal) + '</td>' +
+            '</tr>').join('') +
+            '<tr style="font-weight:bold;background:#f7f7f7;"><td colspan="2">Total</td><td>' + rows.length + '</td><td>' + money(grandTotal) + '</td></tr>' +
+          '</table></div>';
+    }
+
     async function load() {
       try {
         const [emps, rows] = await Promise.all([getEmployeesForChecklist(), getAccessChecklist()]);
@@ -200,8 +246,9 @@ if (employee) {
       render();
     }
 
-    await load();
+    await Promise.all([load(), loadScrapEntries()]);
     subscribeToChanges('access_checklist_verifications', load);
+    subscribeToChanges('scrap_entries', loadScrapEntries);
 
     // Effective levels for a row: an array, any combination of view/encode/edit/
     // approver, empty means No access -- the override if Ren has set one, otherwise
@@ -275,10 +322,30 @@ if (employee) {
       root.innerHTML =
         '<h2>Access Verification Checklist</h2>' +
         '<p class="muted">Pick an employee on the left. Each task starts from what their role/position actually grants — click No access, View only, Encode (can add an entry but not edit/delete), Edit, or Approver to correct it if what you see on their real account is different. More than one can be active on the same task (e.g. Edit + Approver) — that\'s entirely your call.</p>' +
+        '<div class="card">' +
+          '<h3 style="margin:0 0 2px;">Scrap Encoding Activity</h3>' +
+          '<p class="muted" style="margin-top:-2px;">Who\'s actually encoding Scrap entries, ranked by how many — the top row is your busiest encoder for this range.</p>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">' +
+            '<div class="field"><label>From</label><input type="date" id="scrap-lb-from" value="' + scrapFrom + '"></div>' +
+            '<div class="field"><label>To</label><input type="date" id="scrap-lb-to" value="' + scrapTo + '"></div>' +
+            '<button type="button" class="btn small secondary" id="scrap-lb-clear">All Time</button>' +
+          '</div>' +
+          '<div id="ac-scrap-leaderboard"><div class="muted">Loading…</div></div>' +
+        '</div>' +
         '<div class="ac-layout">' +
           '<div class="card ac-emp-list">' + empListHtml + '</div>' +
           '<div class="ac-emp-main">' + mainHtml + '</div>' +
         '</div>';
+
+      renderScrapLeaderboard();
+      document.getElementById('scrap-lb-from').addEventListener('change', (ev) => { scrapFrom = ev.target.value; renderScrapLeaderboard(); });
+      document.getElementById('scrap-lb-to').addEventListener('change', (ev) => { scrapTo = ev.target.value; renderScrapLeaderboard(); });
+      document.getElementById('scrap-lb-clear').addEventListener('click', () => {
+        scrapFrom = ''; scrapTo = '';
+        document.getElementById('scrap-lb-from').value = '';
+        document.getElementById('scrap-lb-to').value = '';
+        renderScrapLeaderboard();
+      });
 
       root.querySelectorAll('[data-select-emp]').forEach((btn) => btn.addEventListener('click', () => {
         selectedId = btn.dataset.selectEmp;

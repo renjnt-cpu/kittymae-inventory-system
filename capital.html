@@ -23,19 +23,21 @@ if (employee) {
   const root = document.getElementById('capital-root');
 
   const isAdmin = employee.role === 'Admin';
-  const isManagerial = ['Admin', 'Manager'].includes(employee.role);
-  // Everyone can add now -- Admin/Manager's own entries post as Approved immediately
-  // (they're the approval authority); anyone else's sit as Pending Approval. Full
-  // company-wide balances/browsing stays limited to the roles/positions that already
-  // had it -- everyone else just sees their own requests (like Refunds' "My Requests").
-  const canFullView = ['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Sales Executive', 'Admin Assistant'].includes(employee.position);
-  // Personal Assistant is view-only here (same spirit as her Branches access): she
-  // should see the remaining-balance tiles for every branch, but not the full
-  // company-wide entries list/filters -- just tiles plus her own "My Capital Requests"
-  // below, same as everyone outside canFullView already sees.
-  const canViewBalance = canFullView || employee.position === 'Personal Assistant';
-  const canDelete = ['Admin', 'Manager'].includes(employee.role);
-  const canApproveRow = (r) => isManagerial || (employee.role === 'Branch Supervisor' && r.branch_id === employee.branch_id);
+  // Add + view is limited to Manager, Branch Supervisor, and Personal Assistant (plus
+  // Admin, who has everything) -- Sales Executive, Admin Assistant, and rank-and-file
+  // employees no longer get in here at all (70_branch_capital_restricted_access.sql).
+  // Only Admin approves or deletes now -- Manager's and Branch Supervisor's approve
+  // rights were revoked in that same migration, so nobody but Ren can auto-approve
+  // their own entry either; everyone else's adds sit as Pending Approval.
+  const canAccess = isAdmin || ['Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Personal Assistant';
+  const isManagerial = isAdmin;
+  const canFullView = canAccess;
+  const canViewBalance = canAccess;
+  const canDelete = isAdmin;
+  const canApproveRow = () => isAdmin;
+  if (!canAccess) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Branch Capital is limited to Manager, Branch Supervisor, and Personal Assistant.</p></div></div>';
+  } else {
   const branches = await getBranches();
   const branchById = Object.fromEntries(branches.map((b) => [b.id, b.name]));
   const branchOptions = (selected) => branches.map((b) =>
@@ -46,7 +48,7 @@ if (employee) {
     '<div class="card">' +
       '<h3>Add Capital Entry</h3>' +
       '<p class="muted" style="margin-top:-4px;">Money put into a branch — working capital, float, or other funding.' +
-        (isManagerial ? '' : ' A Manager or that branch\'s Supervisor must approve it before it counts.') +
+        (isManagerial ? '' : ' Ren must approve it before it counts.') +
       '</p>' +
       '<form id="cap-form" style="flex-direction:column;align-items:stretch;">' +
         '<div class="field"><label>Branch *</label><select name="branchId" required>' + branchOptions() + '</select></div>' +
@@ -214,6 +216,7 @@ if (employee) {
   }
 
   function tile(num, label) { return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>'; }
+  }
 }
 </script>
 </body>
