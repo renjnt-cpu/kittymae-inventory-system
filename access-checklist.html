@@ -59,10 +59,11 @@ const POSITION_MANAGERS = ['Operations Supervisor', 'Inventory Supervisor', 'Adm
 
 // Fixed set of task categories, in the order they're shown -- one row per category
 // per employee (not several sub-statements), each carrying a single access level.
-const CATEGORY_ORDER = ['inventory', 'movement', 'transfers', 'branches', 'capital', 'payments', 'assets', 'lbc', 'refund', 'bills'];
+const CATEGORY_ORDER = ['inventory', 'movement', 'orders', 'transfers', 'branches', 'capital', 'payments', 'assets', 'lbc', 'refund', 'bills'];
 const CATEGORY_LABEL = {
   inventory: 'Inventory Visibility',
   movement: 'Stock Movements',
+  orders: 'Order & Item Status',
   transfers: 'Transfers',
   branches: 'Branches (Subasta / Scrap)',
   capital: 'Branch Capital',
@@ -156,6 +157,14 @@ function itemsForEmployee(emp) {
   cat.bills = emp.bills_access
     ? { label: 'Can see and add Bills', access: true, levels: ['edit'] }
     : { label: 'Cannot see the Bills tracker', access: false, levels: [] };
+
+  // Order & Item Status (Record Movement) -- company-wide, any active employee can add
+  // and update status; only Manager/Admin can delete (75_order_item_status_tracker.sql).
+  // Unlike the rest of "movement" this isn't role/branch-scoped at all, so it's set
+  // unconditionally here rather than inside the role branches above.
+  cat.orders = emp.role === 'Manager'
+    ? { label: 'Can add, update, and delete Order & Item Status entries', access: true, levels: ['edit'] }
+    : { label: 'Can add and update Order & Item Status entries (cannot delete)', access: true, levels: ['encode'] };
 
   // Individually granted extra access upgrades whichever category it belongs to,
   // instead of showing as a separate "other" row.
