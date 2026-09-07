@@ -194,6 +194,9 @@ if (employee) {
     // anything else on the page.
     let scrapEntries = [];
     let scrapFrom = '', scrapTo = '';
+    // Which column ranks the table -- 'count' (Entries Encoded) or 'total' (Total
+    // amount). Clicking either header toggles ranking by that column instead.
+    let scrapSort = 'count';
 
     async function loadScrapEntries() {
       try { scrapEntries = await listScrapEntries(); } catch (err) { scrapEntries = []; }
@@ -210,24 +213,35 @@ if (employee) {
       const byEmp = {};
       rows.forEach((r) => {
         const name = (r.creator && r.creator.full_name) || 'Unknown';
-        const e = byEmp[name] || (byEmp[name] = { count: 0, subtotal: 0 });
+        const e = byEmp[name] || (byEmp[name] = { count: 0, total: 0 });
         e.count += 1;
-        e.subtotal += Number(r.total_amount || 0);
+        e.total += Number(r.total_amount || 0);
       });
-      const ranked = Object.entries(byEmp).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.count - a.count);
+      const ranked = Object.entries(byEmp).map(([name, v]) => ({ name, ...v }))
+        .sort((a, b) => b[scrapSort] - a[scrapSort]);
       const grandTotal = rows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
+
+      const sortHeader = (key, label) =>
+        '<th><button type="button" class="btn small secondary" data-sort="' + key + '" style="padding:2px 8px;">' +
+          label + (scrapSort === key ? ' ▼' : '') +
+        '</button></th>';
 
       box.innerHTML = !ranked.length
         ? '<p class="muted">No scrap entries for this range.</p>'
-        : '<div class="table-scroll"><table><tr><th>Rank</th><th>Employee</th><th>Entries Encoded</th><th>Subtotal</th></tr>' +
+        : '<div class="table-scroll"><table><tr><th>Rank</th><th>Employee</th>' + sortHeader('count', 'Entries Encoded') + sortHeader('total', 'Total') + '</tr>' +
             ranked.map((r, i) => '<tr' + (i === 0 ? ' style="font-weight:bold;background:#fdf6e3;"' : '') + '>' +
               '<td data-label="Rank">' + (i + 1) + (i === 0 ? ' 🏆' : '') + '</td>' +
               '<td data-label="Employee">' + esc(r.name) + '</td>' +
               '<td data-label="Entries Encoded">' + r.count + '</td>' +
-              '<td data-label="Subtotal">' + money(r.subtotal) + '</td>' +
+              '<td data-label="Total">' + money(r.total) + '</td>' +
             '</tr>').join('') +
             '<tr style="font-weight:bold;background:#f7f7f7;"><td colspan="2">Total</td><td>' + rows.length + '</td><td>' + money(grandTotal) + '</td></tr>' +
           '</table></div>';
+
+      box.querySelectorAll('[data-sort]').forEach((btn) => btn.addEventListener('click', () => {
+        scrapSort = btn.dataset.sort;
+        renderScrapLeaderboard();
+      }));
     }
 
     async function load() {
