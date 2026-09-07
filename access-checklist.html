@@ -231,23 +231,30 @@ if (employee) {
       // trophy moment.
       const topIsHighlighted = scrapSortDir === 'desc';
 
-      const sortHeader = (key, label) => {
+      // Sort controls live in their own toolbar, not inside <th> -- a <th> sitting
+      // inside .table-scroll's mobile card-view rules (which only reshape <thead>/
+      // <td>, not a bare header <tr> of <th>s) rendered inconsistently on narrow
+      // screens and could hide the arrow entirely. A plain button row above the
+      // table works identically at every width.
+      const sortBtn = (key, label) => {
         const active = scrapSort === key;
         const arrow = active ? (scrapSortDir === 'desc' ? ' ▼' : ' ▲') : '';
-        return '<th><button type="button" class="btn small secondary" data-sort="' + key + '" style="padding:2px 8px;">' + label + arrow + '</button></th>';
+        return '<button type="button" class="btn small' + (active ? '' : ' secondary') + '" data-sort="' + key + '">Sort: ' + label + arrow + '</button>';
       };
 
-      box.innerHTML = !ranked.length
+      box.innerHTML =
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">' + sortBtn('count', 'Entries Encoded') + sortBtn('total', 'Total') + '</div>' +
+        (!ranked.length
         ? '<p class="muted">No scrap entries for this range.</p>'
-        : '<div class="table-scroll"><table><tr><th>Rank</th><th>Employee</th>' + sortHeader('count', 'Entries Encoded') + sortHeader('total', 'Total') + '</tr>' +
+        : '<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Employee</th><th>Entries Encoded</th><th>Total</th></tr></thead><tbody>' +
             ranked.map((r, i) => '<tr' + (i === 0 && topIsHighlighted ? ' style="font-weight:bold;background:#fdf6e3;"' : '') + '>' +
               '<td data-label="Rank">' + (i + 1) + (i === 0 && topIsHighlighted ? ' 🏆' : '') + '</td>' +
               '<td data-label="Employee">' + esc(r.name) + '</td>' +
               '<td data-label="Entries Encoded">' + r.count + '</td>' +
               '<td data-label="Total">' + money(r.total) + '</td>' +
             '</tr>').join('') +
-            '<tr style="font-weight:bold;background:#f7f7f7;"><td colspan="2">Total</td><td>' + rows.length + '</td><td>' + money(grandTotal) + '</td></tr>' +
-          '</table></div>';
+            '</tbody><tfoot><tr style="font-weight:bold;background:#f7f7f7;"><td colspan="2">Total</td><td>' + rows.length + '</td><td>' + money(grandTotal) + '</td></tr></tfoot>' +
+          '</table></div>');
 
       box.querySelectorAll('[data-sort]').forEach((btn) => btn.addEventListener('click', () => {
         const key = btn.dataset.sort;
