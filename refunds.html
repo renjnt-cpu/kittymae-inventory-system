@@ -237,6 +237,8 @@ if (employee) {
     });
 
     let allRefunds = [];
+    // null = natural/insertion order until a header is clicked.
+    let refSort = null, refSortDir = 'desc';
     load();
     subscribeToChanges(['refunds', 'refund_attachments'], load);
 
@@ -321,7 +323,15 @@ if (employee) {
       const approvedCount = filtered.filter((r) => r.status === 'Approved').length;
       const completedTotal = allRefunds.filter((r) => r.status === 'Completed').reduce((s, r) => s + Number(r.refund_amount || 0), 0);
       // Completed refunds live in the right-side panel, not this table.
-      const rows = filtered.filter((r) => r.status !== 'Completed');
+      let rows = filtered.filter((r) => r.status !== 'Completed');
+      if (refSort) {
+        const dirMul = refSortDir === 'desc' ? -1 : 1;
+        rows = [...rows].sort((a, b) => {
+          const av = a[refSort], bv = b[refSort];
+          const cmp = refSort === 'refund_amount' ? Number(av || 0) - Number(bv || 0) : String(av || '').localeCompare(String(bv || ''));
+          return cmp * dirMul;
+        });
+      }
       const activeTotal = rows.reduce((s, r) => s + Number(r.refund_amount || 0), 0);
       document.getElementById('ref-tiles').innerHTML =
         tile(String(pendingCount), 'Pending Approval') + tile(String(approvedCount), 'Approved') +
@@ -385,8 +395,16 @@ if (employee) {
           '</td>' +
         '</tr>';
       }).join('');
+      // Sort control sits beside the column's own name, same pattern as the Scrap
+      // Encoding Activity leaderboard and Bills.
+      const sortTh = (key, label) => {
+        const active = refSort === key;
+        const arrow = active ? (refSortDir === 'desc' ? ' ▼' : ' ▲') : '';
+        return '<th><button type="button" class="btn small' + (active ? '' : ' secondary') + '" data-ref-sort="' + key + '" style="padding:2px 8px;">' + label + arrow + '</button></th>';
+      };
       list.innerHTML = '<div class="table-scroll"><table style="min-width:1000px;">' +
-        '<thead><tr><th>Order ID / Customer</th><th>Status</th><th>Dates</th><th>Amount</th><th>Method / Account</th><th>Proof of Payment</th><th>Notes / By</th><th></th></tr></thead>' +
+        '<thead><tr>' + sortTh('customer_name', 'Order ID / Customer') + sortTh('status', 'Status') + sortTh('date_requested', 'Dates') +
+          sortTh('refund_amount', 'Amount') + '<th>Method / Account</th><th>Proof of Payment</th><th>Notes / By</th><th></th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +
         '<tfoot><tr style="font-weight:bold;background:#f7f7f7;">' +
           '<td colspan="3">Qty: ' + rows.length + '</td>' +
@@ -394,6 +412,13 @@ if (employee) {
           '<td colspan="4"></td>' +
         '</tr></tfoot>' +
         '</table></div>';
+
+      list.querySelectorAll('[data-ref-sort]').forEach((btn) => btn.addEventListener('click', () => {
+        const key = btn.dataset.refSort;
+        if (refSort === key) { refSortDir = refSortDir === 'desc' ? 'asc' : 'desc'; }
+        else { refSort = key; refSortDir = 'desc'; }
+        render();
+      }));
 
       list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
         const id = btn.dataset.id;

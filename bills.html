@@ -100,6 +100,10 @@ if (employee) {
     });
 
     let allBills = [];
+    // null = natural/insertion order until a header is clicked, same as every other
+    // page's default. Applied once, before the Unpaid/Paid split, so both sections
+    // stay consistently ordered.
+    let billSort = null, billSortDir = 'desc';
     await load();
     subscribeToChanges('bills', load);
 
@@ -220,6 +224,15 @@ if (employee) {
       if (fMax) rows = rows.filter((b) => Number(b.amount || 0) <= Number(fMax));
       if (fRecurring !== 'all') rows = rows.filter((b) => (fRecurring === '1') === !!b.is_recurring);
 
+      if (billSort) {
+        const dirMul = billSortDir === 'desc' ? -1 : 1;
+        rows = [...rows].sort((a, b) => {
+          const av = a[billSort], bv = b[billSort];
+          const cmp = billSort === 'amount' ? Number(av || 0) - Number(bv || 0) : String(av || '').localeCompare(String(bv || ''));
+          return cmp * dirMul;
+        });
+      }
+
       const totalAll = rows.reduce((s, b) => s + Number(b.amount || 0), 0);
       const totalUnpaid = rows.filter((b) => b.status === 'Unpaid' || b.status === 'Overdue').reduce((s, b) => s + Number(b.amount || 0), 0);
       const totalPaid = rows.filter((b) => b.status === 'Paid' || b.status === 'Auto-debited').reduce((s, b) => s + Number(b.amount || 0), 0);
@@ -254,10 +267,22 @@ if (employee) {
           '<tr class="edit-row" data-edit-for="' + b.id + '" style="display:none;"><td colspan="11"></td></tr>';
       }
 
+      // Sort control sits beside the column's own name inside its <th>, matching the
+      // Scrap Encoding Activity leaderboard's pattern -- click to rank by that column
+      // (highest/Z-first), click again to flip to lowest/A-first.
+      const sortTh = (key, label) => {
+        const active = billSort === key;
+        const arrow = active ? (billSortDir === 'desc' ? ' ▼' : ' ▲') : '';
+        return '<th><button type="button" class="btn small' + (active ? '' : ' secondary') + '" data-bill-sort="' + key + '" style="padding:2px 8px;">' + label + arrow + '</button></th>';
+      };
+
       function sectionHtml(sectionRows) {
         if (!sectionRows.length) return '<p class="muted">None.</p>';
-        return '<div class="table-scroll"><table><tr><th>Name</th><th>Account Name</th><th>Account Number</th><th>Category</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Recurring</th><th>Notes</th><th>Photo</th><th></th></tr>' +
-          sectionRows.map(rowHtml).join('') + '</table></div>';
+        return '<div class="table-scroll"><table><thead><tr>' +
+          sortTh('name', 'Name') + sortTh('account_name', 'Account Name') + '<th>Account Number</th>' + sortTh('category', 'Category') +
+          sortTh('amount', 'Amount') + sortTh('due_date', 'Due Date') + sortTh('status', 'Status') + '<th>Recurring</th><th>Notes</th><th>Photo</th><th></th>' +
+          '</tr></thead><tbody>' +
+          sectionRows.map(rowHtml).join('') + '</tbody></table></div>';
       }
 
       // Split into two clearly separate sections so unpaid bills never get lost among
@@ -269,6 +294,13 @@ if (employee) {
         sectionHtml(unpaidRows) +
         '<h3 style="color:var(--ok);margin-top:22px;">Paid / Auto-debited (' + paidRows.length + ')</h3>' +
         sectionHtml(paidRows);
+
+      list.querySelectorAll('[data-bill-sort]').forEach((btn) => btn.addEventListener('click', () => {
+        const key = btn.dataset.billSort;
+        if (billSort === key) { billSortDir = billSortDir === 'desc' ? 'asc' : 'desc'; }
+        else { billSort = key; billSortDir = 'desc'; }
+        render();
+      }));
 
       list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
         const id = btn.dataset.id;
