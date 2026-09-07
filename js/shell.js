@@ -47,7 +47,7 @@ export async function initShell(activePage) {
     // fill in FB Name/Customer/Order ID, not import or delete.
     pages.push({ id: 'transactions', label: 'Transactions', href: 'transactions.html' });
   }
-  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || (employee.extra_page_access || []).includes('assets')) {
+  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Personal Assistant', 'Admin Assistant'].includes(employee.position) || (employee.extra_page_access || []).includes('assets')) {
     pages.push({ id: 'assets', label: 'Asset & Supplies Custodian', href: 'assets.html' });
   }
   if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Admin Assistant' || (employee.extra_page_access || []).includes('lbc')) {

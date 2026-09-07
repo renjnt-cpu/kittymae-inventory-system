@@ -136,10 +136,12 @@ function itemsForEmployee(emp) {
     if (emp.position === 'Admin Assistant') {
       cat.payments = { label: 'Can see Transactions and fill in FB Name/Customer/Order ID (not add/import/delete)', access: true, levels: ['edit'] };
       cat.lbc      = { label: 'Can see and manage LBC Monitoring', access: true, levels: ['edit'] };
+      cat.assets   = { label: 'Can add/edit/delete Asset & Supplies Custodian items', access: true, levels: ['edit'] };
     }
   } else if (emp.role === 'None' && emp.position === 'Personal Assistant') {
     cat.branches = { label: 'Can view Subasta/Scrap for every branch (view only)', access: true, levels: ['view'] };
     cat.capital  = { label: 'Can add (pending Ren’s approval) and view Branch Capital for every branch', access: true, levels: ['view', 'encode'] };
+    cat.assets   = { label: 'Can add/edit/delete Asset & Supplies Custodian items', access: true, levels: ['edit'] };
   } else if (emp.role === 'None') {
     cat.branches = emp.branches
       ? { label: 'Can add Subasta/Scrap entries for ' + branch + ' (cannot edit/delete)', access: true, levels: ['encode'] }
