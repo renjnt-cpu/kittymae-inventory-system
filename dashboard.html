@@ -135,16 +135,35 @@ if (employee) {
     }
   }
 
+  // Purchased Amount / Est. Sales / Profit are computed here from LIVE qty_available
+  // times the pricing synced from SKU 26 (see sku26_sync.gs) -- not imported as static
+  // numbers from the sheet, so they never go stale between syncs the way a copied
+  // "Est. Sales" column would.
+  function rowFinancials(r) {
+    const supplierPrice = r.products?.supplier_price;
+    const sellingPrice = r.products?.system_selling_price;
+    const purchasedAmount = supplierPrice != null ? r.qty_available * supplierPrice : null;
+    const estSales = sellingPrice != null ? r.qty_available * sellingPrice : null;
+    const profit = purchasedAmount != null && estSales != null ? estSales - purchasedAmount : null;
+    return { purchasedAmount, estSales, profit };
+  }
+
   function renderTiles(rows) {
     const totalPcs = rows.reduce((s, r) => s + r.qty_available, 0);
     const totalGrams = rows.reduce((s, r) => s + (r.total_grams_on_hand || 0), 0);
     const lowStock = rows.filter((r) => r.products && r.qty_available <= r.products.reorder_level).length;
     const outOfStock = rows.filter((r) => r.qty_available === 0).length;
+    const purchasedTotal = rows.reduce((s, r) => s + (rowFinancials(r).purchasedAmount || 0), 0);
+    const estSalesTotal = rows.reduce((s, r) => s + (rowFinancials(r).estSales || 0), 0);
+    const profitTotal = estSalesTotal - purchasedTotal;
     document.getElementById('tiles').innerHTML = [
       tile(totalPcs, 'Total Pieces'),
       tile(Math.round(totalGrams * 10) / 10 + 'g', 'Total Grams'),
       tile(lowStock, 'Low Stock SKUs'),
       tile(outOfStock, 'Out of Stock SKUs'),
+      tile(money(purchasedTotal), 'Purchased Amount (on hand)'),
+      tile(money(estSalesTotal), 'Est. Sales (on hand)'),
+      tile(money(profitTotal), 'Est. Profit (on hand)'),
     ].join('');
   }
   function tile(num, label) { return '<div class="tile"><div class="num">' + esc(num) + '</div><div class="lbl">' + esc(label) + '</div></div>'; }
@@ -154,15 +173,25 @@ if (employee) {
     const filtered = q ? rows.filter((r) => r.sku.toLowerCase().includes(q) || (r.products?.item_name || '').toLowerCase().includes(q)) : rows;
     const box = document.getElementById('stock-table');
     if (!filtered.length) { box.innerHTML = '<p class="muted">No matching stock.</p>'; return; }
-    box.innerHTML = '<div class="table-scroll"><table><tr><th>SKU</th><th>Item Name</th><th>Available</th><th>Reserved</th><th>Grams on Hand</th><th>Status</th></tr>' +
+    box.innerHTML = '<div class="table-scroll"><table><thead><tr><th>SKU</th><th>Item Name</th><th>Available</th><th>Reserved</th><th>Grams on Hand</th><th>Status</th>' +
+      '<th>Sup. Price</th><th>Pancake Price</th><th>Gold Rate (Sup./Current)</th><th>Purchased Amount</th><th>Est. Sales</th><th>Est. Profit</th></tr></thead><tbody>' +
       filtered.map((r) => {
         const low = r.products && r.qty_available <= r.products.reorder_level;
         const status = r.qty_available === 0
           ? '<span class="badge low">OUT OF STOCK</span>'
           : low ? '<span class="badge low">LOW STOCK</span>' : '<span class="badge ok">OK</span>';
+        const { purchasedAmount, estSales, profit } = rowFinancials(r);
+        const supRate = r.products?.supplier_gold_rate_per_g, curRate = r.products?.current_gold_rate_per_g;
         return '<tr><td data-label="SKU">' + esc(r.sku) + '</td><td data-label="Item Name">' + esc(r.products?.item_name || '') + '</td><td data-label="Available">' + r.qty_available +
-          '</td><td data-label="Reserved">' + r.qty_reserved + '</td><td data-label="Grams on Hand">' + (r.total_grams_on_hand ?? '—') + '</td><td data-label="Status">' + status + '</td></tr>';
-      }).join('') + '</table></div>';
+          '</td><td data-label="Reserved">' + r.qty_reserved + '</td><td data-label="Grams on Hand">' + (r.total_grams_on_hand ?? '—') + '</td><td data-label="Status">' + status + '</td>' +
+          '<td data-label="Sup. Price">' + money(r.products?.supplier_price) + '</td>' +
+          '<td data-label="Pancake Price">' + money(r.products?.system_selling_price) + '</td>' +
+          '<td data-label="Gold Rate (Sup./Current)">' + (supRate != null ? Number(supRate).toLocaleString('en-PH') : '—') + ' / ' + (curRate != null ? Number(curRate).toLocaleString('en-PH') : '—') + '</td>' +
+          '<td data-label="Purchased Amount">' + money(purchasedAmount) + '</td>' +
+          '<td data-label="Est. Sales">' + money(estSales) + '</td>' +
+          '<td data-label="Est. Profit">' + money(profit) + '</td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
   }
 }
 </script>

@@ -42,7 +42,8 @@ export async function getBranches() {
 export async function getInventory(branchId) {
   let query = supabase
     .from('inventory')
-    .select('sku, branch_id, qty_available, qty_reserved, total_grams_on_hand, last_updated_at, products(item_name, product_line, reorder_level, product_status)')
+    .select('sku, branch_id, qty_available, qty_reserved, total_grams_on_hand, last_updated_at, ' +
+      'products(item_name, product_line, reorder_level, product_status, supplier_price, system_selling_price, gross_weight_g, supplier_gold_rate_per_g, current_gold_rate_per_g)')
     .order('sku');
   if (branchId) query = query.eq('branch_id', branchId);
   const { data, error } = await query;
