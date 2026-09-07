@@ -876,10 +876,11 @@ export async function deleteLayawayPayment(paymentId) {
   if (error) throw new Error(error.message);
 }
 
-// ---- Order & Item Status (Record Movement) -- a fulfillment board modeled on
-// Pancake's own Orders view, but item-focused rather than customer-focused. Not
-// synced from Pancake -- staff set the status here by hand. Company-wide, whole
-// staff can add/edit, Admin/Manager can delete (75_order_item_status_tracker.sql). ----
+// ---- Order & Item Status (Record Movement) -- a monitoring board mirroring
+// Pancake's own Orders view, item-focused rather than customer-focused. No manual
+// add -- rows are meant to come from a future Pancake sync; status can be corrected
+// by hand meanwhile. Company-wide read/status-update, Admin/Manager can delete
+// (75_order_item_status_tracker.sql). ----
 
 export async function listOrderItemStatuses() {
   const { data, error } = await supabase.from('order_item_status')
@@ -887,16 +888,6 @@ export async function listOrderItemStatuses() {
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return attachEmployeeNames(data, { creator: 'created_by' });
-}
-
-export async function createOrderItemStatus({ orderReference, sku, itemName, qty, branchId, customerName, status, notes }) {
-  const empId = await currentEmployeeId();
-  const { error } = await supabase.from('order_item_status').insert({
-    order_reference: orderReference || null, sku: sku || null, item_name: itemName,
-    qty: qty || 1, branch_id: branchId || null, customer_name: customerName || null,
-    status: status || 'New', notes: notes || null, created_by: empId,
-  });
-  if (error) throw new Error(error.message);
 }
 
 /** Just the status, for the quick inline dropdown on each row -- doesn't require
