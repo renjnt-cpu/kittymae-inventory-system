@@ -156,6 +156,7 @@ if (employee) {
             '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;">' +
               '<div style="font-size:13px;font-weight:bold;">' + esc(b.name) + '</div>' +
               '<div class="muted" style="font-size:12px;">' + (b.due_date || 'no date set') + ' · ' + money(b.amount) + '</div>' +
+              (b.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(b.creator.full_name) + '</div>' : '') +
               (b.attachment_path ? '<button class="btn small secondary" style="margin-top:4px;" data-id="' + b.id + '" data-act="view-recurring-photo">View Photo</button>' : '') +
             '</div>'
           ).join('') +
