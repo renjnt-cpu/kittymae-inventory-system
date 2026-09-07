@@ -13,7 +13,12 @@
     <h3>Record a Movement</h3>
     <p class="muted">Covers receiving, sales, non-sale stock out, damage, missing items, and corrections. Branch transfers and layaway holds are handled on their own pages (see Transfers / Layaway).</p>
     <form id="mv-form">
-      <div class="field"><label>SKU *</label><input type="text" name="sku" required></div>
+      <div class="field" style="position:relative;">
+        <label>SKU *</label>
+        <input type="text" name="sku" id="mv-sku" required autocomplete="off" placeholder="Type a SKU or item name…">
+        <div id="mv-sku-name" class="muted" style="font-size:11px;"></div>
+        <div id="mv-sku-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>
+      </div>
       <div class="field" id="branch-field"></div>
       <div class="field"><label>Movement Type *</label>
         <select name="transactionType" required id="mv-type">
@@ -46,7 +51,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { getBranches, recordMovement, recordSale, listSales } from './js/api.js';
+import { getBranches, recordMovement, recordSale, listSales, searchProducts } from './js/api.js';
 
 const REMOVES = new Set(['Stock Out', 'Damage', 'Missing', 'Supplier Return', 'Sale']);
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
@@ -81,6 +86,59 @@ if (employee) {
   }
   document.getElementById('mv-type').addEventListener('change', syncFieldsToType);
   syncFieldsToType();
+
+  // SKU autocomplete, backed by the products catalog synced in from SKU 26 (see
+  // sku26_sync.gs) -- lets staff find the right SKU by typing either the code or the
+  // item name instead of having to already know the exact code. Free text is still
+  // allowed (not every SKU is necessarily synced yet), this just helps when it is.
+  const skuInput = document.getElementById('mv-sku');
+  const skuSuggest = document.getElementById('mv-sku-suggest');
+  const skuNamePreview = document.getElementById('mv-sku-name');
+  let skuSearchToken = 0;
+  let skuSearchTimer = null;
+
+  function hideSkuSuggestions() { skuSuggest.style.display = 'none'; skuSuggest.innerHTML = ''; }
+
+  function pickSku(p) {
+    skuInput.value = p.sku;
+    skuNamePreview.textContent = p.item_name + (p.category ? ' · ' + p.category : (p.product_line ? ' · ' + p.product_line : ''));
+    hideSkuSuggestions();
+  }
+
+  function renderSkuSuggestions(matches) {
+    if (!matches.length) { hideSkuSuggestions(); return; }
+    skuSuggest.innerHTML = matches.map((p) =>
+      '<div data-sku="' + esc(p.sku) + '" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;">' +
+        '<strong>' + esc(p.sku) + '</strong> — ' + esc(p.item_name) +
+        (p.category || p.product_line ? '<div class="muted" style="font-size:11px;">' + esc(p.category || p.product_line) + '</div>' : '') +
+      '</div>'
+    ).join('');
+    skuSuggest.style.display = '';
+    skuSuggest.querySelectorAll('[data-sku]').forEach((row, i) => {
+      row.addEventListener('mousedown', (ev) => { ev.preventDefault(); pickSku(matches[i]); });
+    });
+  }
+
+  skuInput.addEventListener('input', () => {
+    skuNamePreview.textContent = '';
+    const q = skuInput.value.trim();
+    clearTimeout(skuSearchTimer);
+    if (!q) { hideSkuSuggestions(); return; }
+    skuSearchTimer = setTimeout(async () => {
+      const token = ++skuSearchToken;
+      try {
+        const results = await searchProducts(q);
+        if (token !== skuSearchToken) return; // a newer keystroke's search already landed
+        renderSkuSuggestions(results);
+        const exact = results.find((p) => p.sku.toLowerCase() === q.toLowerCase());
+        if (exact) skuNamePreview.textContent = exact.item_name + (exact.category || exact.product_line ? ' · ' + (exact.category || exact.product_line) : '');
+      } catch (err) {
+        // A failed lookup shouldn't block typing a SKU by hand -- just no suggestions this keystroke.
+      }
+    }, 200);
+  });
+  skuInput.addEventListener('blur', () => setTimeout(hideSkuSuggestions, 150));
+  skuInput.addEventListener('focus', () => { if (skuSuggest.innerHTML) skuSuggest.style.display = ''; });
 
   async function loadSalesTiles() {
     const box = document.getElementById('mv-tiles');
@@ -135,6 +193,8 @@ if (employee) {
       toast('mv-msg', 'Movement recorded.', false);
       f.reset();
       syncFieldsToType();
+      skuNamePreview.textContent = '';
+      hideSkuSuggestions();
       await loadSalesTiles();
     } catch (err) {
       toast('mv-msg', String(err.message || err), true);
