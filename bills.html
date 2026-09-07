@@ -188,7 +188,14 @@ if (employee) {
       const current = sel.value;
       const months = new Set(allBills.filter((b) => b.due_date).map((b) => b.due_date.slice(0, 7)));
       const now = new Date().toISOString().slice(0, 7);
-      months.add(now);
+      // Always offer the current month plus the next couple, even before any bill is due
+      // then -- lets Ren jump ahead and start adding/checking a future month's bills
+      // instead of the option only appearing once a bill with that due date exists.
+      const [nowY, nowM] = now.split('-').map(Number);
+      for (let i = 0; i <= 2; i++) {
+        const d = new Date(nowY, nowM - 1 + i, 1);
+        months.add(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+      }
       const sorted = Array.from(months).sort();
       sel.innerHTML = '<option value="all">All months</option>' +
         sorted.map((m) => '<option value="' + m + '"' + (m === now ? ' selected' : '') + monthOptionStyle(m) + '>' + monthLabel(m) + '</option>').join('');
