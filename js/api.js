@@ -14,6 +14,31 @@ async function currentEmployeeId() {
   return emp ? emp.id : null;
 }
 
+/** Attaches {full_name} objects for "who did this" columns (creator/approver/payer/
+ * custodian, etc.) via get_employee_names() -- a SECURITY DEFINER RPC that only ever
+ * returns id+full_name, regardless of the caller's role. Direct embeds like
+ * `employees!bills_created_by_fkey(full_name)` only resolve for Admin/Manager/self,
+ * since that's all the employees table's own RLS allows (on purpose -- it also guards
+ * email/contact_number/bills_access/etc.) -- this is how everyone else still gets to
+ * see a plain name on a record they can already see. fieldMap maps the alias each row
+ * should get (e.g. "creator") to the id column that names it (e.g. "created_by"). */
+async function attachEmployeeNames(rows, fieldMap) {
+  const idCols = Object.values(fieldMap);
+  const ids = new Set();
+  rows.forEach((r) => idCols.forEach((col) => { if (r[col]) ids.add(r[col]); }));
+  if (!ids.size) return rows;
+  const { data, error } = await supabase.rpc('get_employee_names', { ids: Array.from(ids) });
+  if (error) throw new Error(error.message);
+  const byId = {};
+  (data || []).forEach((e) => { byId[e.id] = e.full_name; });
+  rows.forEach((r) => {
+    Object.entries(fieldMap).forEach(([alias, col]) => {
+      r[alias] = r[col] && byId[r[col]] ? { full_name: byId[r[col]] } : null;
+    });
+  });
+  return rows;
+}
+
 /** Live cross-user updates — the business is fast-paced (multiple people approving/
  * editing the same records), so every page subscribes to Postgres changes on the
  * table(s) it displays and just reloads when anything changes, instead of everyone
@@ -197,10 +222,10 @@ export async function cancelTransfer(transferId, reason) {
 
 export async function listBills() {
   const { data, error } = await supabase.from('bills')
-    .select('*, creator:employees!bills_created_by_fkey(full_name), payer:employees!bills_paid_by_fkey(full_name)')
+    .select('*')
     .order('due_date', { ascending: true, nullsFirst: false });
   if (error) throw new Error(error.message);
-  return data;
+  return attachEmployeeNames(data, { creator: 'created_by', payer: 'paid_by' });
 }
 
 /** Returns the new bill's id — needed so a photo picked in the same Add Bill submit
@@ -288,12 +313,12 @@ export async function removeBillAttachment(billId, path) {
  * (and re-filtering it client-side) got slower as the table grew for no reason. */
 export async function listSubastaItems(branchId) {
   let query = supabase.from('subasta_items')
-    .select('*, creator:employees!subasta_items_created_by_fkey(full_name), branches(name), subasta_payments(*)')
+    .select('*, branches(name), subasta_payments(*)')
     .order('auction_eligible_date', { ascending: true, nullsFirst: false });
   if (branchId != null) query = query.eq('branch_id', branchId);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return data;
+  return attachEmployeeNames(data, { creator: 'created_by' });
 }
 
 /** One payment method label for quick display/search -- the individual rows in
@@ -354,12 +379,12 @@ export async function deleteSubastaItem(id) {
 /** branchId narrows the query server-side -- see listSubastaItems() for why. */
 export async function listScrapEntries(branchId) {
   let query = supabase.from('scrap_entries')
-    .select('*, creator:employees!scrap_entries_created_by_fkey(full_name), branches(name), scrap_payments(*)')
+    .select('*, branches(name), scrap_payments(*)')
     .order('entry_date', { ascending: false });
   if (branchId != null) query = query.eq('branch_id', branchId);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return data;
+  return attachEmployeeNames(data, { creator: 'created_by' });
 }
 
 export async function getScrapBalances() {
@@ -437,10 +462,10 @@ export async function getScrapAttachmentUrl(path) {
 
 export async function listTransactions() {
   const { data, error } = await supabase.from('transactions')
-    .select('*, creator:employees!transactions_created_by_fkey(full_name), branches(name), accounts(name, type)')
+    .select('*, branches(name), accounts(name, type)')
     .order('transaction_datetime', { ascending: false });
   if (error) throw new Error(error.message);
-  return data;
+  return attachEmployeeNames(data, { creator: 'created_by' });
 }
 
 /** Ren holds 5 separate GCash accounts, 2 BDO, 4 BPI, and 1 Maya -- each transaction
@@ -515,10 +540,10 @@ export async function deleteTransaction(id) {
 
 export async function listRefunds() {
   const { data, error } = await supabase.from('refunds')
-    .select('*, creator:employees!refunds_created_by_fkey(full_name), approver:employees!refunds_approved_by_fkey(full_name), refund_attachments(id, attachment_path, amount, reference_number, uploaded_at)')
+    .select('*, refund_attachments(id, attachment_path, amount, reference_number, uploaded_at)')
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
-  return data;
+  return attachEmployeeNames(data, { creator: 'created_by', approver: 'approved_by' });
 }
 
 /** Returns the new refund's id so an optional request-time photo (proof of purchase,
@@ -612,20 +637,23 @@ export async function getRefundAttachmentUrl(path) {
 // accountable for it. Company-wide, Admin + Manager only (like Payments/Branch Capital). ----
 
 /** Plain roster for the Custodian dropdown — unlike getEmployeesForChecklist(), this
- * includes Admin, since Ren can just as well be the custodian of an item. */
+ * includes Admin, since Ren can just as well be the custodian of an item. Goes through
+ * get_employee_names() (see attachEmployeeNames() above) rather than a direct table
+ * read, since the employees table's own RLS only lets Admin/Manager/self read other
+ * rows -- everyone with Asset & Supplies Custodian access still needs to see the full
+ * roster to pick a custodian. */
 export async function listActiveEmployees() {
-  const { data, error } = await supabase.from('employees')
-    .select('id, full_name').eq('status', 'Active').order('full_name');
+  const { data, error } = await supabase.rpc('get_employee_names');
   if (error) throw new Error(error.message);
-  return data;
+  return (data || []).slice().sort((a, b) => a.full_name.localeCompare(b.full_name));
 }
 
 export async function listAssetCustodianItems() {
   const { data, error } = await supabase.from('asset_custodian_items')
-    .select('*, custodian:employees!asset_custodian_items_custodian_id_fkey(full_name), creator:employees!asset_custodian_items_created_by_fkey(full_name), branches(name)')
+    .select('*, branches(name)')
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
-  return data;
+  return attachEmployeeNames(data, { custodian: 'custodian_id', creator: 'created_by' });
 }
 
 export async function createAssetCustodianItem({ itemName, itemType, branchId, custodianId, quantity, unitValue, condition, dateAssigned, notes }) {
@@ -659,10 +687,10 @@ export async function deleteAssetCustodianItem(id) {
 
 export async function listLbcShipments() {
   const { data, error } = await supabase.from('lbc_shipments')
-    .select('*, creator:employees!lbc_shipments_created_by_fkey(full_name), branches(name)')
+    .select('*, branches(name)')
     .order('ship_date', { ascending: false });
   if (error) throw new Error(error.message);
-  return data;
+  return attachEmployeeNames(data, { creator: 'created_by' });
 }
 
 export async function createLbcShipment({ branchId, orderId, customerName, trackingNumber, shipDate, codAmount, notes }) {
@@ -707,10 +735,10 @@ export async function deleteLbcShipment(id) {
 
 export async function listBranchCapitalEntries() {
   const { data, error } = await supabase.from('branch_capital_entries')
-    .select('*, creator:employees!branch_capital_entries_created_by_fkey(full_name), branches(name)')
+    .select('*, branches(name)')
     .order('entry_date', { ascending: false });
   if (error) throw new Error(error.message);
-  return data;
+  return attachEmployeeNames(data, { creator: 'created_by' });
 }
 
 /** fromDate/toDate optional (both omitted = all-time, same numbers the old fixed
@@ -806,12 +834,12 @@ export async function setAccessChecklistItem(employeeId, itemKey, checked, level
 
 export async function listLayaways(branchId) {
   let query = supabase.from('layaway_holds')
-    .select('*, branches(name), creator:employees!layaway_holds_created_by_fkey(full_name), layaway_payments(*)')
+    .select('*, branches(name), layaway_payments(*)')
     .order('hold_date', { ascending: false });
   if (branchId != null) query = query.eq('branch_id', branchId);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return data;
+  return attachEmployeeNames(data, { creator: 'created_by' });
 }
 
 export async function createLayawayHold({ sku, branchId, qty, customerName, contactNumber, unitPrice, notes }) {
