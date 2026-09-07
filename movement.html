@@ -66,13 +66,24 @@ import {
 
 const REMOVES = new Set(['Stock Out', 'Damage', 'Missing', 'Supplier Return', 'Sale']);
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
-// Mirrors Pancake's own Orders stages -- shown in this order everywhere (tabs, each
-// row's status dropdown) so "what comes next" always reads left-to-right / top-to-bottom.
-const ORDER_STATUSES = ['New', 'Pending Confirmation', 'Awaiting Stock', 'Ordered', 'Confirmed', 'Awaiting Print', 'Printed', 'Packing', 'Pending Shipment', 'Shipped', 'Cancelled'];
-const ORDER_STATUS_BADGE = {
-  New: 'pending', 'Pending Confirmation': 'pending', 'Awaiting Stock': 'low', Ordered: 'transit', Confirmed: 'transit',
-  'Awaiting Print': 'pending', Printed: 'transit', Packing: 'transit', 'Pending Shipment': 'pending', Shipped: 'ok', Cancelled: 'low',
-};
+
+// Pancake's real status_name values (confirmed against live webhook payloads: "new",
+// "wait_submit", "submitted", "wait_print", "printed", "packing", and others not yet
+// seen) don't match any fixed list we could invent -- so the tabs and dropdown are
+// built from whatever distinct statuses actually show up in the data, not a hardcoded
+// enum that would silently miss a status Pancake adds later.
+function prettyStatus(raw) {
+  return String(raw || '').split('_').map((w) => w ? w[0].toUpperCase() + w.slice(1) : w).join(' ') || 'Unknown';
+}
+// No fixed color map either, for the same reason -- a keyword heuristic over the raw
+// value covers whatever Pancake sends without needing to enumerate every status.
+function statusBadgeClass(raw) {
+  const s = String(raw || '').toLowerCase();
+  if (s.includes('cancel') || s.includes('return') || s.includes('fail')) return 'low';
+  if (s.includes('ship') || s.includes('deliver') || s.includes('complet') || s.includes('done')) return 'ok';
+  if (s.includes('wait') || s.includes('pending') || s.includes('new') || s.includes('submit')) return 'pending';
+  return 'transit';
+}
 // Mirrors assert_can_act_on_branch() in 67_layaway.sql / the inline check in
 // record_sale() (66_sales_recording.sql) -- so the branch field locks to "own branch
 // only" for the exact same set of people the backend would otherwise reject.
@@ -240,13 +251,17 @@ if (employee) {
   subscribeToChanges('order_item_status', loadOrderItems);
 
   function renderOrderItems() {
+    // Whatever statuses actually exist in the data right now -- see the comment by
+    // prettyStatus() above for why this isn't a fixed list.
+    const distinctStatuses = [...new Set(orderItems.map((r) => r.status))].sort();
+
     const tabs = document.getElementById('ois-tabs');
     const counts = { all: orderItems.length };
-    ORDER_STATUSES.forEach((s) => { counts[s] = orderItems.filter((r) => r.status === s).length; });
+    distinctStatuses.forEach((s) => { counts[s] = orderItems.filter((r) => r.status === s).length; });
     const tabBtn = (key, label) =>
       '<button type="button" class="btn small' + (oisStatusFilter === key ? '' : ' secondary') + '" data-ois-tab="' + esc(key) + '">' +
         esc(label) + ' <span class="muted" style="font-weight:normal;">' + counts[key] + '</span></button>';
-    tabs.innerHTML = tabBtn('all', 'All') + ORDER_STATUSES.map((s) => tabBtn(s, s)).join('');
+    tabs.innerHTML = tabBtn('all', 'All') + distinctStatuses.map((s) => tabBtn(s, prettyStatus(s))).join('');
     tabs.querySelectorAll('[data-ois-tab]').forEach((btn) => btn.addEventListener('click', () => {
       oisStatusFilter = btn.dataset.oisTab;
       renderOrderItems();
@@ -271,7 +286,7 @@ if (employee) {
       const arrow = active ? (oisSortDir === 'desc' ? ' ▼' : ' ▲') : '';
       return '<th><button type="button" class="btn small' + (active ? '' : ' secondary') + '" data-ois-sort="' + key + '" style="padding:2px 8px;">' + label + arrow + '</button></th>';
     };
-    const statusOptionsFor = (current) => ORDER_STATUSES.map((s) => '<option' + (s === current ? ' selected' : '') + '>' + s + '</option>').join('');
+    const statusOptionsFor = (current) => distinctStatuses.map((s) => '<option value="' + esc(s) + '"' + (s === current ? ' selected' : '') + '>' + esc(prettyStatus(s)) + '</option>').join('');
     list.innerHTML = '<div class="table-scroll"><table><thead><tr>' +
         sortTh('item_name', 'Item') + sortTh('qty', 'Qty') + sortTh('branch', 'Branch') + sortTh('status', 'Status') + sortTh('order_reference', 'Order / Customer') + '<th>Notes / By</th><th></th>' +
       '</tr></thead><tbody>' +
@@ -281,7 +296,7 @@ if (employee) {
           '<td data-label="Qty">' + r.qty + '</td>' +
           '<td data-label="Branch">' + esc(r.branches?.name || '—') + '</td>' +
           '<td data-label="Status">' +
-            '<select data-status-for="' + r.id + '" class="badge ' + (ORDER_STATUS_BADGE[r.status] || 'pending') + '" style="border:none;font:inherit;">' + statusOptionsFor(r.status) + '</select>' +
+            '<select data-status-for="' + r.id + '" class="badge ' + statusBadgeClass(r.status) + '" style="border:none;font:inherit;">' + statusOptionsFor(r.status) + '</select>' +
           '</td>' +
           '<td data-label="Order / Customer" style="font-size:11px;">' + esc(r.order_reference || '—') + (r.customer_name ? '<div class="muted">' + esc(r.customer_name) + '</div>' : '') + '</td>' +
           '<td data-label="Notes / By" style="font-size:11px;">' + esc(r.notes || '') +
