@@ -224,29 +224,31 @@ if (employee) {
       });
       const dirMul = scrapSortDir === 'desc' ? -1 : 1;
       const ranked = Object.entries(byEmp).map(([name, v]) => ({ name, ...v }))
-        .sort((a, b) => (a[scrapSort] - b[scrapSort]) * dirMul);
+        .sort((a, b) => {
+          const av = a[scrapSort], bv = b[scrapSort];
+          return (typeof av === 'string' ? av.localeCompare(bv) : av - bv) * dirMul;
+        });
       const grandTotal = rows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
       // Rank 1 only reads as "the busiest" (bold, gold row, trophy) when sorted
-      // highest-first -- sorted the other way, rank 1 is the lowest, which isn't a
-      // trophy moment.
-      const topIsHighlighted = scrapSortDir === 'desc';
+      // highest-first by a performance metric -- sorted the other way, or sorted
+      // alphabetically by name, rank 1 isn't a trophy moment.
+      const topIsHighlighted = scrapSortDir === 'desc' && scrapSort !== 'name';
 
-      // Sort controls live in their own toolbar, not inside <th> -- a <th> sitting
-      // inside .table-scroll's mobile card-view rules (which only reshape <thead>/
-      // <td>, not a bare header <tr> of <th>s) rendered inconsistently on narrow
-      // screens and could hide the arrow entirely. A plain button row above the
-      // table works identically at every width.
-      const sortBtn = (key, label) => {
+      // Sort control sits right next to each column's own name, inside its <th> --
+      // properly wrapped in <thead> this time (unlike the first version of this
+      // table) so .table-scroll's mobile card-view CSS hides the whole header
+      // predictably on narrow screens, same as every other table on the site,
+      // instead of rendering it inconsistently.
+      const sortTh = (key, label) => {
         const active = scrapSort === key;
         const arrow = active ? (scrapSortDir === 'desc' ? ' ▼' : ' ▲') : '';
-        return '<button type="button" class="btn small' + (active ? '' : ' secondary') + '" data-sort="' + key + '">Sort: ' + label + arrow + '</button>';
+        return '<th><button type="button" class="btn small' + (active ? '' : ' secondary') + '" data-sort="' + key + '" style="padding:2px 8px;">' + label + arrow + '</button></th>';
       };
 
       box.innerHTML =
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">' + sortBtn('count', 'Entries Encoded') + sortBtn('total', 'Total') + '</div>' +
         (!ranked.length
         ? '<p class="muted">No scrap entries for this range.</p>'
-        : '<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Employee</th><th>Entries Encoded</th><th>Total</th></tr></thead><tbody>' +
+        : '<div class="table-scroll"><table><thead><tr><th>Rank</th>' + sortTh('name', 'Employee') + sortTh('count', 'Entries Encoded') + sortTh('total', 'Total') + '</tr></thead><tbody>' +
             ranked.map((r, i) => '<tr' + (i === 0 && topIsHighlighted ? ' style="font-weight:bold;background:#fdf6e3;"' : '') + '>' +
               '<td data-label="Rank">' + (i + 1) + (i === 0 && topIsHighlighted ? ' 🏆' : '') + '</td>' +
               '<td data-label="Employee">' + esc(r.name) + '</td>' +
