@@ -47,14 +47,43 @@
     <p class="muted" style="margin-top:8px;">Sale / Customer Return add nothing extra to reporting beyond the ledger; Stock In / Customer Return add to inventory; Sale / Stock Out / Damage / Missing / Supplier Return remove from it. Adjustment/Correction can go either way and require Admin or Manager.</p>
   </div>
   <div class="tiles" id="mv-tiles"></div>
+
+  <div class="card">
+    <h3>Order &amp; Item Status</h3>
+    <p class="muted" style="margin-top:-4px;">Tracks an ordered item through fulfillment — modeled on Pancake's own Orders stages, but focused on the item being pulled/shipped rather than the customer conversation (Pancake already handles that). Set by hand; not synced live from Pancake.</p>
+    <form id="ois-form" style="flex-direction:column;align-items:stretch;">
+      <div class="field"><label>SKU</label><input type="text" name="sku"></div>
+      <div class="field"><label>Item Name *</label><input type="text" name="itemName" required></div>
+      <div class="field"><label>Qty</label><input type="number" name="qty" min="1" value="1"></div>
+      <div class="field" id="ois-branch-field"></div>
+      <div class="field"><label>Status</label><select name="status" id="ois-status-select"></select></div>
+      <div class="field"><label>Order Reference</label><input type="text" name="orderReference" placeholder="Pancake order ID"></div>
+      <div class="field"><label>Customer Name</label><input type="text" name="customerName"></div>
+      <div class="field" style="min-width:220px;"><label>Notes</label><input type="text" name="notes"></div>
+      <button class="btn" type="submit">Add</button>
+    </form>
+    <div id="ois-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:14px;"></div>
+    <div id="ois-list" style="margin-top:10px;"><div class="muted">Loading…</div></div>
+  </div>
 </main>
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { getBranches, recordMovement, recordSale, listSales, searchProducts } from './js/api.js';
+import {
+  getBranches, recordMovement, recordSale, listSales, searchProducts,
+  listOrderItemStatuses, createOrderItemStatus, setOrderItemStatus, deleteOrderItemStatus,
+  subscribeToChanges,
+} from './js/api.js';
 
 const REMOVES = new Set(['Stock Out', 'Damage', 'Missing', 'Supplier Return', 'Sale']);
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+// Mirrors Pancake's own Orders stages -- shown in this order everywhere (tabs, the
+// Add form's dropdown) so "what comes next" always reads left-to-right / top-to-bottom.
+const ORDER_STATUSES = ['New', 'Pending Confirmation', 'Awaiting Stock', 'Ordered', 'Confirmed', 'Awaiting Print', 'Printed', 'Packing', 'Pending Shipment', 'Shipped', 'Cancelled'];
+const ORDER_STATUS_BADGE = {
+  New: 'pending', 'Pending Confirmation': 'pending', 'Awaiting Stock': 'low', Ordered: 'transit', Confirmed: 'transit',
+  'Awaiting Print': 'pending', Printed: 'transit', Packing: 'transit', 'Pending Shipment': 'pending', Shipped: 'ok', Cancelled: 'low',
+};
 // Mirrors assert_can_act_on_branch() in 67_layaway.sql / the inline check in
 // record_sale() (66_sales_recording.sql) -- so the branch field locks to "own branch
 // only" for the exact same set of people the backend would otherwise reject.
@@ -74,6 +103,13 @@ if (employee) {
       branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('') + '</select>';
   }
   const branchName = (id) => (branches.find((b) => b.id === id) || {}).name || '';
+
+  // Order & Item Status's own Branch field -- separate from Record Movement's above,
+  // since which branch is fulfilling an order isn't necessarily the same scoping rule
+  // (an unassigned/company-wide order can exist before a branch is even decided).
+  document.getElementById('ois-branch-field').innerHTML = '<label>Branch</label><select name="branchId"><option value="">—</option>' +
+    branches.map((b) => '<option value="' + b.id + '"' + (isScoped && b.id === employee.branch_id ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('') + '</select>';
+  document.getElementById('ois-status-select').innerHTML = ORDER_STATUSES.map((s) => '<option>' + s + '</option>').join('');
 
   const saleFields = document.getElementById('mv-sale-fields');
   const reasonField = document.getElementById('mv-reason-field');
@@ -196,6 +232,106 @@ if (employee) {
       skuNamePreview.textContent = '';
       hideSkuSuggestions();
       await loadSalesTiles();
+    } catch (err) {
+      toast('mv-msg', String(err.message || err), true);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // Order & Item Status board.
+  let orderItems = [];
+  let oisStatusFilter = 'all';
+
+  async function loadOrderItems() {
+    try {
+      orderItems = await listOrderItemStatuses();
+      renderOrderItems();
+    } catch (err) {
+      document.getElementById('ois-list').innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+    }
+  }
+  await loadOrderItems();
+  subscribeToChanges('order_item_status', loadOrderItems);
+
+  function renderOrderItems() {
+    const tabs = document.getElementById('ois-tabs');
+    const counts = { all: orderItems.length };
+    ORDER_STATUSES.forEach((s) => { counts[s] = orderItems.filter((r) => r.status === s).length; });
+    const tabBtn = (key, label) =>
+      '<button type="button" class="btn small' + (oisStatusFilter === key ? '' : ' secondary') + '" data-ois-tab="' + esc(key) + '">' +
+        esc(label) + ' <span class="muted" style="font-weight:normal;">' + counts[key] + '</span></button>';
+    tabs.innerHTML = tabBtn('all', 'All') + ORDER_STATUSES.map((s) => tabBtn(s, s)).join('');
+    tabs.querySelectorAll('[data-ois-tab]').forEach((btn) => btn.addEventListener('click', () => {
+      oisStatusFilter = btn.dataset.oisTab;
+      renderOrderItems();
+    }));
+
+    const rows = oisStatusFilter === 'all' ? orderItems : orderItems.filter((r) => r.status === oisStatusFilter);
+    const list = document.getElementById('ois-list');
+    if (!rows.length) { list.innerHTML = '<p class="muted">No items for this filter.</p>'; return; }
+
+    const statusOptionsFor = (current) => ORDER_STATUSES.map((s) => '<option' + (s === current ? ' selected' : '') + '>' + s + '</option>').join('');
+    list.innerHTML = '<div class="table-scroll"><table><thead><tr>' +
+        '<th>Item</th><th>Qty</th><th>Branch</th><th>Status</th><th>Order / Customer</th><th>Notes / By</th><th></th>' +
+      '</tr></thead><tbody>' +
+      rows.map((r) =>
+        '<tr>' +
+          '<td data-label="Item"><strong>' + esc(r.item_name) + '</strong>' + (r.sku ? '<div class="muted" style="font-size:11px;">' + esc(r.sku) + '</div>' : '') + '</td>' +
+          '<td data-label="Qty">' + r.qty + '</td>' +
+          '<td data-label="Branch">' + esc(r.branches?.name || '—') + '</td>' +
+          '<td data-label="Status">' +
+            '<select data-status-for="' + r.id + '" class="badge ' + (ORDER_STATUS_BADGE[r.status] || 'pending') + '" style="border:none;font:inherit;">' + statusOptionsFor(r.status) + '</select>' +
+          '</td>' +
+          '<td data-label="Order / Customer" style="font-size:11px;">' + esc(r.order_reference || '—') + (r.customer_name ? '<div class="muted">' + esc(r.customer_name) + '</div>' : '') + '</td>' +
+          '<td data-label="Notes / By" style="font-size:11px;">' + esc(r.notes || '') +
+            (r.creator ? '<div class="muted" style="font-size:10px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
+          '</td>' +
+          '<td><button class="btn small secondary" type="button" data-delete-id="' + r.id + '">Delete</button></td>' +
+        '</tr>'
+      ).join('') +
+      '</tbody></table></div>';
+
+    list.querySelectorAll('[data-status-for]').forEach((sel) => sel.addEventListener('change', async () => {
+      const id = sel.dataset.statusFor;
+      sel.disabled = true;
+      try {
+        await setOrderItemStatus(id, sel.value);
+        toast('mv-msg', 'Status updated.', false);
+        await loadOrderItems();
+      } catch (err) {
+        toast('mv-msg', String(err.message || err), true);
+        sel.disabled = false;
+      }
+    }));
+    list.querySelectorAll('[data-delete-id]').forEach((btn) => btn.addEventListener('click', async () => {
+      if (!confirm('Delete this item?')) return;
+      try {
+        await deleteOrderItemStatus(btn.dataset.deleteId);
+        toast('mv-msg', 'Deleted.', false);
+        await loadOrderItems();
+      } catch (err) {
+        toast('mv-msg', String(err.message || err), true);
+      }
+    }));
+  }
+
+  document.getElementById('ois-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    const btn = f.querySelector('button[type=submit]');
+    btn.disabled = true;
+    try {
+      await createOrderItemStatus({
+        sku: f.sku.value.trim(), itemName: f.itemName.value.trim(), qty: Number(f.qty.value) || 1,
+        branchId: f.branchId.value ? Number(f.branchId.value) : null,
+        status: f.status.value, orderReference: f.orderReference.value.trim(),
+        customerName: f.customerName.value.trim(), notes: f.notes.value.trim(),
+      });
+      toast('mv-msg', 'Added.', false);
+      f.reset();
+      document.getElementById('ois-status-select').value = 'New';
+      await loadOrderItems();
     } catch (err) {
       toast('mv-msg', String(err.message || err), true);
     } finally {

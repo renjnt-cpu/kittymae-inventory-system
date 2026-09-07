@@ -875,3 +875,39 @@ export async function deleteLayawayPayment(paymentId) {
   const { error } = await supabase.from('layaway_payments').delete().eq('id', paymentId);
   if (error) throw new Error(error.message);
 }
+
+// ---- Order & Item Status (Record Movement) -- a fulfillment board modeled on
+// Pancake's own Orders view, but item-focused rather than customer-focused. Not
+// synced from Pancake -- staff set the status here by hand. Company-wide, whole
+// staff can add/edit, Admin/Manager can delete (75_order_item_status_tracker.sql). ----
+
+export async function listOrderItemStatuses() {
+  const { data, error } = await supabase.from('order_item_status')
+    .select('*, branches(name)')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return attachEmployeeNames(data, { creator: 'created_by' });
+}
+
+export async function createOrderItemStatus({ orderReference, sku, itemName, qty, branchId, customerName, status, notes }) {
+  const empId = await currentEmployeeId();
+  const { error } = await supabase.from('order_item_status').insert({
+    order_reference: orderReference || null, sku: sku || null, item_name: itemName,
+    qty: qty || 1, branch_id: branchId || null, customer_name: customerName || null,
+    status: status || 'New', notes: notes || null, created_by: empId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Just the status, for the quick inline dropdown on each row -- doesn't require
+ * opening the full edit form for the common case of moving an item to its next stage. */
+export async function setOrderItemStatus(id, status) {
+  const { error } = await supabase.from('order_item_status')
+    .update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteOrderItemStatus(id) {
+  const { error } = await supabase.from('order_item_status').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
