@@ -17,7 +17,7 @@ import { initShell, toast, esc } from './js/shell.js';
 import {
   getBranches,
   listSubastaItems, createSubastaItem, updateSubastaItem, deleteSubastaItem,
-  listScrapEntries, getScrapBalances, getScrapCashBalances, createScrapEntry, deleteScrapEntry, uploadScrapAttachment, getScrapAttachmentUrl,
+  listScrapEntries, getScrapCashBalances, createScrapEntry, deleteScrapEntry, uploadScrapAttachment, getScrapAttachmentUrl,
   subscribeToChanges,
 } from './js/api.js';
 
@@ -245,7 +245,7 @@ if (employee) {
       }
     });
 
-    let allSubasta = [], allScrap = [], branchBalances = [], scrapCashBalances = [];
+    let allSubasta = [], allScrap = [], scrapCashBalances = [];
     await Promise.all([loadSubasta(), loadScrap()]);
     subscribeToChanges('subasta_items', loadSubasta);
     subscribeToChanges(['scrap_entries', 'branch_capital_entries'], loadScrap);
@@ -447,9 +447,8 @@ if (employee) {
       const list = document.getElementById('scrap-list');
       list.innerHTML = '<div class="muted">Loading…</div>';
       try {
-        const [entries, balances, cashBalances] = await Promise.all([listScrapEntries(selectedBranch), getScrapBalances(), getScrapCashBalances()]);
+        const [entries, cashBalances] = await Promise.all([listScrapEntries(selectedBranch), getScrapCashBalances()]);
         allScrap = entries;
-        branchBalances = balances.filter((b) => b.branch_id === selectedBranch);
         scrapCashBalances = cashBalances;
         renderScrap();
       } catch (err) {
@@ -463,6 +462,25 @@ if (employee) {
       box.innerHTML = '<div class="table-scroll"><table><tr><th>Metal</th><th>Karat/Purity</th><th>Balance</th></tr>' +
         rows.map((b) => '<tr><td data-label="Metal">' + esc(b.metal_type) + '</td><td data-label="Karat/Purity">' + esc(b.karat || '—') + '</td><td data-label="Balance">' + weight(b.balance_grams) + '</td></tr>').join('') +
         '</table></div>';
+    }
+
+    /** Net grams (In adds, Out subtracts) per metal+karat, from whichever rows are
+     * CURRENTLY filtered -- so Current Balance tracks the From/To range (and
+     * Search/Metal/Type) instead of always showing the all-time running total from
+     * getScrapBalances(), which ignored every filter above it. Clearing the date
+     * filters naturally shows the true all-time balance again, since nothing then
+     * narrows `rows`. */
+    function computeBalanceFromRows(rows) {
+      const byKey = {};
+      rows.forEach((r) => {
+        const key = r.metal_type + '|' + (r.karat || '');
+        const g = Number(r.weight_grams || 0);
+        byKey[key] = (byKey[key] || 0) + (r.entry_type === 'In' ? g : -g);
+      });
+      return Object.keys(byKey).sort().map((key) => {
+        const [metal_type, karat] = key.split('|');
+        return { metal_type, karat: karat || null, balance_grams: byKey[key] };
+      });
     }
 
     function renderScrap() {
@@ -487,7 +505,7 @@ if (employee) {
       if (fFrom) rows = rows.filter((r) => r.entry_date >= fFrom);
       if (fTo) rows = rows.filter((r) => r.entry_date <= fTo);
 
-      renderScrapBalance(fMetal === 'all' ? branchBalances : branchBalances.filter((b) => b.metal_type === fMetal));
+      renderScrapBalance(computeBalanceFromRows(rows));
 
       // Broken out by metal + karat, from the SAME filtered rows as the list below --
       // so the From/To range (and Search/Metal/Type) actually changes this number.
