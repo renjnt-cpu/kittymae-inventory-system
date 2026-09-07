@@ -197,8 +197,11 @@ if (employee) {
     let scrapEntries = [];
     let scrapFrom = '', scrapTo = '';
     // Which column ranks the table -- 'count' (Entries Encoded) or 'total' (Total
-    // amount). Clicking either header toggles ranking by that column instead.
+    // amount) -- and which direction. Clicking a header switches to ranking by that
+    // column (highest first); clicking the SAME header again flips low-to-high, so
+    // it's just as easy to find who's lowest as who's highest.
     let scrapSort = 'count';
+    let scrapSortDir = 'desc';
 
     async function loadScrapEntries() {
       try { scrapEntries = await listScrapEntries(); } catch (err) { scrapEntries = []; }
@@ -219,20 +222,26 @@ if (employee) {
         e.count += 1;
         e.total += Number(r.total_amount || 0);
       });
+      const dirMul = scrapSortDir === 'desc' ? -1 : 1;
       const ranked = Object.entries(byEmp).map(([name, v]) => ({ name, ...v }))
-        .sort((a, b) => b[scrapSort] - a[scrapSort]);
+        .sort((a, b) => (a[scrapSort] - b[scrapSort]) * dirMul);
       const grandTotal = rows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
+      // Rank 1 only reads as "the busiest" (bold, gold row, trophy) when sorted
+      // highest-first -- sorted the other way, rank 1 is the lowest, which isn't a
+      // trophy moment.
+      const topIsHighlighted = scrapSortDir === 'desc';
 
-      const sortHeader = (key, label) =>
-        '<th><button type="button" class="btn small secondary" data-sort="' + key + '" style="padding:2px 8px;">' +
-          label + (scrapSort === key ? ' ▼' : '') +
-        '</button></th>';
+      const sortHeader = (key, label) => {
+        const active = scrapSort === key;
+        const arrow = active ? (scrapSortDir === 'desc' ? ' ▼' : ' ▲') : '';
+        return '<th><button type="button" class="btn small secondary" data-sort="' + key + '" style="padding:2px 8px;">' + label + arrow + '</button></th>';
+      };
 
       box.innerHTML = !ranked.length
         ? '<p class="muted">No scrap entries for this range.</p>'
         : '<div class="table-scroll"><table><tr><th>Rank</th><th>Employee</th>' + sortHeader('count', 'Entries Encoded') + sortHeader('total', 'Total') + '</tr>' +
-            ranked.map((r, i) => '<tr' + (i === 0 ? ' style="font-weight:bold;background:#fdf6e3;"' : '') + '>' +
-              '<td data-label="Rank">' + (i + 1) + (i === 0 ? ' 🏆' : '') + '</td>' +
+            ranked.map((r, i) => '<tr' + (i === 0 && topIsHighlighted ? ' style="font-weight:bold;background:#fdf6e3;"' : '') + '>' +
+              '<td data-label="Rank">' + (i + 1) + (i === 0 && topIsHighlighted ? ' 🏆' : '') + '</td>' +
               '<td data-label="Employee">' + esc(r.name) + '</td>' +
               '<td data-label="Entries Encoded">' + r.count + '</td>' +
               '<td data-label="Total">' + money(r.total) + '</td>' +
@@ -241,7 +250,11 @@ if (employee) {
           '</table></div>';
 
       box.querySelectorAll('[data-sort]').forEach((btn) => btn.addEventListener('click', () => {
-        scrapSort = btn.dataset.sort;
+        const key = btn.dataset.sort;
+        // Same column clicked again -- flip direction; a different column -- switch
+        // to it, starting from highest-first.
+        if (scrapSort === key) { scrapSortDir = scrapSortDir === 'desc' ? 'asc' : 'desc'; }
+        else { scrapSort = key; scrapSortDir = 'desc'; }
         renderScrapLeaderboard();
       }));
     }
