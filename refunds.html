@@ -156,7 +156,7 @@ if (employee) {
         totalRequested += Number(r.refund_amount || 0);
         totalPaid += paidSoFar;
         return '<tr>' +
-          '<td>' + nameOrderLabel(r, dupKeys) + '</td>' +
+          '<td>' + orderIdLabel(r, dupKeys) + ' — ' + customerLabel(r, dupKeys) + '</td>' +
           '<td><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
           '<td>' + (r.date_requested || '—') + '<div class="muted" style="font-size:10px;">Purchased: ' + (r.purchase_date || '—') + '</div></td>' +
           '<td style="font-size:11px;">' + esc(r.item_description || '—') + (r.reason ? '<div class="muted">' + esc(r.reason) + '</div>' : '') + requestPhotoBtn(r) + '</td>' +
@@ -285,7 +285,7 @@ if (employee) {
         const photos = r.refund_attachments || [];
         total += Number(r.refund_amount || 0);
         return '<div class="completed-item">' +
-          '<div>' + nameOrderLabel(r, dupKeys) + requestPhotoBtn(r) + '</div>' +
+          '<div>' + orderIdLabel(r, dupKeys) + ' — ' + customerLabel(r, dupKeys) + requestPhotoBtn(r) + '</div>' +
           '<div class="muted" style="font-size:10px;">' + esc(r.item_description || '') + '</div>' +
           '<div style="margin-top:4px;"><b>' + money(r.refund_amount) + '</b> <span class="muted">— ' + esc(r.refund_method) + '</span></div>' +
           '<div style="font-size:11px;margin-top:2px;">' +
