@@ -159,7 +159,7 @@ if (employee) {
               (b.creator ? '<div class="muted" style="font-size:10px;margin-top:2px;">Added by ' + esc(b.creator.full_name) + '</div>' : '') +
               '<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;">' +
                 (b.attachment_path ? '<button class="btn small secondary" data-id="' + b.id + '" data-act="view-recurring-photo">View Photo</button>' : '') +
-                (b.due_date ? '<button class="btn small secondary" data-id="' + b.id + '" data-act="next-month">Next Month →</button>' : '') +
+                (b.due_date ? '<button class="btn small secondary" data-id="' + b.id + '" data-act="add-bill">Add Bill</button>' : '') +
               '</div>' +
             '</div>'
           ).join('') +
@@ -175,19 +175,22 @@ if (employee) {
         }
       }));
 
-      // One click to roll a recurring bill forward instead of opening Edit and retyping
-      // everything -- same day-of-month next month (clamped if that month is shorter,
-      // e.g. the 31st rolls to the 28th/29th/30th), reset to Unpaid for the new cycle.
-      box.querySelectorAll('[data-act="next-month"]').forEach((btn) => btn.addEventListener('click', async () => {
+      // One click to add NEXT month's instance of a recurring bill instead of retyping
+      // everything into the Add Bill form -- same name/category/account/amount/notes,
+      // due_date advanced one month (clamped if that month is shorter, e.g. the 31st
+      // rolls to the 28th/29th/30th), status reset to Unpaid. This creates a NEW row
+      // rather than editing the existing one, since the month filter is meant to show
+      // history -- moving the same row forward would erase this month's record.
+      box.querySelectorAll('[data-act="add-bill"]').forEach((btn) => btn.addEventListener('click', async () => {
         const b = recurring.find((r) => String(r.id) === btn.dataset.id);
         const nextDate = addOneMonth(b.due_date);
-        if (!confirm('Move "' + b.name + '" to ' + nextDate + ' and mark it Unpaid?')) return;
+        if (!confirm('Add "' + b.name + '" for ' + nextDate + ' (₱' + (b.amount ?? '—') + ', Unpaid)?')) return;
         try {
-          await updateBill(b.id, {
+          await createBill({
             name: b.name, category: b.category, accountName: b.account_name, accountNumber: b.account_number,
-            amount: b.amount, dueDate: nextDate, status: 'Unpaid', isRecurring: b.is_recurring, notes: b.notes,
+            amount: b.amount, dueDate: nextDate, status: 'Unpaid', isRecurring: true, notes: b.notes,
           });
-          toast('bill-msg', 'Moved to ' + nextDate + '.', false);
+          toast('bill-msg', 'Added for ' + nextDate + '.', false);
           await load();
         } catch (err) {
           toast('bill-msg', String(err.message || err), true);
