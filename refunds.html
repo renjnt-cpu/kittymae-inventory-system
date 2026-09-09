@@ -18,6 +18,7 @@ import { listRefunds, createRefund, uploadRefundRequestPhoto, setRefundStatus, d
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const STATUS_BADGE = { 'Pending Approval': 'pending', 'Approved': 'transit', 'Completed': 'ok' };
+function tile(num, label) { return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>'; }
 
 /** Same customer name + same Order ID appearing on more than one refund is almost
  * always either an accidental double-submission or someone trying to claim a refund
@@ -108,6 +109,7 @@ if (employee) {
         '</div>' +
         '<div class="layout-2col-main">' +
           '<h3>My Refund Requests</h3>' +
+          '<div class="tiles" id="mine-tiles"></div>' +
           '<div id="ref-list"><div class="muted">Loading…</div></div>' +
         '</div>' +
       '</div>';
@@ -146,15 +148,16 @@ if (employee) {
      * approver processes the payout). */
     function renderMine() {
       const list = document.getElementById('ref-list');
+      const mineTotalRequested = myRows.reduce((s, r) => s + Number(r.refund_amount || 0), 0);
+      const mineTotalPaid = myRows.reduce((s, r) => s + (r.refund_attachments || []).reduce((s2, a) => s2 + Number(a.amount || 0), 0), 0);
+      document.getElementById('mine-tiles').innerHTML =
+        tile(myRows.length, 'Qty') + tile(money(mineTotalRequested), 'Total Requested') + tile(money(mineTotalPaid), 'Total Paid');
       if (!myRows.length) { list.innerHTML = '<p class="muted">No refund requests yet.</p>'; return; }
       const dupKeys = duplicateKeySet(myRows);
-      let totalRequested = 0, totalPaid = 0;
       const rowsHtml = myRows.map((r) => {
         const photos = r.refund_attachments || [];
         const paidSoFar = photos.reduce((s, a) => s + Number(a.amount || 0), 0);
         const remaining = Number(r.refund_amount || 0) - paidSoFar;
-        totalRequested += Number(r.refund_amount || 0);
-        totalPaid += paidSoFar;
         return '<tr>' +
           '<td>' + orderIdLabel(r, dupKeys) + ' — ' + customerLabel(r, dupKeys) + '</td>' +
           '<td><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
@@ -168,7 +171,7 @@ if (employee) {
           '</td>' +
           '<td style="font-size:11px;">' +
             (photos.length
-              ? photos.map((a) => '<div>' + money(a.amount) + (a.reference_number ? ' · ' + esc(a.reference_number) : '') + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button>' : ' <span class="muted">(no photo)</span>') + '</div>').join('')
+              ? photos.map((a) => '<div>' + money(a.amount) + (a.reference_number ? ' · ' + esc(a.reference_number) : '') + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View Photo</button>' : ' <span class="muted">(no photo)</span>') + '</div>').join('')
               : '<span class="muted">None yet</span>') +
           '</td>' +
           '<td style="font-size:11px;">' + esc(r.notes || '') + '<div class="muted" style="font-size:10px;">Approved by: ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div></td>' +
@@ -177,11 +180,6 @@ if (employee) {
       list.innerHTML = '<div class="table-scroll"><table style="min-width:900px;">' +
         '<thead><tr><th>Order ID / Customer</th><th>Status</th><th>Dates</th><th>Item / Reason</th><th>Amount</th><th>Method / Account</th><th>Proof of Payment</th><th>Notes / Approved by</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +
-        '<tfoot><tr style="font-weight:bold;background:#f7f7f7;">' +
-          '<td colspan="4">Qty: ' + myRows.length + '</td>' +
-          '<td>' + money(totalRequested) + '<div class="muted" style="font-size:10px;font-weight:normal;">' + money(totalPaid) + ' paid</div></td>' +
-          '<td colspan="3"></td>' +
-        '</tr></tfoot>' +
         '</table></div>';
 
       list.querySelectorAll('[data-view-id]').forEach((btn) => btn.addEventListener('click', async () => {
@@ -274,31 +272,30 @@ if (employee) {
       if (!completed.length) { box.innerHTML = '<p class="muted">No completed refunds yet.</p>'; return; }
 
       const dupKeys = duplicateKeySet(allRefunds);
-      let total = 0;
+      const total = completed.reduce((s, r) => s + Number(r.refund_amount || 0), 0);
       // Stacked cards, not a table -- this panel is a fixed 280px-wide sidebar
       // (css/styles.css .layout-3col-right) at every viewport width, and the old
       // min-width:420px table never actually fit it, forcing an internal horizontal
       // scrollbar that crowded/overlapped the rest of the card. A narrow panel showing
       // a handful of fields per completed refund reads fine stacked; it never needs to
-      // be a grid.
+      // be a grid. Qty/Total sits at the top now, not buried below every card.
+      const summaryHtml = '<div class="completed-item" style="font-weight:bold;background:#f7f7f7;margin:0 -16px 10px;padding:10px 16px;border-radius:10px 10px 0 0;">Qty: ' + completed.length + ' · ' + money(total) + '</div>';
       const itemsHtml = completed.map((r) => {
         const photos = r.refund_attachments || [];
-        total += Number(r.refund_amount || 0);
         return '<div class="completed-item">' +
           '<div>' + orderIdLabel(r, dupKeys) + ' — ' + customerLabel(r, dupKeys) + requestPhotoBtn(r) + '</div>' +
           '<div class="muted" style="font-size:10px;">' + esc(r.item_description || '') + '</div>' +
           '<div style="margin-top:4px;"><b>' + money(r.refund_amount) + '</b> <span class="muted">— ' + esc(r.refund_method) + '</span></div>' +
           '<div style="font-size:11px;margin-top:2px;">' +
             (photos.length
-              ? photos.map((a) => '<div>' + money(a.amount) + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button>' : '') + '</div>').join('')
+              ? photos.map((a) => '<div>' + money(a.amount) + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View Photo</button>' : '') + '</div>').join('')
               : '<span class="muted">No proof of payment</span>') +
           '</div>' +
           '<div class="muted" style="font-size:10px;margin-top:2px;">By ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
           '<button class="btn small secondary" type="button" data-id="' + r.id + '" data-act="reopen" style="margin-top:6px;">Reopen</button>' +
         '</div>';
       }).join('');
-      box.innerHTML = itemsHtml +
-        '<div class="completed-item" style="font-weight:bold;background:#f7f7f7;margin:0 -16px -16px;padding:10px 16px;border-radius:0 0 10px 10px;">Qty: ' + completed.length + ' · ' + money(total) + '</div>';
+      box.innerHTML = summaryHtml + itemsHtml;
 
       box.querySelectorAll('[data-view-id]').forEach((btn) => btn.addEventListener('click', async () => {
         try { window.open(await getRefundAttachmentUrl(btn.dataset.path), '_blank'); }
@@ -334,9 +331,15 @@ if (employee) {
         });
       }
       const activeTotal = rows.reduce((s, r) => s + Number(r.refund_amount || 0), 0);
+      const activePaid = rows.reduce((s, r) => s + (r.refund_attachments || []).reduce((s2, a) => s2 + Number(a.amount || 0), 0), 0);
+      const activeRemaining = rows.reduce((s, r) => {
+        const paid = (r.refund_attachments || []).reduce((s2, a) => s2 + Number(a.amount || 0), 0);
+        return s + Math.max(Number(r.refund_amount || 0) - paid, 0);
+      }, 0);
       document.getElementById('ref-tiles').innerHTML =
-        tile(String(pendingCount), 'Pending Approval') + tile(String(approvedCount), 'Approved') +
-        tile(money(activeTotal), 'Total Amount (Pending + Approved)') + tile(money(completedTotal), 'Total Refunded') + tile(String(rows.length), 'Count');
+        tile(String(rows.length), 'Qty') + tile(money(activeTotal), 'Total Amount (Pending + Approved)') +
+        tile(money(activePaid), 'Total Paid') + tile(money(activeRemaining), 'Total Remaining') +
+        tile(String(pendingCount), 'Pending Approval') + tile(String(approvedCount), 'Approved') + tile(money(completedTotal), 'Total Refunded');
 
       renderCompletedPanel();
 
@@ -347,14 +350,10 @@ if (employee) {
       // Transactions/Scrap/Subasta. Add Proof of Payment is an always-visible inline
       // form (no "+ Add" toggle first) once the refund is past Pending Approval.
       const dupKeys = duplicateKeySet(allRefunds);
-      let totalRequested = 0, totalPaid = 0, totalRemaining = 0;
       const rowsHtml = rows.map((r) => {
         const photos = r.refund_attachments || [];
         const paidSoFar = photos.reduce((s, a) => s + Number(a.amount || 0), 0);
         const remaining = Number(r.refund_amount || 0) - paidSoFar;
-        totalRequested += Number(r.refund_amount || 0);
-        totalPaid += paidSoFar;
-        totalRemaining += Math.max(remaining, 0);
         const canAttach = r.status !== 'Pending Approval';
         const canComplete = r.status === 'Approved' && remaining <= 0;
         return '<tr' + (r.status === 'Pending Approval' ? ' style="background:#fff8e8;"' : '') + '>' +
@@ -372,7 +371,7 @@ if (employee) {
           '</td>' +
           '<td style="font-size:11px;">' +
             (photos.length
-              ? photos.map((a) => '<div style="margin-bottom:2px;">' + money(a.amount) + (a.reference_number ? ' · ' + esc(a.reference_number) : '') + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View</button>' : ' <span class="muted">(no photo)</span>') + (canEditRefund(employee) ? ' <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path || '') + '">✕</button>' : '') + '</div>').join('')
+              ? photos.map((a) => '<div style="margin-bottom:2px;">' + money(a.amount) + (a.reference_number ? ' · ' + esc(a.reference_number) : '') + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View Photo</button>' : ' <span class="muted">(no photo)</span>') + (canEditRefund(employee) ? ' <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path || '') + '">✕</button>' : '') + '</div>').join('')
               : '<span class="muted">None yet</span>') +
             (canAttach
               ? '<form class="add-proof-form" data-refund-id="' + r.id + '" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">' +
@@ -408,11 +407,6 @@ if (employee) {
         '<thead><tr>' + sortTh('order_reference', 'Order ID') + sortTh('customer_name', 'Customer') + sortTh('status', 'Status') + sortTh('date_requested', 'Dates') +
           sortTh('refund_amount', 'Amount') + '<th>Method / Account</th><th>Proof of Payment</th><th>Notes / By</th><th></th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +
-        '<tfoot><tr style="font-weight:bold;background:#f7f7f7;">' +
-          '<td colspan="4">Qty: ' + rows.length + '</td>' +
-          '<td>' + money(totalRequested) + '<div class="muted" style="font-size:10px;font-weight:normal;">' + money(totalPaid) + ' paid · ' + money(totalRemaining) + ' left</div></td>' +
-          '<td colspan="4"></td>' +
-        '</tr></tfoot>' +
         '</table></div>';
 
       list.querySelectorAll('[data-ref-sort]').forEach((btn) => btn.addEventListener('click', () => {
@@ -470,8 +464,6 @@ if (employee) {
         }
       }));
     }
-
-    function tile(num, label) { return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>'; }
   }
 }
 </script>
