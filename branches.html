@@ -121,7 +121,7 @@ if (employee) {
           '<div class="card">' +
             '<h3>Add Subasta Item</h3>' +
             '<div id="sub-write-note"></div>' +
-            '<form id="sub-form" style="flex-direction:column;align-items:stretch;">' +
+            '<form id="sub-form" style="flex-direction:column;align-items:stretch;flex-wrap:nowrap;">' +
               '<div class="field"><label>SKU</label><input type="text" name="sku"></div>' +
               '<div class="field"><label>Item Description *</label><input type="text" name="itemDescription" required></div>' +
               '<div class="field"><label>Weight (grams)</label><input type="number" name="weightGrams" step="0.001" min="0"></div>' +
@@ -154,7 +154,7 @@ if (employee) {
           '<div class="card">' +
             '<h3>Add Scrap Entry</h3>' +
             '<div id="scrap-write-note"></div>' +
-            '<form id="scrap-form" style="flex-direction:column;align-items:stretch;">' +
+            '<form id="scrap-form" style="flex-direction:column;align-items:stretch;flex-wrap:nowrap;">' +
               '<div class="field"><label>Date</label><input type="date" name="entryDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
               '<div class="field"><label>Type *</label><select name="entryType"><option value="In">In (bought from customer)</option><option value="Out">Out (sold to refiner)</option></select></div>' +
               '<div class="field"><label>Customer Name</label><input type="text" name="customerName"></div>' +

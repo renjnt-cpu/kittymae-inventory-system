@@ -43,7 +43,7 @@ if (employee) {
         '<div class="card">' +
           '<h3>Hold an Item</h3>' +
           '<p class="muted" style="margin-top:-4px;">The item leaves the sellable pool immediately (moves to Reserved) but stays on hand until either completed as a sale or cancelled.</p>' +
-          '<form id="lw-form" style="flex-direction:column;align-items:stretch;">' +
+          '<form id="lw-form" style="flex-direction:column;align-items:stretch;flex-wrap:nowrap;">' +
             '<div class="field"><label>SKU *</label><input type="text" name="sku" required></div>' +
             branchFieldHtml +
             '<div class="field"><label>Qty *</label><input type="number" name="qty" min="1" value="1" required></div>' +

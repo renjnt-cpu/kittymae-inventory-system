@@ -42,7 +42,7 @@ if (employee) {
         '<div class="layout-2col-side">' +
           '<div class="card">' +
             '<h3>Add Item</h3>' +
-            '<form id="asset-form" style="flex-direction:column;align-items:stretch;">' +
+            '<form id="asset-form" style="flex-direction:column;align-items:stretch;flex-wrap:nowrap;">' +
               '<div class="field"><label>Item Name *</label><input type="text" name="itemName" required></div>' +
               '<div class="field"><label>Type *</label><select name="itemType" required><option>Asset</option><option>Supplies</option></select></div>' +
               '<div class="field"><label>Custodian</label><select name="custodianId">' + custodianOptions() + '</select></div>' +
