@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SKU Catalog — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main>
+  <div id="prod-msg"></div>
+  <div id="products-root"></div>
+</main>
+
+<script type="module">
+import { initShell, toast, esc } from './js/shell.js';
+import { listProducts, createProduct, updateProduct, subscribeToChanges } from './js/api.js';
+
+const PRODUCT_LINES = ['18K Saudi Gold', '18K Coated', 'Moissanite', 'Silver 925/999', 'Stainless/Fashion'];
+const METAL_PURITIES = ['24K', '21K', '18K', '925', '999', 'N/A'];
+const VALUE_TIERS = ['A', 'B', 'C'];
+const CATEGORIES = ['Ring', 'Necklace', 'Bracelet', 'Earrings', 'Chain', 'Bangle', 'Anklet', 'Pendant', 'Set', 'Other'];
+const optionsOf = (list, selected) => '<option value="">—</option>' + list.map((v) => '<option' + (v === selected ? ' selected' : '') + '>' + v + '</option>').join('');
+const plainOptions = (list) => list.map((v) => '<option>' + v + '</option>').join('');
+const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g';
+
+const employee = await initShell('products');
+if (employee) {
+  const root = document.getElementById('products-root');
+  const canManage = ['Admin', 'Manager'].includes(employee.role);
+
+  const addFormHtml = canManage
+    ? '<div class="card">' +
+        '<h3>Add SKU</h3>' +
+        '<p class="muted" style="margin-top:-4px;">New entries into the product master — the same SKU list Record Movement and Transfers look up.</p>' +
+        '<form id="prod-form" style="flex-direction:column;align-items:stretch;flex-wrap:nowrap;">' +
+          '<div class="field"><label>SKU *</label><input type="text" name="sku" required></div>' +
+          '<div class="field"><label>Item Name *</label><input type="text" name="itemName" required></div>' +
+          '<div class="field"><label>Product Line</label><select name="productLine">' + optionsOf(PRODUCT_LINES) + '</select></div>' +
+          '<div class="field"><label>Metal Purity</label><select name="metalPurity">' + optionsOf(METAL_PURITIES) + '</select></div>' +
+          '<div class="field"><label>Gross Weight (g)</label><input type="number" name="grossWeightG" step="0.001" min="0" placeholder="leave blank if unknown"></div>' +
+          '<div class="field"><label>Value Tier</label><select name="valueTier">' + optionsOf(VALUE_TIERS) + '</select></div>' +
+          '<div class="field"><label>Category</label><select name="category">' + optionsOf(CATEGORIES) + '</select></div>' +
+          '<div class="field"><label>Size / Length</label><input type="text" name="sizeLength"></div>' +
+          '<div class="field"><label>Reorder Level</label><input type="number" name="reorderLevel" min="0" value="0"></div>' +
+          '<div class="field"><label>Stone / Gem Details</label><input type="text" name="stoneGemDetails"></div>' +
+          '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+          '<button class="btn" type="submit">Add SKU</button>' +
+        '</form>' +
+      '</div>'
+    : '';
+
+  root.innerHTML =
+    '<div class="layout-2col">' +
+      (addFormHtml ? '<div class="layout-2col-side">' + addFormHtml + '</div>' : '') +
+      '<div class="layout-2col-main">' +
+        '<div class="card">' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+            '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="SKU or item name…"></div>' +
+            '<div class="field"><label>Product Line</label><select id="f-line"><option value="all">All Lines</option>' + plainOptions(PRODUCT_LINES) + '</select></div>' +
+            '<div class="field"><label>Category</label><select id="f-category"><option value="all">All Categories</option>' + plainOptions(CATEGORIES) + '</select></div>' +
+            '<div class="field"><label>Status</label><select id="f-status"><option value="all">All</option><option value="Active" selected>Active</option><option value="Discontinued">Discontinued</option></select></div>' +
+            '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="prod-list"><div class="muted">Loading…</div></div>' +
+      '</div>' +
+    '</div>';
+
+  if (canManage) {
+    document.getElementById('prod-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      try {
+        await createProduct({
+          sku: f.sku.value, itemName: f.itemName.value, productLine: f.productLine.value,
+          metalPurity: f.metalPurity.value, grossWeightG: f.grossWeightG.value, valueTier: f.valueTier.value,
+          category: f.category.value, sizeLength: f.sizeLength.value.trim(), reorderLevel: f.reorderLevel.value,
+          stoneGemDetails: f.stoneGemDetails.value.trim(), notes: f.notes.value.trim(),
+        });
+        toast('prod-msg', 'SKU added.', false);
+        f.reset();
+        f.reorderLevel.value = 0;
+        await load();
+      } catch (err) {
+        toast('prod-msg', String(err.message || err), true);
+      }
+    });
+  }
+
+  let allProducts = [];
+  await load();
+  subscribeToChanges('products', load);
+
+  document.getElementById('f-search').addEventListener('input', render);
+  document.getElementById('f-line').addEventListener('change', render);
+  document.getElementById('f-category').addEventListener('change', render);
+  document.getElementById('f-status').addEventListener('change', render);
+  document.getElementById('f-clear').addEventListener('click', () => {
+    document.getElementById('f-search').value = '';
+    document.getElementById('f-line').value = 'all';
+    document.getElementById('f-category').value = 'all';
+    document.getElementById('f-status').value = 'all';
+    render();
+  });
+
+  async function load() {
+    const list = document.getElementById('prod-list');
+    list.innerHTML = '<div class="muted">Loading…</div>';
+    try {
+      allProducts = await listProducts();
+      render();
+    } catch (err) {
+      list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+    }
+  }
+
+  function render() {
+    const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
+    const fLine = document.getElementById('f-line').value;
+    const fCategory = document.getElementById('f-category').value;
+    const fStatus = document.getElementById('f-status').value;
+
+    let rows = allProducts;
+    if (fSearch) rows = rows.filter((p) => p.sku.toLowerCase().includes(fSearch) || p.item_name.toLowerCase().includes(fSearch));
+    if (fLine !== 'all') rows = rows.filter((p) => p.product_line === fLine);
+    if (fCategory !== 'all') rows = rows.filter((p) => p.category === fCategory);
+    if (fStatus !== 'all') rows = rows.filter((p) => p.product_status === fStatus);
+
+    const list = document.getElementById('prod-list');
+    if (!rows.length) { list.innerHTML = '<p class="muted">No SKUs match this filter.</p>'; return; }
+
+    function rowHtml(p) {
+      return '<tr data-row-id="' + esc(p.sku) + '">' +
+          '<td data-label="SKU"><b>' + esc(p.sku) + '</b></td>' +
+          '<td data-label="Item Name">' + esc(p.item_name) + '</td>' +
+          '<td data-label="Line">' + esc(p.product_line || '—') + '</td>' +
+          '<td data-label="Purity">' + esc(p.metal_purity || '—') + '</td>' +
+          '<td data-label="Weight">' + weight(p.gross_weight_g) + '</td>' +
+          '<td data-label="Category">' + esc(p.category || '—') + '</td>' +
+          '<td data-label="Tier">' + esc(p.value_tier || '—') + '</td>' +
+          '<td data-label="Reorder Lvl">' + p.reorder_level + '</td>' +
+          '<td data-label="Status"><span class="badge ' + (p.product_status === 'Active' ? 'ok' : 'low') + '">' + esc(p.product_status) + '</span></td>' +
+          '<td data-label="Actions" style="white-space:nowrap;">' +
+            (canManage
+              ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="edit">Edit</button> ' +
+                (p.product_status === 'Active'
+                  ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="discontinue">Discontinue</button>'
+                  : '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="reactivate">Reactivate</button>')
+              : '') +
+          '</td>' +
+        '</tr>' +
+        '<tr class="edit-row" data-edit-for="' + esc(p.sku) + '" style="display:none;"><td colspan="10"></td></tr>';
+    }
+
+    list.innerHTML = '<div class="table-scroll"><table><thead><tr style="white-space:nowrap;">' +
+      '<th>SKU</th><th>Item Name</th><th>Line</th><th>Purity</th><th>Weight</th><th>Category</th><th>Tier</th><th>Reorder Lvl</th><th>Status</th><th></th>' +
+      '</tr></thead><tbody>' + rows.map(rowHtml).join('') + '</tbody></table></div>';
+
+    if (!canManage) return;
+
+    list.querySelectorAll('[data-act="edit"]').forEach((btn) => btn.addEventListener('click', () => openEdit(btn.dataset.sku, rows)));
+
+    list.querySelectorAll('[data-act="discontinue"]').forEach((btn) => btn.addEventListener('click', async () => {
+      if (!confirm('Mark ' + btn.dataset.sku + ' as Discontinued? It stays visible in history, just hidden from low-stock/active views.')) return;
+      try { await updateProduct(btn.dataset.sku, { productStatus: 'Discontinued' }); toast('prod-msg', 'SKU discontinued.', false); await load(); }
+      catch (err) { toast('prod-msg', String(err.message || err), true); }
+    }));
+
+    list.querySelectorAll('[data-act="reactivate"]').forEach((btn) => btn.addEventListener('click', async () => {
+      try { await updateProduct(btn.dataset.sku, { productStatus: 'Active' }); toast('prod-msg', 'SKU reactivated.', false); await load(); }
+      catch (err) { toast('prod-msg', String(err.message || err), true); }
+    }));
+  }
+
+  /** Opens an inline edit form pre-filled with the SKU's current values, same pattern
+   * as Bills' edit-in-place row. SKU itself is never editable — it's the primary key
+   * every other table (inventory, ledger, transfers) references by. */
+  function openEdit(sku, rows) {
+    const p = rows.find((r) => r.sku === sku);
+    const cell = document.querySelector('tr[data-edit-for="' + sku + '"]');
+    const isOpen = cell.style.display !== 'none';
+    document.querySelectorAll('.edit-row').forEach((r) => { r.style.display = 'none'; r.querySelector('td').innerHTML = ''; });
+    if (isOpen) return;
+    cell.style.display = '';
+    cell.querySelector('td').innerHTML =
+      '<form class="edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+        '<div class="field"><label>Item Name</label><input type="text" name="itemName" value="' + esc(p.item_name) + '" required></div>' +
+        '<div class="field"><label>Product Line</label><select name="productLine">' + optionsOf(PRODUCT_LINES, p.product_line) + '</select></div>' +
+        '<div class="field"><label>Metal Purity</label><select name="metalPurity">' + optionsOf(METAL_PURITIES, p.metal_purity) + '</select></div>' +
+        '<div class="field"><label>Gross Weight (g)</label><input type="number" name="grossWeightG" step="0.001" min="0" value="' + (p.gross_weight_g ?? '') + '"></div>' +
+        '<div class="field"><label>Value Tier</label><select name="valueTier">' + optionsOf(VALUE_TIERS, p.value_tier) + '</select></div>' +
+        '<div class="field"><label>Category</label><select name="category">' + optionsOf(CATEGORIES, p.category) + '</select></div>' +
+        '<div class="field"><label>Size / Length</label><input type="text" name="sizeLength" value="' + esc(p.size_length || '') + '"></div>' +
+        '<div class="field"><label>Reorder Level</label><input type="number" name="reorderLevel" min="0" value="' + p.reorder_level + '"></div>' +
+        '<div class="field" style="min-width:200px;"><label>Stone / Gem Details</label><input type="text" name="stoneGemDetails" value="' + esc(p.stone_gem_details || '') + '"></div>' +
+        '<div class="field" style="min-width:220px;"><label>Notes</label><input type="text" name="notes" value="' + esc(p.notes || '') + '"></div>' +
+        '<button class="btn small" type="submit">Save</button> ' +
+        '<button class="btn small secondary" type="button" data-cancel="1">Cancel</button>' +
+      '</form>';
+    const form = cell.querySelector('.edit-form');
+    form.querySelector('[data-cancel]').addEventListener('click', () => { cell.style.display = 'none'; form.remove(); });
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      try {
+        await updateProduct(sku, {
+          itemName: f.itemName.value.trim(), productLine: f.productLine.value, metalPurity: f.metalPurity.value,
+          grossWeightG: f.grossWeightG.value, valueTier: f.valueTier.value, category: f.category.value,
+          sizeLength: f.sizeLength.value.trim(), reorderLevel: f.reorderLevel.value,
+          stoneGemDetails: f.stoneGemDetails.value.trim(), notes: f.notes.value.trim(),
+        });
+        toast('prod-msg', 'SKU updated.', false);
+        await load();
+      } catch (err) {
+        toast('prod-msg', String(err.message || err), true);
+      }
+    });
+  }
+}
+</script>
+</body>
+</html>

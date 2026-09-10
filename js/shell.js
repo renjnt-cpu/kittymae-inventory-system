@@ -30,6 +30,7 @@ export async function initShell(activePage) {
     pages.push({ id: 'branches', label: 'Branches', href: 'branches.html' });
   }
   pages.push(
+    { id: 'products', label: 'SKU Catalog', href: 'products.html' },
     { id: 'movement', label: 'Record Movement', href: 'movement.html' },
     { id: 'transfers', label: 'Transfers', href: 'transfers.html' },
     { id: 'layaway', label: 'Layaway', href: 'layaway.html' },

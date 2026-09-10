@@ -86,6 +86,53 @@ export async function searchProducts(query) {
   return data;
 }
 
+/** Full SKU Catalog listing for products.html — everyone with a session can read
+ * every row (products_read_all), so no branch/role filtering here. */
+export async function listProducts() {
+  const { data, error } = await supabase.from('products').select('*').order('sku');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createProduct({ sku, itemName, productLine, metalPurity, grossWeightG, valueTier, reorderLevel, category, sizeLength, stoneGemDetails, notes }) {
+  const { error } = await supabase.from('products').insert({
+    sku: sku.trim(),
+    item_name: itemName.trim(),
+    product_line: productLine || null,
+    metal_purity: metalPurity || null,
+    gross_weight_g: grossWeightG === '' || grossWeightG === null || grossWeightG === undefined ? null : Number(grossWeightG),
+    value_tier: valueTier || null,
+    reorder_level: reorderLevel ? Number(reorderLevel) : 0,
+    category: category || null,
+    size_length: sizeLength || null,
+    stone_gem_details: stoneGemDetails || null,
+    notes: notes || null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** fields uses the same camelCase keys as createProduct, all optional — only the keys
+ * present are patched. productStatus ('Active'/'Discontinued') also goes through this. */
+export async function updateProduct(sku, fields) {
+  const patch = { updated_at: new Date().toISOString() };
+  const map = {
+    itemName: 'item_name', productLine: 'product_line', metalPurity: 'metal_purity',
+    grossWeightG: 'gross_weight_g', valueTier: 'value_tier', reorderLevel: 'reorder_level',
+    category: 'category', sizeLength: 'size_length', stoneGemDetails: 'stone_gem_details',
+    notes: 'notes', productStatus: 'product_status',
+  };
+  Object.entries(map).forEach(([key, col]) => {
+    if (!(key in fields)) return;
+    let v = fields[key];
+    if ((col === 'gross_weight_g') && (v === '' || v === null || v === undefined)) v = null;
+    else if (col === 'gross_weight_g') v = Number(v);
+    if (col === 'reorder_level') v = v ? Number(v) : 0;
+    patch[col] = v === '' ? null : v;
+  });
+  const { error } = await supabase.from('products').update(patch).eq('sku', sku);
+  if (error) throw new Error(error.message);
+}
+
 /**
  * The one Record-a-Movement entry point for Phase 1's frontend — covers Stock In /
  * Stock Out / Damage / Missing / Adjustment / Correction. Sale and the two Transfer
