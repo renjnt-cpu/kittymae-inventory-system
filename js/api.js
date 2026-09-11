@@ -94,29 +94,14 @@ export async function listProducts() {
   return data;
 }
 
-export async function createProduct({ sku, itemName, productLine, metalPurity, grossWeightG, valueTier, reorderLevel, category, sizeLength, stoneGemDetails, notes }) {
-  const { error } = await supabase.from('products').insert({
-    sku: sku.trim(),
-    item_name: itemName.trim(),
-    product_line: productLine || null,
-    metal_purity: metalPurity || null,
-    gross_weight_g: grossWeightG === '' || grossWeightG === null || grossWeightG === undefined ? null : Number(grossWeightG),
-    value_tier: valueTier || null,
-    reorder_level: reorderLevel ? Number(reorderLevel) : 0,
-    category: category || null,
-    size_length: sizeLength || null,
-    stone_gem_details: stoneGemDetails || null,
-    notes: notes || null,
-  });
-  if (error) throw new Error(error.message);
-}
-
-/** fields uses the same camelCase keys as createProduct, all optional — only the keys
- * present are patched. productStatus ('Active'/'Discontinued') also goes through this. */
+/** New SKUs are added in the Google Sheet, not here — this only patches a detail on an
+ * existing row. Keys are all optional camelCase — only the ones present are patched.
+ * productStatus ('Active'/'Discontinued') also goes through this. */
 export async function updateProduct(sku, fields) {
   const patch = { updated_at: new Date().toISOString() };
   const map = {
-    itemName: 'item_name', productLine: 'product_line', metalPurity: 'metal_purity',
+    itemName: 'item_name', subSku: 'sub_sku', price: 'system_selling_price',
+    productLine: 'product_line', metalPurity: 'metal_purity',
     grossWeightG: 'gross_weight_g', valueTier: 'value_tier', reorderLevel: 'reorder_level',
     category: 'category', sizeLength: 'size_length', stoneGemDetails: 'stone_gem_details',
     notes: 'notes', productStatus: 'product_status',
@@ -124,8 +109,8 @@ export async function updateProduct(sku, fields) {
   Object.entries(map).forEach(([key, col]) => {
     if (!(key in fields)) return;
     let v = fields[key];
-    if ((col === 'gross_weight_g') && (v === '' || v === null || v === undefined)) v = null;
-    else if (col === 'gross_weight_g') v = Number(v);
+    if ((col === 'gross_weight_g' || col === 'system_selling_price') && (v === '' || v === null || v === undefined)) v = null;
+    else if (col === 'gross_weight_g' || col === 'system_selling_price') v = Number(v);
     if (col === 'reorder_level') v = v ? Number(v) : 0;
     patch[col] = v === '' ? null : v;
   });
