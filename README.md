@@ -19,8 +19,9 @@ This is a static site — no server, no build command. Drag the `kittymae-invent
 
 - `login.html` — Google sign-in, links the account to its `employees` row.
 - `dashboard.html` — branch stock table, KPI tiles, search.
-- `movement.html` — Record a Movement (Stock In/Out, Damage, Missing, Returns, Adjustment/Correction). Sales and transfers are deliberately not here — see the plan's "Sales deduction" section for why.
 - `transfers.html` — request/approve/ship/receive branch transfers, with discrepancy flagging.
+
+Record Movement, Layaway, and Branch Capital have moved to a separate site — [Kittymae POS](https://renjnt-cpu.github.io/kittymae-pos/) (repo: `kittymae-pos/`) — which shares this same Supabase backend and employee accounts.
 
 ## Never do this
 
