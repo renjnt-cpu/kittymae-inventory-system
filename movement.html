@@ -300,7 +300,16 @@ if (employee) {
     }
   }
   await loadOrderItems();
-  subscribeToChanges('order_item_status', loadOrderItems);
+  // Debounced: the 15-minute pancake-resync run alone upserts 300+ rows per pass,
+  // and Realtime fires postgres_changes once per row -- without this, a single
+  // resync burst would trigger hundreds of reloads (full network round-trips) on
+  // any open tab within a few seconds, which is real, noticeable lag, not fetch
+  // size. Collapsing a burst into one reload shortly after it settles fixes that.
+  let realtimeReloadTimer = null;
+  subscribeToChanges('order_item_status', () => {
+    clearTimeout(realtimeReloadTimer);
+    realtimeReloadTimer = setTimeout(loadOrderItems, 800);
+  });
 
   // Search now queries the server (it has to -- the client no longer holds the full
   // active dataset), so it's debounced to one request per pause in typing rather

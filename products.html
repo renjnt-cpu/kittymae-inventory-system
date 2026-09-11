@@ -14,7 +14,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { listProducts, updateProduct, subscribeToChanges } from './js/api.js';
+import { listProducts, updateProduct, subscribeToChanges, PRODUCTS_ROW_CAP } from './js/api.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g';
@@ -36,23 +36,41 @@ if (employee) {
     '</div>' +
     '<div id="prod-list"><div class="muted">Loading…</div></div>';
 
+  // With 7,392 SKUs, fetching everything and filtering client-side silently hit
+  // Supabase's default 1000-row cap -- see PRODUCTS_ROW_CAP in api.js. Search and
+  // status now query the server directly instead, capped explicitly with a visible
+  // notice when that cap is hit (same fix as Order & Item Status on movement.html).
   let allProducts = [];
+  let searchTimer = null;
+  let realtimeTimer = null;
   await load();
-  subscribeToChanges('products', load);
+  // Debounced: an edit or the Active/Discontinued toggle firing on one row shouldn't
+  // matter much here, but this keeps the same safety pattern as movement.html in
+  // case of another bulk import later.
+  subscribeToChanges('products', () => {
+    clearTimeout(realtimeTimer);
+    realtimeTimer = setTimeout(load, 500);
+  });
 
-  document.getElementById('f-search').addEventListener('input', render);
-  document.getElementById('f-status').addEventListener('change', render);
+  document.getElementById('f-search').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(load, 300);
+  });
+  document.getElementById('f-status').addEventListener('change', load);
   document.getElementById('f-clear').addEventListener('click', () => {
     document.getElementById('f-search').value = '';
     document.getElementById('f-status').value = 'all';
-    render();
+    load();
   });
 
   async function load() {
     const list = document.getElementById('prod-list');
     list.innerHTML = '<div class="muted">Loading…</div>';
     try {
-      allProducts = await listProducts();
+      allProducts = await listProducts({
+        search: document.getElementById('f-search').value.trim(),
+        status: document.getElementById('f-status').value,
+      });
       render();
     } catch (err) {
       list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
@@ -60,15 +78,14 @@ if (employee) {
   }
 
   function render() {
-    const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
-    const fStatus = document.getElementById('f-status').value;
-
-    let rows = allProducts;
-    if (fSearch) rows = rows.filter((p) => p.sku.toLowerCase().includes(fSearch) || (p.sub_sku || '').toLowerCase().includes(fSearch) || p.item_name.toLowerCase().includes(fSearch));
-    if (fStatus !== 'all') rows = rows.filter((p) => p.product_status === fStatus);
+    const rows = allProducts; // already scoped to the current search + status at the query level
+    const truncated = rows.length >= PRODUCTS_ROW_CAP;
 
     const list = document.getElementById('prod-list');
     if (!rows.length) { list.innerHTML = '<p class="muted">No SKUs match this filter.</p>'; return; }
+    const truncatedNotice = truncated
+      ? '<p class="muted" style="margin:0 0 8px;color:#b45309;">Showing the first ' + PRODUCTS_ROW_CAP + ' matching SKUs — search to narrow further and see the rest.</p>'
+      : '';
 
     function rowHtml(p) {
       return '<tr data-row-id="' + esc(p.sku) + '">' +
@@ -90,7 +107,7 @@ if (employee) {
         '<tr class="edit-row" data-edit-for="' + esc(p.sku) + '" style="display:none;"><td colspan="7"></td></tr>';
     }
 
-    list.innerHTML = '<div class="table-scroll"><table><thead><tr style="white-space:nowrap;">' +
+    list.innerHTML = truncatedNotice + '<div class="table-scroll"><table><thead><tr style="white-space:nowrap;">' +
       '<th>SKU</th><th>Product Name</th><th>Sub SKU</th><th>Price</th><th>Est. Gram</th><th>Status</th><th></th>' +
       '</tr></thead><tbody>' + rows.map(rowHtml).join('') + '</tbody></table></div>';
 

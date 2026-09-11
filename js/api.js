@@ -86,10 +86,26 @@ export async function searchProducts(query) {
   return data;
 }
 
+// Same lesson as ORDER_ITEM_STATUS_ROW_CAP below: with 7,392 SKUs (nearly all
+// Active by default), select('*') with no limit was silently truncated at
+// Supabase's default 1000-row cap -- products.html would only ever show
+// alphabetically-first ~1000 SKUs, with no error or notice that ~6,000+ were
+// missing. Capped explicitly here instead, with a UI notice when it's hit.
+export const PRODUCTS_ROW_CAP = 1000;
+
 /** Full SKU Catalog listing for products.html — everyone with a session can read
- * every row (products_read_all), so no branch/role filtering here. */
-export async function listProducts() {
-  const { data, error } = await supabase.from('products').select('*').order('sku');
+ * every row (products_read_all), so no branch/role filtering here. search/status
+ * scope the query server-side instead of fetching everything and filtering
+ * client-side, same reasoning as listOrderItemStatuses(). */
+export async function listProducts({ search = '', status = 'Active' } = {}) {
+  let query = supabase.from('products').select('*');
+  if (status !== 'all') query = query.eq('product_status', status);
+  const term = sanitizeForOrFilter(search || '');
+  if (term) {
+    const pat = '%' + term + '%';
+    query = query.or('sku.ilike.' + pat + ',sub_sku.ilike.' + pat + ',item_name.ilike.' + pat);
+  }
+  const { data, error } = await query.order('sku').limit(PRODUCTS_ROW_CAP);
   if (error) throw new Error(error.message);
   return data;
 }
