@@ -848,28 +848,35 @@ export async function updateEmployeePosition(employeeId, position) {
 // ---- HR 201-File (strictly HR Supervisor + Admin -- is_hr_or_admin() in
 // 83_hr_201_file.sql) -- personal info + document uploads per employee. ----
 
-/** Every employee regardless of status -- unlike getEmployeesForChecklist(), a former
- * employee's 201-File may still need to be looked up, and Admin themselves can have one. */
-export async function listEmployeesForHr() {
+/** The landscape 201-File table's main query -- the whole roster in one call, each
+ * row carrying its 201-File fields already embedded (PostgREST follows the
+ * employee_201_files.employee_id FK), instead of a separate lookup per employee.
+ * Requires employees_hr_read (85_hr_201_file_landscape.sql) -- without it, an HR
+ * Supervisor (a *position*, not a *role*) would only get their own employees row back
+ * via employees_self_read and this would look nearly empty. */
+export async function listAllEmployee201Files() {
   const { data, error } = await supabase.from('employees')
-    .select('id, full_name, role, position, status, hire_date, contact_number, branches(name)')
+    .select('id, employee_code, full_name, role, position, status, hire_date, contact_number, branches(name), employee_201_files(*)')
     .order('full_name');
   if (error) throw new Error(error.message);
-  return data;
-}
-
-export async function getEmployee201File(employeeId) {
-  const { data, error } = await supabase.from('employee_201_files').select('*').eq('employee_id', employeeId).maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) return null;
-  const [withName] = await attachEmployeeNames([data], { updater: 'updated_by' });
-  return withName;
+  const rows = data.map((e) => ({ ...e, file201: e.employee_201_files?.[0] || null }));
+  const updaterIds = rows.map((r) => r.file201).filter(Boolean);
+  await attachEmployeeNames(updaterIds, { updater: 'updated_by' });
+  return rows;
 }
 
 export async function upsertEmployee201File(employeeId, fields) {
   const me = await currentEmployeeId();
   const { error } = await supabase.from('employee_201_files').upsert({
     employee_id: employeeId,
+    first_name: fields.firstName || null,
+    middle_name: fields.middleName || null,
+    last_name: fields.lastName || null,
+    suffix: fields.suffix || null,
+    end_of_employment_date: fields.endOfEmploymentDate || null,
+    department: fields.department || null,
+    job_title: fields.jobTitle || null,
+    gender: fields.gender || null,
     birthdate: fields.birthdate || null,
     civil_status: fields.civilStatus || null,
     address: fields.address || null,

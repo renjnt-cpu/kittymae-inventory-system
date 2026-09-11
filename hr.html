@@ -15,13 +15,37 @@
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
 import {
-  listEmployeesForHr, getEmployee201File, upsertEmployee201File,
+  listAllEmployee201Files, upsertEmployee201File,
   listEmployee201Documents, uploadEmployee201Document, getEmployee201DocumentUrl, deleteEmployee201Document,
 } from './js/api.js';
 
+// Kittymae's real departments/positions only -- the reference roster sheet this
+// mirrors ("OFFICE NEEDED") has a much bigger Department/Position code list built for
+// a multi-department company (Branding, Call Center, IT, Procurement, Legal,
+// Warehouse Logistics...) that doesn't apply here at all. Job Title uses a <datalist>
+// rather than a strict <select> so an existing value outside this list never gets
+// silently reset just because it isn't one of the guesses below.
+const DEPARTMENTS = ['EXECUTIVE', 'SALES & MARKETING', 'HUMAN CAPITAL MANAGEMENT'];
+const JOB_TITLES_BY_DEPT = {
+  'EXECUTIVE': ['CEO', 'COO'],
+  'SALES & MARKETING': ['Senior Sales Admin Associate', 'Sales Admin Associate', 'Sales Associate'],
+  'HUMAN CAPITAL MANAGEMENT': ['Admin Associate', 'Sales Clerk'],
+};
 const CIVIL_STATUSES = ['Single', 'Married', 'Widowed', 'Separated'];
+const GENDERS = ['Male', 'Female'];
 const fmtDate = (s) => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-PH', { dateStyle: 'medium' }) : '—';
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+
+/** Same "LAST, FIRST MIDDLE SUFFIX" formula the reference sheet's own Complete Name
+ * column uses -- falls back to the employees table's full_name until the 201-File's
+ * own name-part fields are filled in for that person. */
+function completeName(row) {
+  const f = row.file201;
+  if (f && (f.last_name || f.first_name)) {
+    return [f.last_name, [f.first_name, f.middle_name, f.suffix].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  }
+  return row.full_name;
+}
 
 const employee = await initShell('hr');
 if (employee) {
@@ -31,135 +55,184 @@ if (employee) {
   if (!hasAccess) {
     root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">The 201-File is restricted to HR Supervisor and Admin.</p></div></div>';
   } else {
-    const employees = await listEmployeesForHr();
-    let selectedId = null;
+    let allRows = [];
+    await load();
 
-    root.innerHTML =
-      '<div class="layout-2col">' +
-        '<div class="layout-2col-side">' +
-          '<div class="card">' +
-            '<h3>Employees</h3>' +
-            '<div class="field"><label>Search</label><input type="text" id="emp-search" placeholder="Name…"></div>' +
-            '<div id="emp-list" style="margin-top:8px;max-height:480px;overflow-y:auto;"></div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="layout-2col-main">' +
-          '<div id="file-panel"><p class="muted">Select an employee on the left to view or edit their 201-File.</p></div>' +
-        '</div>' +
-      '</div>';
-
-    function renderEmployeeList() {
-      const q = document.getElementById('emp-search').value.trim().toLowerCase();
-      const rows = q ? employees.filter((e) => e.full_name.toLowerCase().includes(q)) : employees;
-      document.getElementById('emp-list').innerHTML = rows.map((e) =>
-        '<div data-id="' + e.id + '" style="padding:7px 8px;cursor:pointer;border-radius:6px;font-size:13px;' +
-          (e.id === selectedId ? 'background:var(--rose);' : '') + '">' +
-          '<b>' + esc(e.full_name) + '</b>' +
-          (e.status !== 'Active' ? ' <span class="badge low">' + esc(e.status) + '</span>' : '') +
-          '<div class="muted" style="font-size:11px;">' + esc(e.position || e.role) + (e.branches ? ' · ' + esc(e.branches.name) : '') + '</div>' +
-        '</div>'
-      ).join('') || '<p class="muted">No employees match.</p>';
-      document.getElementById('emp-list').querySelectorAll('[data-id]').forEach((row) => row.addEventListener('click', () => {
-        selectedId = row.dataset.id;
-        renderEmployeeList();
-        loadFilePanel();
-      }));
+    async function load() {
+      root.innerHTML = '<div class="muted">Loading…</div>';
+      try {
+        allRows = await listAllEmployee201Files();
+        render();
+      } catch (err) {
+        root.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+      }
     }
-    document.getElementById('emp-search').addEventListener('input', renderEmployeeList);
-    renderEmployeeList();
 
-    async function loadFilePanel() {
-      const panel = document.getElementById('file-panel');
-      panel.innerHTML = '<div class="muted">Loading…</div>';
-      const emp = employees.find((e) => e.id === selectedId);
-      const [file201, docs] = await Promise.all([getEmployee201File(selectedId), listEmployee201Documents(selectedId)]);
-
-      panel.innerHTML =
-        '<h2>' + esc(emp.full_name) + ' <span class="muted" style="font-weight:normal;">— ' + esc(emp.position || emp.role) + '</span></h2>' +
+    function render() {
+      root.innerHTML =
         '<div class="card">' +
-          '<h3>Personal Info</h3>' +
-          '<form id="file-form" style="flex-direction:column;align-items:stretch;flex-wrap:nowrap;">' +
-            '<div class="field"><label>Birthdate</label><input type="date" name="birthdate" value="' + (file201?.birthdate || '') + '"></div>' +
-            '<div class="field"><label>Civil Status</label><select name="civilStatus">' +
-              '<option value="">—</option>' + CIVIL_STATUSES.map((s) => '<option' + (s === file201?.civil_status ? ' selected' : '') + '>' + s + '</option>').join('') +
-            '</select></div>' +
-            '<div class="field" style="min-width:260px;"><label>Address</label><input type="text" name="address" value="' + esc(file201?.address || '') + '"></div>' +
-            '<div class="field"><label>SSS Number</label><input type="text" name="sssNumber" value="' + esc(file201?.sss_number || '') + '"></div>' +
-            '<div class="field"><label>PhilHealth Number</label><input type="text" name="philhealthNumber" value="' + esc(file201?.philhealth_number || '') + '"></div>' +
-            '<div class="field"><label>Pag-IBIG Number</label><input type="text" name="pagibigNumber" value="' + esc(file201?.pagibig_number || '') + '"></div>' +
-            '<div class="field"><label>TIN Number</label><input type="text" name="tinNumber" value="' + esc(file201?.tin_number || '') + '"></div>' +
-            '<div class="field"><label>Emergency Contact Name</label><input type="text" name="emergencyContactName" value="' + esc(file201?.emergency_contact_name || '') + '"></div>' +
-            '<div class="field"><label>Emergency Contact Number</label><input type="text" name="emergencyContactNumber" value="' + esc(file201?.emergency_contact_number || '') + '"></div>' +
-            '<div class="field"><label>Relationship</label><input type="text" name="emergencyContactRelationship" value="' + esc(file201?.emergency_contact_relationship || '') + '"></div>' +
-            '<div class="field" style="min-width:260px;"><label>Notes</label><input type="text" name="notes" value="' + esc(file201?.notes || '') + '"></div>' +
-            '<button class="btn" type="submit">Save</button>' +
-          '</form>' +
-          (file201 ? '<p class="muted" style="font-size:11px;margin-top:8px;">Last updated ' + fmtDateTime(file201.updated_at) + (file201.updater ? ' by ' + esc(file201.updater.full_name) : '') + '</p>' : '') +
+          '<div class="field" style="max-width:320px;"><label>Search</label><input type="text" id="hr-search" placeholder="Name, employee #, department…"></div>' +
         '</div>' +
-        '<div class="card">' +
-          '<h3>Documents</h3>' +
-          '<form id="doc-form" style="align-items:flex-end;">' +
-            '<div class="field"><label>Document Name *</label><input type="text" name="documentName" placeholder="e.g. SSS ID, Contract…" required></div>' +
-            '<div class="field"><label>File *</label><input type="file" name="file" accept="image/*,.pdf" required></div>' +
-            '<button class="btn small" type="submit">Upload</button>' +
-          '</form>' +
-          '<div id="doc-list" style="margin-top:10px;">' +
-            (docs.length
-              ? '<div class="table-scroll"><table><tr><th>Document</th><th>Uploaded</th><th>By</th><th></th></tr>' +
-                docs.map((d) =>
-                  '<tr><td data-label="Document">' + esc(d.document_name) + '</td>' +
-                  '<td data-label="Uploaded">' + fmtDateTime(d.uploaded_at) + '</td>' +
-                  '<td data-label="By">' + (d.uploader ? esc(d.uploader.full_name) : '—') + '</td>' +
-                  '<td style="white-space:nowrap;">' +
-                    '<button class="btn small secondary" data-act="view" data-path="' + esc(d.storage_path) + '">View</button> ' +
-                    '<button class="btn small secondary" data-act="delete" data-id="' + d.id + '" data-path="' + esc(d.storage_path) + '">Delete</button>' +
-                  '</td></tr>'
-                ).join('') + '</table></div>'
-              : '<p class="muted">No documents uploaded yet.</p>') +
-          '</div>' +
-        '</div>';
+        '<div id="hr-table"></div>';
 
-      document.getElementById('file-form').addEventListener('submit', async (ev) => {
+      document.getElementById('hr-search').addEventListener('input', renderTable);
+      renderTable();
+    }
+
+    function renderTable() {
+      const q = document.getElementById('hr-search').value.trim().toLowerCase();
+      const rows = q
+        ? allRows.filter((r) => completeName(r).toLowerCase().includes(q) || (r.employee_code || '').toLowerCase().includes(q) || (r.file201?.department || '').toLowerCase().includes(q))
+        : allRows;
+
+      const box = document.getElementById('hr-table');
+      if (!rows.length) { box.innerHTML = '<p class="muted">No employees match.</p>'; return; }
+
+      box.innerHTML = '<div class="table-scroll"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
+        '<colgroup><col style="width:8%"><col style="width:16%"><col style="width:12%"><col style="width:14%"><col style="width:8%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:7%"></colgroup>' +
+        '<thead><tr><th>Employee #</th><th>Complete Name</th><th>Department</th><th>Job Title</th><th>Status</th><th>Date Hired</th><th>End of Employment</th><th>Civil Status</th><th></th></tr></thead><tbody>' +
+        rows.map((r) => {
+          const f = r.file201 || {};
+          return '<tr>' +
+            '<td data-label="Employee #">' + esc(r.employee_code || '—') + '</td>' +
+            '<td data-label="Complete Name">' + esc(completeName(r)) + '</td>' +
+            '<td data-label="Department">' + esc(f.department || '—') + '</td>' +
+            '<td data-label="Job Title">' + esc(f.job_title || '—') + '</td>' +
+            '<td data-label="Status"><span class="badge ' + (r.status === 'Active' ? 'ok' : 'low') + '">' + esc(r.status) + '</span></td>' +
+            '<td data-label="Date Hired">' + fmtDate(r.hire_date) + '</td>' +
+            '<td data-label="End of Employment">' + fmtDate(f.end_of_employment_date) + '</td>' +
+            '<td data-label="Civil Status">' + esc(f.civil_status || '—') + '</td>' +
+            '<td><button class="btn small secondary" data-act="edit" data-id="' + r.id + '">Edit</button></td>' +
+          '</tr>' +
+          '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="9"></td></tr>';
+        }).join('') +
+        '</tbody></table></div>';
+
+      box.querySelectorAll('[data-act="edit"]').forEach((btn) => btn.addEventListener('click', () => openEdit(btn.dataset.id, rows)));
+    }
+
+    async function openEdit(id, rows) {
+      const row = rows.find((r) => String(r.id) === String(id));
+      const cell = document.querySelector('tr[data-edit-for="' + id + '"]');
+      const isOpen = cell.style.display !== 'none';
+      document.querySelectorAll('#hr-table .edit-row').forEach((tr) => { tr.style.display = 'none'; tr.querySelector('td').innerHTML = ''; });
+      if (isOpen) return; // toggle closed if it was already open
+
+      cell.style.display = '';
+      cell.querySelector('td').innerHTML = '<div class="muted">Loading…</div>';
+      const docs = await listEmployee201Documents(row.id).catch((err) => { toast('hr-msg', String(err.message || err), true); return []; });
+      cell.querySelector('td').innerHTML = editPanelHtml(row, docs);
+
+      const f = cell.querySelector('.hr-edit-form');
+      const deptSelect = f.querySelector('[name=department]');
+      const titleList = f.querySelector('#hr-title-list-' + id);
+      function refreshTitleOptions() {
+        titleList.innerHTML = (JOB_TITLES_BY_DEPT[deptSelect.value] || []).map((t) => '<option value="' + esc(t) + '">').join('');
+      }
+      deptSelect.addEventListener('change', refreshTitleOptions);
+      refreshTitleOptions();
+
+      f.addEventListener('submit', async (ev) => {
         ev.preventDefault();
-        const f = ev.target;
+        const ff = ev.target;
         try {
-          await upsertEmployee201File(selectedId, {
-            birthdate: f.birthdate.value, civilStatus: f.civilStatus.value, address: f.address.value.trim(),
-            sssNumber: f.sssNumber.value.trim(), philhealthNumber: f.philhealthNumber.value.trim(),
-            pagibigNumber: f.pagibigNumber.value.trim(), tinNumber: f.tinNumber.value.trim(),
-            emergencyContactName: f.emergencyContactName.value.trim(), emergencyContactNumber: f.emergencyContactNumber.value.trim(),
-            emergencyContactRelationship: f.emergencyContactRelationship.value.trim(), notes: f.notes.value.trim(),
+          await upsertEmployee201File(row.id, {
+            firstName: ff.firstName.value.trim(), middleName: ff.middleName.value.trim(),
+            lastName: ff.lastName.value.trim(), suffix: ff.suffix.value.trim(),
+            department: ff.department.value, jobTitle: ff.jobTitle.value.trim(), gender: ff.gender.value,
+            endOfEmploymentDate: ff.endOfEmploymentDate.value, civilStatus: ff.civilStatus.value,
+            birthdate: ff.birthdate.value, address: ff.address.value.trim(),
+            sssNumber: ff.sssNumber.value.trim(), philhealthNumber: ff.philhealthNumber.value.trim(),
+            pagibigNumber: ff.pagibigNumber.value.trim(), tinNumber: ff.tinNumber.value.trim(),
+            emergencyContactName: ff.emergencyContactName.value.trim(), emergencyContactNumber: ff.emergencyContactNumber.value.trim(),
+            emergencyContactRelationship: ff.emergencyContactRelationship.value.trim(), notes: ff.notes.value.trim(),
           });
           toast('hr-msg', 'Saved.', false);
-          await loadFilePanel();
+          await load();
         } catch (err) {
           toast('hr-msg', String(err.message || err), true);
         }
       });
 
-      document.getElementById('doc-form').addEventListener('submit', async (ev) => {
+      const docForm = cell.querySelector('.hr-doc-form');
+      docForm.addEventListener('submit', async (ev) => {
         ev.preventDefault();
-        const f = ev.target;
-        const file = f.file.files[0];
+        const df = ev.target;
+        const file = df.file.files[0];
         if (!file) return;
         try {
-          await uploadEmployee201Document(selectedId, f.documentName.value.trim(), file);
+          await uploadEmployee201Document(row.id, df.documentName.value.trim(), file);
           toast('hr-msg', 'Document uploaded.', false);
-          await loadFilePanel();
+          await load();
+          openEdit(id, allRows); // re-expand the same row with the refreshed document list
         } catch (err) {
           toast('hr-msg', String(err.message || err), true);
         }
       });
-
-      panel.querySelectorAll('[data-act="view"]').forEach((btn) => btn.addEventListener('click', async () => {
+      cell.querySelectorAll('[data-doc-act="view"]').forEach((btn) => btn.addEventListener('click', async () => {
         try { window.open(await getEmployee201DocumentUrl(btn.dataset.path), '_blank'); }
         catch (err) { toast('hr-msg', String(err.message || err), true); }
       }));
-      panel.querySelectorAll('[data-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
+      cell.querySelectorAll('[data-doc-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
         if (!confirm('Delete this document?')) return;
-        try { await deleteEmployee201Document(btn.dataset.id, btn.dataset.path); toast('hr-msg', 'Deleted.', false); await loadFilePanel(); }
-        catch (err) { toast('hr-msg', String(err.message || err), true); }
+        try {
+          await deleteEmployee201Document(btn.dataset.id, btn.dataset.path);
+          toast('hr-msg', 'Deleted.', false);
+          await load();
+          openEdit(id, allRows);
+        } catch (err) { toast('hr-msg', String(err.message || err), true); }
       }));
+    }
+
+    function editPanelHtml(row, docs) {
+      const f = row.file201 || {};
+      const id = row.id;
+      return '<div style="padding:10px 4px;">' +
+        '<form class="hr-edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+          '<div class="field"><label>First Name</label><input type="text" name="firstName" value="' + esc(f.first_name || '') + '"></div>' +
+          '<div class="field"><label>Middle Name</label><input type="text" name="middleName" value="' + esc(f.middle_name || '') + '"></div>' +
+          '<div class="field"><label>Last Name</label><input type="text" name="lastName" value="' + esc(f.last_name || '') + '"></div>' +
+          '<div class="field"><label>Suffix</label><input type="text" name="suffix" value="' + esc(f.suffix || '') + '"></div>' +
+          '<div class="field"><label>Gender</label><select name="gender"><option value="">—</option>' +
+            GENDERS.map((g) => '<option' + (g === f.gender ? ' selected' : '') + '>' + g + '</option>').join('') + '</select></div>' +
+          '<div class="field"><label>Civil Status</label><select name="civilStatus"><option value="">—</option>' +
+            CIVIL_STATUSES.map((s) => '<option' + (s === f.civil_status ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
+          '<div class="field"><label>Department</label><select name="department"><option value="">—</option>' +
+            DEPARTMENTS.map((d) => '<option' + (d === f.department ? ' selected' : '') + '>' + d + '</option>').join('') + '</select></div>' +
+          '<div class="field"><label>Job Title</label><input type="text" name="jobTitle" list="hr-title-list-' + id + '" value="' + esc(f.job_title || '') + '"><datalist id="hr-title-list-' + id + '"></datalist></div>' +
+          '<div class="field"><label>Birthdate</label><input type="date" name="birthdate" value="' + (f.birthdate || '') + '"></div>' +
+          '<div class="field"><label>End of Employment Date</label><input type="date" name="endOfEmploymentDate" value="' + (f.end_of_employment_date || '') + '"></div>' +
+          '<div class="field" style="min-width:220px;"><label>Address</label><input type="text" name="address" value="' + esc(f.address || '') + '"></div>' +
+          '<div class="field"><label>SSS Number</label><input type="text" name="sssNumber" value="' + esc(f.sss_number || '') + '"></div>' +
+          '<div class="field"><label>PhilHealth Number</label><input type="text" name="philhealthNumber" value="' + esc(f.philhealth_number || '') + '"></div>' +
+          '<div class="field"><label>Pag-IBIG Number</label><input type="text" name="pagibigNumber" value="' + esc(f.pagibig_number || '') + '"></div>' +
+          '<div class="field"><label>TIN Number</label><input type="text" name="tinNumber" value="' + esc(f.tin_number || '') + '"></div>' +
+          '<div class="field"><label>Emergency Contact Name</label><input type="text" name="emergencyContactName" value="' + esc(f.emergency_contact_name || '') + '"></div>' +
+          '<div class="field"><label>Emergency Contact Number</label><input type="text" name="emergencyContactNumber" value="' + esc(f.emergency_contact_number || '') + '"></div>' +
+          '<div class="field"><label>Relationship</label><input type="text" name="emergencyContactRelationship" value="' + esc(f.emergency_contact_relationship || '') + '"></div>' +
+          '<div class="field" style="min-width:220px;"><label>Notes</label><input type="text" name="notes" value="' + esc(f.notes || '') + '"></div>' +
+          '<button class="btn small" type="submit">Save</button>' +
+        '</form>' +
+        (f.updated_at ? '<p class="muted" style="font-size:11px;margin-top:6px;">Last updated ' + fmtDateTime(f.updated_at) + (f.updater ? ' by ' + esc(f.updater.full_name) : '') + '</p>' : '') +
+        '<h3 style="margin-top:16px;">Documents</h3>' +
+        '<form class="hr-doc-form" style="align-items:flex-end;">' +
+          '<div class="field"><label>Document Name *</label><input type="text" name="documentName" placeholder="e.g. SSS ID, Contract…" required></div>' +
+          '<div class="field"><label>File *</label><input type="file" name="file" accept="image/*,.pdf" required></div>' +
+          '<button class="btn small" type="submit">Upload</button>' +
+        '</form>' +
+        (docs.length
+          ? '<div class="table-scroll" style="margin-top:8px;"><table><tr><th>Document</th><th>Uploaded</th><th>By</th><th></th></tr>' +
+            docs.map((d) =>
+              '<tr><td data-label="Document">' + esc(d.document_name) + '</td>' +
+              '<td data-label="Uploaded">' + fmtDateTime(d.uploaded_at) + '</td>' +
+              '<td data-label="By">' + (d.uploader ? esc(d.uploader.full_name) : '—') + '</td>' +
+              '<td style="white-space:nowrap;">' +
+                '<button type="button" class="btn small secondary" data-doc-act="view" data-path="' + esc(d.storage_path) + '">View</button> ' +
+                '<button type="button" class="btn small secondary" data-doc-act="delete" data-id="' + d.id + '" data-path="' + esc(d.storage_path) + '">Delete</button>' +
+              '</td></tr>'
+            ).join('') + '</table></div>'
+          : '<p class="muted" style="margin-top:8px;">No documents uploaded yet.</p>') +
+      '</div>';
     }
   }
 }
