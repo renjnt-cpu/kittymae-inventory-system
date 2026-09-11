@@ -855,11 +855,19 @@ export async function updateEmployeePosition(employeeId, position) {
  * Supervisor (a *position*, not a *role*) would only get their own employees row back
  * via employees_self_read and this would look nearly empty. */
 export async function listAllEmployee201Files() {
-  const { data, error } = await supabase.from('employees')
-    .select('id, employee_code, full_name, role, position, status, hire_date, contact_number, branches(name), employee_201_files!employee_201_files_employee_id_fkey(*)')
-    .order('full_name');
-  if (error) throw new Error(error.message);
-  const rows = data.map((e) => ({ ...e, file201: e.employee_201_files?.[0] || null }));
+  // Two plain queries merged here instead of one embedded one -- employee_201_files
+  // has two FKs to employees (employee_id and updated_by), which PostgREST can't
+  // auto-resolve for an embed no matter which one is meant, and hinting at the
+  // desired constraint didn't clear it either (schema-cache lag or hint syntax
+  // mismatch) -- not worth fighting given how small this roster is.
+  const [{ data: employees, error: empErr }, { data: files, error: fileErr }] = await Promise.all([
+    supabase.from('employees').select('id, employee_code, full_name, role, position, status, hire_date, contact_number, branches(name)').order('full_name'),
+    supabase.from('employee_201_files').select('*'),
+  ]);
+  if (empErr) throw new Error(empErr.message);
+  if (fileErr) throw new Error(fileErr.message);
+  const filesById = Object.fromEntries((files || []).map((f) => [f.employee_id, f]));
+  const rows = employees.map((e) => ({ ...e, file201: filesById[e.id] || null }));
   const updaterIds = rows.map((r) => r.file201).filter(Boolean);
   await attachEmployeeNames(updaterIds, { updater: 'updated_by' });
   return rows;
