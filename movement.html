@@ -304,7 +304,13 @@ if (employee) {
       return '<th><button type="button" class="btn small' + (active ? '' : ' secondary') + '" data-ois-sort="' + key + '" style="padding:2px 8px;">' + label + arrow + '</button></th>';
     };
     const statusOptionsFor = (current) => distinctStatuses.map((s) => '<option value="' + esc(s) + '"' + (s === current ? ' selected' : '') + '>' + esc(prettyStatus(s)) + '</option>').join('');
-    list.innerHTML = '<div class="table-scroll"><table><thead><tr>' +
+    // Subtotal reflects exactly what's on screen (status tab + search combined) --
+    // most useful when the search narrows down to one item name/SKU, to see at a
+    // glance how many pieces of it are in flight across all its matching orders.
+    const subtotalQty = rows.reduce((s, r) => s + Number(r.qty || 0), 0);
+    const subtotalLine = '<p class="muted" style="margin:0 0 6px;">' + rows.length + ' item' + (rows.length === 1 ? '' : 's') +
+      (oisSearch ? ' matching "' + esc(oisSearch) + '"' : '') + ' · Qty subtotal: <strong>' + subtotalQty + '</strong></p>';
+    list.innerHTML = subtotalLine + '<div class="table-scroll"><table><thead><tr>' +
         sortTh('item_name', 'Item') + sortTh('qty', 'Qty') + sortTh('branch', 'Branch') + sortTh('status', 'Status') + sortTh('order_reference', 'Order / Customer') + sortTh('notes', 'Notes / By') + '<th></th>' +
       '</tr></thead><tbody>' +
       rows.map((r) =>
