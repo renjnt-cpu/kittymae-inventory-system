@@ -320,7 +320,37 @@ if (employee) {
     const subtotalQty = rows.reduce((s, r) => s + Number(r.qty || 0), 0);
     const subtotalLine = '<p class="muted" style="margin:0 0 6px;">' + rows.length + ' item' + (rows.length === 1 ? '' : 's') +
       (oisSearch ? ' matching "' + esc(oisSearch) + '"' : '') + ' · Qty subtotal: <strong>' + subtotalQty + '</strong></p>';
-    list.innerHTML = subtotalLine + '<div class="table-scroll"><table><thead><tr>' +
+
+    // Ranked by order COUNT, not qty -- "most orders" means how many separate order
+    // lines an item shows up in. Recomputed from `rows`, so switching status tabs or
+    // typing a search re-ranks it to match whatever's currently on screen, same as
+    // the subtotal above. Grouped by historyKey() for the same synthetic-SKU reason
+    // as the click-through history.
+    const topCounts = new Map();
+    rows.forEach((r) => {
+      const key = historyKey(r);
+      const entry = topCounts.get(key) || {
+        item_name: r.item_name,
+        sku: (r.sku && !r.sku.toLowerCase().startsWith('pancake-item-')) ? r.sku : null,
+        orders: 0, qty: 0,
+      };
+      entry.orders += 1;
+      entry.qty += Number(r.qty || 0);
+      topCounts.set(key, entry);
+    });
+    const top5 = [...topCounts.values()].sort((a, b) => b.orders - a.orders).slice(0, 5);
+    const filtered = oisStatusFilter !== 'all' || oisSearch;
+    const top5Line = top5.length ? (
+      '<div style="background:#f6f6f6;border-radius:8px;padding:10px 14px;margin-bottom:10px;">' +
+        '<div style="font-weight:600;font-size:12px;margin-bottom:6px;">Top ' + top5.length + ' Products — Most Orders' + (filtered ? ' <span class="muted" style="font-weight:normal;">(current filter)</span>' : '') + '</div>' +
+        '<ol style="margin:0;padding-left:18px;font-size:12px;">' +
+          top5.map((t) => '<li>' + esc(t.item_name) + (t.sku ? ' <span class="muted">(' + esc(t.sku) + ')</span>' : '') +
+            ' — <strong>' + t.orders + '</strong> order' + (t.orders === 1 ? '' : 's') + ' <span class="muted">· Qty ' + t.qty + '</span></li>').join('') +
+        '</ol>' +
+      '</div>'
+    ) : '';
+
+    list.innerHTML = top5Line + subtotalLine + '<div class="table-scroll"><table><thead><tr>' +
         sortTh('item_name', 'Item') + sortTh('qty', 'Qty') + sortTh('branch', 'Branch') + sortTh('status', 'Status') + sortTh('order_reference', 'Order / Customer') + sortTh('notes', 'Notes / By') + '<th></th>' +
       '</tr></thead><tbody>' +
       rows.map((r) =>
