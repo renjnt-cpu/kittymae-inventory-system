@@ -76,11 +76,17 @@ export async function getInventory(branchId) {
   return data;
 }
 
+// Also used by pos.html's SKU lookup (not just movement.html's autocomplete),
+// hence the fuller column list below -- extra fields a caller doesn't need are
+// harmless to select. sanitizeForOrFilter() guards the same PostgREST .or()
+// injection risk documented in listOrderItemStatuses() further down this file.
 export async function searchProducts(query) {
+  const term = sanitizeForOrFilter(query || '');
+  const pat = '%' + term + '%';
   const { data, error } = await supabase
     .from('products')
-    .select('sku, item_name, category, product_line')
-    .or(`sku.ilike.%${query}%,item_name.ilike.%${query}%`)
+    .select('sku, sub_sku, item_name, category, product_line, system_selling_price, gross_weight_g, product_status')
+    .or('sku.ilike.' + pat + ',item_name.ilike.' + pat)
     .limit(50);
   if (error) throw new Error(error.message);
   return data;
