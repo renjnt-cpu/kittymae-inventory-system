@@ -845,6 +845,79 @@ export async function updateEmployeePosition(employeeId, position) {
   if (error) throw new Error(error.message);
 }
 
+// ---- HR 201-File (strictly HR Supervisor + Admin -- is_hr_or_admin() in
+// 83_hr_201_file.sql) -- personal info + document uploads per employee. ----
+
+/** Every employee regardless of status -- unlike getEmployeesForChecklist(), a former
+ * employee's 201-File may still need to be looked up, and Admin themselves can have one. */
+export async function listEmployeesForHr() {
+  const { data, error } = await supabase.from('employees')
+    .select('id, full_name, role, position, status, hire_date, contact_number, branches(name)')
+    .order('full_name');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function getEmployee201File(employeeId) {
+  const { data, error } = await supabase.from('employee_201_files').select('*').eq('employee_id', employeeId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const [withName] = await attachEmployeeNames([data], { updater: 'updated_by' });
+  return withName;
+}
+
+export async function upsertEmployee201File(employeeId, fields) {
+  const me = await currentEmployeeId();
+  const { error } = await supabase.from('employee_201_files').upsert({
+    employee_id: employeeId,
+    birthdate: fields.birthdate || null,
+    civil_status: fields.civilStatus || null,
+    address: fields.address || null,
+    sss_number: fields.sssNumber || null,
+    philhealth_number: fields.philhealthNumber || null,
+    pagibig_number: fields.pagibigNumber || null,
+    tin_number: fields.tinNumber || null,
+    emergency_contact_name: fields.emergencyContactName || null,
+    emergency_contact_number: fields.emergencyContactNumber || null,
+    emergency_contact_relationship: fields.emergencyContactRelationship || null,
+    notes: fields.notes || null,
+    updated_by: me,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function listEmployee201Documents(employeeId) {
+  const { data, error } = await supabase.from('employee_201_documents')
+    .select('*').eq('employee_id', employeeId).order('uploaded_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return attachEmployeeNames(data, { uploader: 'uploaded_by' });
+}
+
+/** Path is "<employee_id>/<timestamp>_<filename>", same private-bucket +
+ * signed-URL pattern as scrap-attachments. */
+export async function uploadEmployee201Document(employeeId, documentName, file) {
+  const path = employeeId + '/' + Date.now() + '_' + file.name;
+  const { error: upErr } = await supabase.storage.from('employee-201-documents').upload(path, file, { upsert: true });
+  if (upErr) throw new Error(upErr.message);
+  const { error: insErr } = await supabase.from('employee_201_documents').insert({
+    employee_id: employeeId, document_name: documentName, storage_path: path, uploaded_by: await currentEmployeeId(),
+  });
+  if (insErr) throw new Error(insErr.message);
+}
+
+export async function getEmployee201DocumentUrl(path) {
+  const { data, error } = await supabase.storage.from('employee-201-documents').createSignedUrl(path, 300);
+  if (error) throw new Error(error.message);
+  return data.signedUrl;
+}
+
+export async function deleteEmployee201Document(id, path) {
+  await supabase.storage.from('employee-201-documents').remove([path]);
+  const { error } = await supabase.from('employee_201_documents').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 // ---- Access checklist (Admin-only sign-off record — see access-checklist.html) ----
 
 /** Everyone except Admin, since Admin has full access by definition and isn't

@@ -53,6 +53,12 @@ export async function initShell(activePage) {
     // COD parcels shipped via LBC for online orders -- company-wide, not per-branch.
     pages.push({ id: 'lbc', label: 'LBC Monitoring', href: 'lbc.html' });
   }
+  // 201-File: strictly HR Supervisor + Admin -- matches is_hr_or_admin() in
+  // 83_hr_201_file.sql exactly, so this link is never shown to someone who'd just
+  // hit "No access" on it.
+  if (employee.role === 'Admin' || employee.position === 'HR Supervisor') {
+    pages.push({ id: 'hr', label: 'HR — 201 File', href: 'hr.html' });
+  }
   if (employee.role === 'Admin') {
     pages.push({ id: 'access-checklist', label: 'Access Checklist', href: 'access-checklist.html' });
   }
@@ -70,6 +76,7 @@ export async function initShell(activePage) {
   const header = document.createElement('header');
   header.innerHTML = '<h1>💎 Kittymae Jewels System</h1>' +
     '<div class="who">' +
+      '<a class="btn small secondary" href="https://renjnt-cpu.github.io/kittymae-pos/index.html">Switch to POS ↗</a> ' +
       '<span id="who-display">' + esc(employee.full_name) + ' · ' + esc(employee.role) +
         (employee.branch_id ? ' · Branch #' + employee.branch_id : ' · All Branches') +
       '</span>' +

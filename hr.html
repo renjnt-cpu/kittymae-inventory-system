@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HR — 201 File — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main>
+  <div id="hr-msg"></div>
+  <div id="hr-root"></div>
+</main>
+
+<script type="module">
+import { initShell, toast, esc } from './js/shell.js';
+import {
+  listEmployeesForHr, getEmployee201File, upsertEmployee201File,
+  listEmployee201Documents, uploadEmployee201Document, getEmployee201DocumentUrl, deleteEmployee201Document,
+} from './js/api.js';
+
+const CIVIL_STATUSES = ['Single', 'Married', 'Widowed', 'Separated'];
+const fmtDate = (s) => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-PH', { dateStyle: 'medium' }) : '—';
+const fmtDateTime = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+
+const employee = await initShell('hr');
+if (employee) {
+  const root = document.getElementById('hr-root');
+  const hasAccess = employee.role === 'Admin' || employee.position === 'HR Supervisor';
+
+  if (!hasAccess) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">The 201-File is restricted to HR Supervisor and Admin.</p></div></div>';
+  } else {
+    const employees = await listEmployeesForHr();
+    let selectedId = null;
+
+    root.innerHTML =
+      '<div class="layout-2col">' +
+        '<div class="layout-2col-side">' +
+          '<div class="card">' +
+            '<h3>Employees</h3>' +
+            '<div class="field"><label>Search</label><input type="text" id="emp-search" placeholder="Name…"></div>' +
+            '<div id="emp-list" style="margin-top:8px;max-height:480px;overflow-y:auto;"></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="layout-2col-main">' +
+          '<div id="file-panel"><p class="muted">Select an employee on the left to view or edit their 201-File.</p></div>' +
+        '</div>' +
+      '</div>';
+
+    function renderEmployeeList() {
+      const q = document.getElementById('emp-search').value.trim().toLowerCase();
+      const rows = q ? employees.filter((e) => e.full_name.toLowerCase().includes(q)) : employees;
+      document.getElementById('emp-list').innerHTML = rows.map((e) =>
+        '<div data-id="' + e.id + '" style="padding:7px 8px;cursor:pointer;border-radius:6px;font-size:13px;' +
+          (e.id === selectedId ? 'background:var(--rose);' : '') + '">' +
+          '<b>' + esc(e.full_name) + '</b>' +
+          (e.status !== 'Active' ? ' <span class="badge low">' + esc(e.status) + '</span>' : '') +
+          '<div class="muted" style="font-size:11px;">' + esc(e.position || e.role) + (e.branches ? ' · ' + esc(e.branches.name) : '') + '</div>' +
+        '</div>'
+      ).join('') || '<p class="muted">No employees match.</p>';
+      document.getElementById('emp-list').querySelectorAll('[data-id]').forEach((row) => row.addEventListener('click', () => {
+        selectedId = row.dataset.id;
+        renderEmployeeList();
+        loadFilePanel();
+      }));
+    }
+    document.getElementById('emp-search').addEventListener('input', renderEmployeeList);
+    renderEmployeeList();
+
+    async function loadFilePanel() {
+      const panel = document.getElementById('file-panel');
+      panel.innerHTML = '<div class="muted">Loading…</div>';
+      const emp = employees.find((e) => e.id === selectedId);
+      const [file201, docs] = await Promise.all([getEmployee201File(selectedId), listEmployee201Documents(selectedId)]);
+
+      panel.innerHTML =
+        '<h2>' + esc(emp.full_name) + ' <span class="muted" style="font-weight:normal;">— ' + esc(emp.position || emp.role) + '</span></h2>' +
+        '<div class="card">' +
+          '<h3>Personal Info</h3>' +
+          '<form id="file-form" style="flex-direction:column;align-items:stretch;flex-wrap:nowrap;">' +
+            '<div class="field"><label>Birthdate</label><input type="date" name="birthdate" value="' + (file201?.birthdate || '') + '"></div>' +
+            '<div class="field"><label>Civil Status</label><select name="civilStatus">' +
+              '<option value="">—</option>' + CIVIL_STATUSES.map((s) => '<option' + (s === file201?.civil_status ? ' selected' : '') + '>' + s + '</option>').join('') +
+            '</select></div>' +
+            '<div class="field" style="min-width:260px;"><label>Address</label><input type="text" name="address" value="' + esc(file201?.address || '') + '"></div>' +
+            '<div class="field"><label>SSS Number</label><input type="text" name="sssNumber" value="' + esc(file201?.sss_number || '') + '"></div>' +
+            '<div class="field"><label>PhilHealth Number</label><input type="text" name="philhealthNumber" value="' + esc(file201?.philhealth_number || '') + '"></div>' +
+            '<div class="field"><label>Pag-IBIG Number</label><input type="text" name="pagibigNumber" value="' + esc(file201?.pagibig_number || '') + '"></div>' +
+            '<div class="field"><label>TIN Number</label><input type="text" name="tinNumber" value="' + esc(file201?.tin_number || '') + '"></div>' +
+            '<div class="field"><label>Emergency Contact Name</label><input type="text" name="emergencyContactName" value="' + esc(file201?.emergency_contact_name || '') + '"></div>' +
+            '<div class="field"><label>Emergency Contact Number</label><input type="text" name="emergencyContactNumber" value="' + esc(file201?.emergency_contact_number || '') + '"></div>' +
+            '<div class="field"><label>Relationship</label><input type="text" name="emergencyContactRelationship" value="' + esc(file201?.emergency_contact_relationship || '') + '"></div>' +
+            '<div class="field" style="min-width:260px;"><label>Notes</label><input type="text" name="notes" value="' + esc(file201?.notes || '') + '"></div>' +
+            '<button class="btn" type="submit">Save</button>' +
+          '</form>' +
+          (file201 ? '<p class="muted" style="font-size:11px;margin-top:8px;">Last updated ' + fmtDateTime(file201.updated_at) + (file201.updater ? ' by ' + esc(file201.updater.full_name) : '') + '</p>' : '') +
+        '</div>' +
+        '<div class="card">' +
+          '<h3>Documents</h3>' +
+          '<form id="doc-form" style="align-items:flex-end;">' +
+            '<div class="field"><label>Document Name *</label><input type="text" name="documentName" placeholder="e.g. SSS ID, Contract…" required></div>' +
+            '<div class="field"><label>File *</label><input type="file" name="file" accept="image/*,.pdf" required></div>' +
+            '<button class="btn small" type="submit">Upload</button>' +
+          '</form>' +
+          '<div id="doc-list" style="margin-top:10px;">' +
+            (docs.length
+              ? '<div class="table-scroll"><table><tr><th>Document</th><th>Uploaded</th><th>By</th><th></th></tr>' +
+                docs.map((d) =>
+                  '<tr><td data-label="Document">' + esc(d.document_name) + '</td>' +
+                  '<td data-label="Uploaded">' + fmtDateTime(d.uploaded_at) + '</td>' +
+                  '<td data-label="By">' + (d.uploader ? esc(d.uploader.full_name) : '—') + '</td>' +
+                  '<td style="white-space:nowrap;">' +
+                    '<button class="btn small secondary" data-act="view" data-path="' + esc(d.storage_path) + '">View</button> ' +
+                    '<button class="btn small secondary" data-act="delete" data-id="' + d.id + '" data-path="' + esc(d.storage_path) + '">Delete</button>' +
+                  '</td></tr>'
+                ).join('') + '</table></div>'
+              : '<p class="muted">No documents uploaded yet.</p>') +
+          '</div>' +
+        '</div>';
+
+      document.getElementById('file-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        try {
+          await upsertEmployee201File(selectedId, {
+            birthdate: f.birthdate.value, civilStatus: f.civilStatus.value, address: f.address.value.trim(),
+            sssNumber: f.sssNumber.value.trim(), philhealthNumber: f.philhealthNumber.value.trim(),
+            pagibigNumber: f.pagibigNumber.value.trim(), tinNumber: f.tinNumber.value.trim(),
+            emergencyContactName: f.emergencyContactName.value.trim(), emergencyContactNumber: f.emergencyContactNumber.value.trim(),
+            emergencyContactRelationship: f.emergencyContactRelationship.value.trim(), notes: f.notes.value.trim(),
+          });
+          toast('hr-msg', 'Saved.', false);
+          await loadFilePanel();
+        } catch (err) {
+          toast('hr-msg', String(err.message || err), true);
+        }
+      });
+
+      document.getElementById('doc-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        const file = f.file.files[0];
+        if (!file) return;
+        try {
+          await uploadEmployee201Document(selectedId, f.documentName.value.trim(), file);
+          toast('hr-msg', 'Document uploaded.', false);
+          await loadFilePanel();
+        } catch (err) {
+          toast('hr-msg', String(err.message || err), true);
+        }
+      });
+
+      panel.querySelectorAll('[data-act="view"]').forEach((btn) => btn.addEventListener('click', async () => {
+        try { window.open(await getEmployee201DocumentUrl(btn.dataset.path), '_blank'); }
+        catch (err) { toast('hr-msg', String(err.message || err), true); }
+      }));
+      panel.querySelectorAll('[data-act="delete"]').forEach((btn) => btn.addEventListener('click', async () => {
+        if (!confirm('Delete this document?')) return;
+        try { await deleteEmployee201Document(btn.dataset.id, btn.dataset.path); toast('hr-msg', 'Deleted.', false); await loadFilePanel(); }
+        catch (err) { toast('hr-msg', String(err.message || err), true); }
+      }));
+    }
+  }
+}
+</script>
+</body>
+</html>
