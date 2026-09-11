@@ -29,6 +29,7 @@ import {
   getBranches, listTransfers, createTransferRequest, approveTransfer, startPreparingTransfer,
   shipTransfer, receiveTransfer, rejectTransfer, cancelTransfer, subscribeToChanges,
 } from './js/api.js';
+import { branchBadge, branchOptionStyle } from './js/branchColors.js';
 
 const STATUS_BADGE = {
   Draft: 'pending', Requested: 'pending', Approved: 'pending', Preparing: 'pending',
@@ -42,7 +43,7 @@ if (employee) {
   const isSupervisorOrAdmin = ['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Sales Executive';
 
   ['from-branch', 'to-branch'].forEach((id) => {
-    document.getElementById(id).innerHTML = branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('');
+    document.getElementById(id).innerHTML = branches.map((b) => '<option value="' + b.id + '" style="' + branchOptionStyle(b.id, branches) + '">' + esc(b.name) + '</option>').join('');
   });
   if (employee.role === 'Branch Supervisor') {
     document.getElementById('to-branch').value = employee.branch_id; // they can only request INTO their own branch
@@ -122,7 +123,7 @@ if (employee) {
     ).join('');
 
     return '<div class="card" data-transfer-id="' + t.id + '">' +
-      '<h3>' + esc(byId[t.from_branch_id]) + ' → ' + esc(byId[t.to_branch_id]) +
+      '<h3>' + branchBadge(esc, byId[t.from_branch_id], t.from_branch_id, branches) + ' → ' + branchBadge(esc, byId[t.to_branch_id], t.to_branch_id, branches) +
       ' &nbsp; <span class="badge ' + (STATUS_BADGE[t.status] || 'pending') + '">' + esc(t.status) + '</span>' +
       (t.has_discrepancy ? ' <span class="badge low">DISCREPANCY</span>' : '') + '</h3>' +
       '<div class="table-scroll"><table><tr><th>SKU</th><th>Requested</th><th>Sent</th><th>Received</th><th>Discrepancy</th></tr>' + items + '</table></div>' +

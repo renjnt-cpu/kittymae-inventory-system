@@ -15,6 +15,7 @@
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
 import { getBranches, listActiveEmployees, listAssetCustodianItems, createAssetCustodianItem, updateAssetCustodianItem, deleteAssetCustodianItem, subscribeToChanges } from './js/api.js';
+import { branchBadge, branchOptionStyle } from './js/branchColors.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const CONDITION_BADGE = { Good: 'ok', Damaged: 'low', Lost: 'low', Returned: 'pending' };
@@ -31,7 +32,7 @@ if (employee) {
   } else {
     const [branches, employees] = await Promise.all([getBranches(), listActiveEmployees()]);
     const branchOptions = (selected) => '<option value="">—</option>' + branches.map((b) =>
-      '<option value="' + b.id + '"' + (b.id === selected ? ' selected' : '') + '>' + esc(b.name) + '</option>'
+      '<option value="' + b.id + '"' + (b.id === selected ? ' selected' : '') + ' style="' + branchOptionStyle(b.id, branches) + '">' + esc(b.name) + '</option>'
     ).join('');
     const custodianOptions = (selected) => '<option value="">Unassigned</option>' + employees.map((e) =>
       '<option value="' + e.id + '"' + (e.id === selected ? ' selected' : '') + '>' + esc(e.full_name) + '</option>'
@@ -141,7 +142,7 @@ if (employee) {
             '</td>' +
             '<td data-label="Type">' + esc(r.item_type) + '</td>' +
             '<td data-label="Custodian">' + esc(r.custodian?.full_name || 'Unassigned') + '</td>' +
-            '<td data-label="Branch">' + esc(r.branches?.name || '—') + '</td>' +
+            '<td data-label="Branch">' + (r.branches ? branchBadge(esc, r.branches.name, r.branch_id, branches) : '—') + '</td>' +
             '<td data-label="Qty">' + r.quantity + '</td>' +
             '<td data-label="Unit Value">' + money(r.unit_value) + '</td>' +
             '<td data-label="Condition"><span class="badge ' + (CONDITION_BADGE[r.condition] || 'ok') + '">' + esc(r.condition) + '</span></td>' +
