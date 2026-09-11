@@ -69,11 +69,32 @@ const REMOVES = new Set(['Stock Out', 'Damage', 'Missing', 'Supplier Return', 'S
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const fmtDate = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
-// Pancake's real status_name values (confirmed against live webhook payloads: "new",
-// "wait_submit", "submitted", "wait_print", "printed", "packing", and others not yet
-// seen) don't match any fixed list we could invent -- so the tabs and dropdown are
-// built from whatever distinct statuses actually show up in the data, not a hardcoded
-// enum that would silently miss a status Pancake adds later.
+// Pancake's own dashboard groups orders under a fixed set of tabs in this order
+// (screenshotted 2026-09-11) -- most of the status_name slugs we've actually seen
+// come through the webhook (new, ordered, printed, packing, pending, wait_print) map
+// onto these either exactly or by a clear pattern (wait_print = Awaiting Print), but
+// "Awaiting Stock" itself has never once appeared in synced data, meaning no order
+// has hit that Pancake state while our webhook was listening -- not a mislabeling
+// issue. Shown as a fixed, always-present tab (even at zero) so a real one won't
+// need a code change to surface. 78_order_item_status_raw_payload.sql now captures
+// the full raw order JSON, so these key guesses can be corrected with certainty from
+// real data instead of pattern-matching if Pancake's actual slug turns out different.
+const PANCAKE_STATUS_TABS = [
+  { label: 'New', keys: ['new'] },
+  { label: 'Pending Confirmation', keys: ['pending'] },
+  { label: 'Awaiting Stock', keys: ['awaiting_stock', 'wait_stock'] },
+  { label: 'Ordered', keys: ['ordered'] },
+  { label: 'Confirmed', keys: ['confirmed'] },
+  { label: 'Awaiting Print', keys: ['wait_print'] },
+  { label: 'Printed', keys: ['printed'] },
+  { label: 'Packing', keys: ['packing'] },
+];
+const PANCAKE_MAPPED_KEYS = new Set(PANCAKE_STATUS_TABS.flatMap((t) => t.keys));
+
+// The per-row status dropdown still lists raw values only (never the canonical
+// labels above) -- picking one writes that literal text into the status column, and
+// writing a pretty label there would create a status Pancake itself never sends,
+// diverging further from the real order_item_status_pancake_real_shape source data.
 function prettyStatus(raw) {
   return String(raw || '').split('_').map((w) => w ? w[0].toUpperCase() + w.slice(1) : w).join(' ') || 'Unknown';
 }
@@ -271,23 +292,36 @@ if (employee) {
   });
 
   function renderOrderItems() {
-    // Whatever statuses actually exist in the data right now -- see the comment by
-    // prettyStatus() above for why this isn't a fixed list.
+    // Raw values actually present in the data right now -- still what the per-row
+    // correction dropdown offers (see the comment by prettyStatus() above).
     const distinctStatuses = [...new Set(orderItems.map((r) => r.status))].sort();
+    // Anything not covered by a PANCAKE_STATUS_TABS mapping gets its own tab too, so
+    // a status we haven't mapped yet (or mis-mapped) still surfaces instead of
+    // silently vanishing into whichever fixed tab it happened to land under.
+    const leftoverStatuses = distinctStatuses.filter((s) => !PANCAKE_MAPPED_KEYS.has(String(s || '').toLowerCase()));
+    const tabKeyMap = new Map();
+    PANCAKE_STATUS_TABS.forEach((t) => tabKeyMap.set(t.label, t.keys));
+    leftoverStatuses.forEach((s) => tabKeyMap.set(s, [s]));
 
     const tabs = document.getElementById('ois-tabs');
-    const counts = { all: orderItems.length };
-    distinctStatuses.forEach((s) => { counts[s] = orderItems.filter((r) => r.status === s).length; });
-    const tabBtn = (key, label) =>
-      '<button type="button" class="btn small' + (oisStatusFilter === key ? '' : ' secondary') + '" data-ois-tab="' + esc(key) + '">' +
-        esc(label) + ' <span class="muted" style="font-weight:normal;">' + counts[key] + '</span></button>';
-    tabs.innerHTML = tabBtn('all', 'All') + distinctStatuses.map((s) => tabBtn(s, prettyStatus(s))).join('');
+    const countFor = (keys) => keys === null ? orderItems.length :
+      orderItems.filter((r) => keys.includes(String(r.status || '').toLowerCase())).length;
+    const tabBtn = (id, label, keys) =>
+      '<button type="button" class="btn small' + (oisStatusFilter === id ? '' : ' secondary') + '" data-ois-tab="' + esc(id) + '">' +
+        esc(label) + ' <span class="muted" style="font-weight:normal;">' + countFor(keys) + '</span></button>';
+    tabs.innerHTML = tabBtn('all', 'All', null) +
+      PANCAKE_STATUS_TABS.map((t) => tabBtn(t.label, t.label, t.keys)).join('') +
+      leftoverStatuses.map((s) => tabBtn(s, prettyStatus(s), [s])).join('');
     tabs.querySelectorAll('[data-ois-tab]').forEach((btn) => btn.addEventListener('click', () => {
       oisStatusFilter = btn.dataset.oisTab;
       renderOrderItems();
     }));
 
-    let rows = oisStatusFilter === 'all' ? orderItems : orderItems.filter((r) => r.status === oisStatusFilter);
+    let rows = orderItems;
+    if (oisStatusFilter !== 'all') {
+      const keys = tabKeyMap.get(oisStatusFilter) || [oisStatusFilter];
+      rows = orderItems.filter((r) => keys.includes(String(r.status || '').toLowerCase()));
+    }
     if (oisSearch) {
       rows = rows.filter((r) => {
         const hay = [r.item_name, r.sku, r.order_reference, r.customer_name, r.notes]
