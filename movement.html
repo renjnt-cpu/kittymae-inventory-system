@@ -70,19 +70,18 @@ const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).t
 const fmtDate = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
 // Pancake's own dashboard groups orders under a fixed set of tabs in this order
-// (screenshotted 2026-09-11) -- most of the status_name slugs we've actually seen
-// come through the webhook (new, ordered, printed, packing, pending, wait_print) map
-// onto these either exactly or by a clear pattern (wait_print = Awaiting Print), but
-// "Awaiting Stock" itself has never once appeared in synced data, meaning no order
-// has hit that Pancake state while our webhook was listening -- not a mislabeling
-// issue. Shown as a fixed, always-present tab (even at zero) so a real one won't
-// need a code change to surface. 78_order_item_status_raw_payload.sql now captures
-// the full raw order JSON, so these key guesses can be corrected with certainty from
-// real data instead of pattern-matching if Pancake's actual slug turns out different.
+// (screenshotted 2026-09-11). These mappings are CONFIRMED against Pancake's own
+// Orders API (numeric status code -> status_name, cross-checked against each tab's
+// live doc_count): new=0, submitted=1, shipped=2, delivered=3, returned=5,
+// canceled=6, packing=8, pending=9, waitting=11 (this is "Awaiting Stock" -- doc_count
+// 88 matched the UI's 87/89 exactly, despite the raw slug looking unrelated),
+// wait_print=12, received_money=16, wait_submit=17, ordered=20. "Confirmed" is the
+// one label here without a confirmed slug (too low-volume to have shown up in
+// sampling) -- left as a best guess pending a real one via raw_payload.
 const PANCAKE_STATUS_TABS = [
   { label: 'New', keys: ['new'] },
   { label: 'Pending Confirmation', keys: ['pending'] },
-  { label: 'Awaiting Stock', keys: ['awaiting_stock', 'wait_stock'] },
+  { label: 'Awaiting Stock', keys: ['waitting'] },
   { label: 'Ordered', keys: ['ordered'] },
   { label: 'Confirmed', keys: ['confirmed'] },
   { label: 'Awaiting Print', keys: ['wait_print'] },
