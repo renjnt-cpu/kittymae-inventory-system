@@ -292,9 +292,15 @@ if (employee) {
   });
 
   function renderOrderItems() {
+    // Delivered means fully done -- nothing left to pull/pack/ship, so it's excluded
+    // from this active fulfillment board entirely (tabs, table, top 5, search).
+    // orderItems itself stays untouched so toggleHistory() can still show a
+    // delivered order in an item's full history -- only the working view hides it.
+    const boardItems = orderItems.filter((r) => String(r.status || '').toLowerCase() !== 'delivered');
+
     // Raw values actually present in the data right now -- still what the per-row
     // correction dropdown offers (see the comment by prettyStatus() above).
-    const distinctStatuses = [...new Set(orderItems.map((r) => r.status))].sort();
+    const distinctStatuses = [...new Set(boardItems.map((r) => r.status))].sort();
     // Anything not covered by a PANCAKE_STATUS_TABS mapping gets its own tab too, so
     // a status we haven't mapped yet (or mis-mapped) still surfaces instead of
     // silently vanishing into whichever fixed tab it happened to land under.
@@ -304,8 +310,8 @@ if (employee) {
     leftoverStatuses.forEach((s) => tabKeyMap.set(s, [s]));
 
     const tabs = document.getElementById('ois-tabs');
-    const countFor = (keys) => keys === null ? orderItems.length :
-      orderItems.filter((r) => keys.includes(String(r.status || '').toLowerCase())).length;
+    const countFor = (keys) => keys === null ? boardItems.length :
+      boardItems.filter((r) => keys.includes(String(r.status || '').toLowerCase())).length;
     const tabBtn = (id, label, keys) =>
       '<button type="button" class="btn small' + (oisStatusFilter === id ? '' : ' secondary') + '" data-ois-tab="' + esc(id) + '">' +
         esc(label) + ' <span class="muted" style="font-weight:normal;">' + countFor(keys) + '</span></button>';
@@ -317,10 +323,10 @@ if (employee) {
       renderOrderItems();
     }));
 
-    let rows = orderItems;
+    let rows = boardItems;
     if (oisStatusFilter !== 'all') {
       const keys = tabKeyMap.get(oisStatusFilter) || [oisStatusFilter];
-      rows = orderItems.filter((r) => keys.includes(String(r.status || '').toLowerCase()));
+      rows = boardItems.filter((r) => keys.includes(String(r.status || '').toLowerCase()));
     }
     if (oisSearch) {
       rows = rows.filter((r) => {
