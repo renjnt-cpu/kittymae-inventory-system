@@ -67,6 +67,7 @@ import {
 
 const REMOVES = new Set(['Stock Out', 'Damage', 'Missing', 'Supplier Return', 'Sale']);
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+const fmtDate = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
 // Pancake's real status_name values (confirmed against live webhook payloads: "new",
 // "wait_submit", "submitted", "wait_print", "printed", "packing", and others not yet
@@ -84,6 +85,15 @@ function statusBadgeClass(raw) {
   if (s.includes('ship') || s.includes('deliver') || s.includes('complet') || s.includes('done')) return 'ok';
   if (s.includes('wait') || s.includes('pending') || s.includes('new') || s.includes('submit')) return 'pending';
   return 'transit';
+}
+// Groups an item's order history by real SKU when there is one, but falls back to
+// item_name for the webhook's synthetic "pancake-item-<id>" SKUs (assigned per order
+// line when Pancake's own variation has no display_id set) -- grouping by those would
+// only ever match the row against itself, since each order line gets its own id.
+function historyKey(r) {
+  const sku = String(r.sku || '').toLowerCase();
+  if (sku && !sku.startsWith('pancake-item-')) return sku;
+  return String(r.item_name || '').trim().toLowerCase();
 }
 // Mirrors assert_can_act_on_branch() in 67_layaway.sql / the inline check in
 // record_sale() (66_sales_recording.sql) -- so the branch field locks to "own branch
@@ -315,7 +325,13 @@ if (employee) {
       '</tr></thead><tbody>' +
       rows.map((r) =>
         '<tr>' +
-          '<td data-label="Item"><strong>' + esc(r.item_name) + '</strong>' + (r.sku ? '<div class="muted" style="font-size:11px;">' + esc(r.sku) + '</div>' : '') + '</td>' +
+          '<td data-label="Item">' +
+            '<button type="button" data-history-toggle="' + r.id + '" data-history-key="' + esc(historyKey(r)) + '" ' +
+              'style="background:none;border:none;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer;">' +
+              '<strong style="text-decoration:underline;text-decoration-style:dotted;">' + esc(r.item_name) + '</strong>' +
+            '</button>' +
+            (r.sku ? '<div class="muted" style="font-size:11px;">' + esc(r.sku) + '</div>' : '') +
+          '</td>' +
           '<td data-label="Qty">' + r.qty + '</td>' +
           '<td data-label="Branch">' + esc(r.branches?.name || '—') + '</td>' +
           '<td data-label="Status">' +
@@ -326,7 +342,8 @@ if (employee) {
             (r.creator ? '<div class="muted" style="font-size:10px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
           '</td>' +
           '<td><button class="btn small secondary" type="button" data-delete-id="' + r.id + '">Delete</button></td>' +
-        '</tr>'
+        '</tr>' +
+        '<tr class="history-row" data-history-for="' + r.id + '" style="display:none;"><td colspan="7"></td></tr>'
       ).join('') +
       '</tbody></table></div>';
 
@@ -358,6 +375,38 @@ if (employee) {
         toast('mv-msg', String(err.message || err), true);
       }
     }));
+    list.querySelectorAll('[data-history-toggle]').forEach((btn) => btn.addEventListener('click', () => {
+      toggleHistory(btn.dataset.historyToggle, btn.dataset.historyKey);
+    }));
+  }
+
+  /** Full history for one item across every order it's shown up in -- looks across
+   * the whole loaded dataset, not just whatever the status tab/search currently has
+   * on screen, since the point is seeing everything regardless of the active filter. */
+  function toggleHistory(id, key) {
+    const row = document.querySelector('tr[data-history-for="' + id + '"]');
+    const isOpen = row.style.display !== 'none';
+    document.querySelectorAll('.history-row').forEach((r) => { r.style.display = 'none'; r.querySelector('td').innerHTML = ''; });
+    if (isOpen) return;
+    row.style.display = '';
+    const matches = orderItems.filter((r) => historyKey(r) === key)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    row.querySelector('td').innerHTML =
+      '<div style="padding:8px 4px;">' +
+        '<div class="muted" style="font-size:11px;margin-bottom:6px;">' + matches.length + ' order' + (matches.length === 1 ? '' : 's') + ' for this item, across every status</div>' +
+        '<div class="table-scroll"><table><thead><tr><th>Order / Customer</th><th>Branch</th><th>Status</th><th>Qty</th><th>Notes</th><th>Date</th></tr></thead><tbody>' +
+        matches.map((m) =>
+          '<tr>' +
+            '<td>' + esc(m.order_reference || '—') + (m.customer_name ? '<div class="muted" style="font-size:11px;">' + esc(m.customer_name) + '</div>' : '') + '</td>' +
+            '<td>' + esc(m.branches?.name || '—') + '</td>' +
+            '<td><span class="badge ' + statusBadgeClass(m.status) + '">' + esc(prettyStatus(m.status)) + '</span></td>' +
+            '<td>' + m.qty + '</td>' +
+            '<td style="font-size:11px;">' + esc(m.notes || '—') + '</td>' +
+            '<td style="font-size:11px;white-space:nowrap;">' + fmtDate(m.created_at) + '</td>' +
+          '</tr>'
+        ).join('') +
+        '</tbody></table></div>' +
+      '</div>';
   }
 }
 </script>
