@@ -929,13 +929,59 @@ const TERMINAL_STATUSES = ['delivered', 'canceled', 'returned', 'shipped'];
 // on every page load.
 const ORDER_ITEM_STATUS_COLUMNS = 'id, order_reference, sku, item_name, qty, branch_id, customer_name, status, notes, created_by, created_at, updated_at, branches(name)';
 
-export async function listOrderItemStatuses() {
-  const { data, error } = await supabase.from('order_item_status')
+// A single status like "new" alone has tens of thousands of active orders after the
+// historical Pancake backfill -- fetching everything active (even with terminal
+// statuses excluded) still silently hit Supabase's default 1000-row cap, which is
+// exactly how Awaiting Stock's real 90 orders were showing as ~27: most of them
+// just fell outside whatever the most-recent 1000 rows happened to be. Capped here
+// explicitly, and paired with a UI message when a query is scoped to fewer rows
+// than actually match (search further to narrow it down), same lesson the original
+// Sheets-based system already learned about this business's real data volume.
+export const ORDER_ITEM_STATUS_ROW_CAP = 500;
+
+/** Strips characters that are structurally significant to PostgREST's .or() filter
+ * syntax (comma separates conditions, parentheses group them) out of free-text
+ * search input before it's embedded in one -- otherwise a search term containing
+ * either could reshape the filter instead of just being searched for. Also escapes
+ * SQL LIKE wildcards so a literal % or _ in a search term isn't treated as one. */
+function sanitizeForOrFilter(s) {
+  return s.replace(/[,()]/g, ' ').replace(/[%_\\]/g, '\\$&').trim();
+}
+
+/** statusKeys: null for "All", or the array of raw status_name values the current
+ * tab maps to (PANCAKE_STATUS_TABS entries are all single-key now, but this still
+ * takes an array for any tab that ever needs more than one). search: free text,
+ * matched against item/SKU/order/customer/notes -- same fields the old client-side
+ * filter checked, just done server-side now so a tab load only pulls what that tab
+ * actually needs instead of the whole active dataset. */
+export async function listOrderItemStatuses({ statusKeys = null, search = '' } = {}) {
+  let query = supabase.from('order_item_status')
     .select(ORDER_ITEM_STATUS_COLUMNS)
-    .not('status', 'in', '(' + TERMINAL_STATUSES.join(',') + ')')
-    .order('created_at', { ascending: false });
+    .not('status', 'in', '(' + TERMINAL_STATUSES.join(',') + ')');
+  if (statusKeys) query = query.in('status', statusKeys);
+  const term = sanitizeForOrFilter(search || '');
+  if (term) {
+    const pat = '%' + term + '%';
+    query = query.or(
+      'item_name.ilike.' + pat + ',sku.ilike.' + pat + ',order_reference.ilike.' + pat +
+      ',customer_name.ilike.' + pat + ',notes.ilike.' + pat
+    );
+  }
+  const { data, error } = await query.order('created_at', { ascending: false }).limit(ORDER_ITEM_STATUS_ROW_CAP);
   if (error) throw new Error(error.message);
   return attachEmployeeNames(data, { creator: 'created_by' });
+}
+
+/** Per-status counts for the tab badges -- a lightweight aggregate (see
+ * 80_order_item_status_counts_fn.sql) instead of counting a client-side array,
+ * since that array is now capped/scoped to one tab at a time and would give wrong
+ * counts for every OTHER tab. */
+export async function getOrderItemStatusCounts() {
+  const { data, error } = await supabase.rpc('order_item_status_counts');
+  if (error) throw new Error(error.message);
+  const counts = { all: 0 };
+  (data || []).forEach((row) => { counts[row.status] = Number(row.cnt); counts.all += Number(row.cnt); });
+  return counts;
 }
 
 /** Full history for one item across EVERY status, including the terminal ones the

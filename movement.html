@@ -61,7 +61,8 @@
 import { initShell, toast, esc } from './js/shell.js';
 import {
   getBranches, recordMovement, recordSale, listSales, searchProducts,
-  listOrderItemStatuses, listOrderHistoryForItem, setOrderItemStatus, deleteOrderItemStatus,
+  listOrderItemStatuses, listOrderHistoryForItem, getOrderItemStatusCounts,
+  ORDER_ITEM_STATUS_ROW_CAP, setOrderItemStatus, deleteOrderItemStatus,
   subscribeToChanges,
 } from './js/api.js';
 
@@ -263,17 +264,36 @@ if (employee) {
     }
   });
 
-  // Order & Item Status board -- monitoring only, no manual Add: real rows are meant
-  // to come from Pancake once a live sync exists. Sort controls sit inside each
-  // column's own <th>, same pattern as Bills/Refunds/the Scrap leaderboard.
-  let orderItems = [];
+  // Order & Item Status board -- monitoring only, no manual Add: real rows come from
+  // the pancake-webhook Edge Function (live) and the one-time pancake-backfill pull
+  // of Pancake's order history. Queries are scoped server-side per tab/search now,
+  // NOT "fetch everything active, filter client-side" -- a single status like New
+  // alone has tens of thousands of orders after the historical backfill, so fetching
+  // everything silently hit Supabase's default 1000-row cap and hid most of whatever
+  // fell outside the most-recent 1000 rows (exactly how Awaiting Stock's real 90
+  // orders were showing as ~27 here). Sort controls sit inside each column's own
+  // <th>, same pattern as Bills/Refunds/the Scrap leaderboard.
+  let orderItems = [];             // whatever the CURRENT tab + search returned (capped -- see api.js)
+  let statusCounts = { all: 0 };   // per-status counts across the whole active dataset, for tab badges
   let oisStatusFilter = 'all';
   let oisSearch = '';
   let oisSort = null, oisSortDir = 'desc';
+  let oisSearchTimer = null;
+
+  function tabKeysFor(filterId) {
+    if (filterId === 'all') return null;
+    const mapped = PANCAKE_STATUS_TABS.find((t) => t.label === filterId);
+    return mapped ? mapped.keys : [filterId];
+  }
 
   async function loadOrderItems() {
     try {
-      orderItems = await listOrderItemStatuses();
+      const [items, counts] = await Promise.all([
+        listOrderItemStatuses({ statusKeys: tabKeysFor(oisStatusFilter), search: oisSearch }),
+        getOrderItemStatusCounts(),
+      ]);
+      orderItems = items;
+      statusCounts = counts;
       renderOrderItems();
     } catch (err) {
       document.getElementById('ois-list').innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
@@ -282,36 +302,31 @@ if (employee) {
   await loadOrderItems();
   subscribeToChanges('order_item_status', loadOrderItems);
 
-  // Lives outside renderOrderItems() (which re-renders the tabs/table on every data
-  // change) so the listener is attached once and typing doesn't lose focus/cursor
-  // position each time a webhook push re-renders the list underneath it.
+  // Search now queries the server (it has to -- the client no longer holds the full
+  // active dataset), so it's debounced to one request per pause in typing rather
+  // than one per keystroke. Lives outside renderOrderItems() so the listener is
+  // attached once and typing doesn't lose focus each time a webhook push re-renders
+  // the list underneath it.
   document.getElementById('ois-search').addEventListener('input', (ev) => {
-    oisSearch = ev.target.value.trim().toLowerCase();
-    renderOrderItems();
+    oisSearch = ev.target.value.trim();
+    clearTimeout(oisSearchTimer);
+    oisSearchTimer = setTimeout(loadOrderItems, 300);
   });
 
   function renderOrderItems() {
-    // Terminal statuses (delivered, canceled, returned, shipped) are excluded at the
-    // query level now -- listOrderItemStatuses() never fetches them at all, since
-    // after the historical Pancake backfill this table holds 40,000+ rows and most
-    // of them are exactly these "fully done" ones. orderItems here is already just
-    // the active working set; toggleHistory() below does its own separate query to
-    // include terminal-status rows for an item's full history.
-
-    // Raw values actually present in the data right now -- still what the per-row
-    // correction dropdown offers (see the comment by prettyStatus() above).
-    const distinctStatuses = [...new Set(orderItems.map((r) => r.status))].sort();
+    // The full set of raw statuses that actually exist right now, from the
+    // server-side aggregate -- NOT derived from orderItems, which is scoped to just
+    // the current tab and would make every OTHER tab's badge (and the per-row
+    // status-correction dropdown) wrong.
+    const distinctStatuses = Object.keys(statusCounts).filter((s) => s !== 'all').sort();
     // Anything not covered by a PANCAKE_STATUS_TABS mapping gets its own tab too, so
     // a status we haven't mapped yet (or mis-mapped) still surfaces instead of
     // silently vanishing into whichever fixed tab it happened to land under.
-    const leftoverStatuses = distinctStatuses.filter((s) => !PANCAKE_MAPPED_KEYS.has(String(s || '').toLowerCase()));
-    const tabKeyMap = new Map();
-    PANCAKE_STATUS_TABS.forEach((t) => tabKeyMap.set(t.label, t.keys));
-    leftoverStatuses.forEach((s) => tabKeyMap.set(s, [s]));
+    const leftoverStatuses = distinctStatuses.filter((s) => !PANCAKE_MAPPED_KEYS.has(s));
 
     const tabs = document.getElementById('ois-tabs');
-    const countFor = (keys) => keys === null ? orderItems.length :
-      orderItems.filter((r) => keys.includes(String(r.status || '').toLowerCase())).length;
+    const countFor = (keys) => keys === null ? statusCounts.all :
+      keys.reduce((sum, k) => sum + (statusCounts[k] || 0), 0);
     const tabBtn = (id, label, keys) =>
       '<button type="button" class="btn small' + (oisStatusFilter === id ? '' : ' secondary') + '" data-ois-tab="' + esc(id) + '">' +
         esc(label) + ' <span class="muted" style="font-weight:normal;">' + countFor(keys) + '</span></button>';
@@ -320,21 +335,10 @@ if (employee) {
       leftoverStatuses.map((s) => tabBtn(s, prettyStatus(s), [s])).join('');
     tabs.querySelectorAll('[data-ois-tab]').forEach((btn) => btn.addEventListener('click', () => {
       oisStatusFilter = btn.dataset.oisTab;
-      renderOrderItems();
+      loadOrderItems();
     }));
 
-    let rows = orderItems;
-    if (oisStatusFilter !== 'all') {
-      const keys = tabKeyMap.get(oisStatusFilter) || [oisStatusFilter];
-      rows = orderItems.filter((r) => keys.includes(String(r.status || '').toLowerCase()));
-    }
-    if (oisSearch) {
-      rows = rows.filter((r) => {
-        const hay = [r.item_name, r.sku, r.order_reference, r.customer_name, r.notes]
-          .map((v) => String(v || '').toLowerCase()).join(' ');
-        return hay.includes(oisSearch);
-      });
-    }
+    let rows = orderItems; // already scoped to the current tab + search at the query level
     const list = document.getElementById('ois-list');
     if (!rows.length) { list.innerHTML = '<p class="muted">No items match this search/filter.</p>'; return; }
 
@@ -357,9 +361,15 @@ if (employee) {
     // Subtotal reflects exactly what's on screen (status tab + search combined) --
     // most useful when the search narrows down to one item name/SKU, to see at a
     // glance how many pieces of it are in flight across all its matching orders.
+    // The query itself is capped (ORDER_ITEM_STATUS_ROW_CAP, see api.js) -- hitting
+    // that cap exactly is the signal there may be more not shown, since a status
+    // like New can run into the thousands; search narrows it down to see the rest.
+    const truncated = rows.length >= ORDER_ITEM_STATUS_ROW_CAP;
     const subtotalQty = rows.reduce((s, r) => s + Number(r.qty || 0), 0);
-    const subtotalLine = '<p class="muted" style="margin:0 0 6px;">' + rows.length + ' item' + (rows.length === 1 ? '' : 's') +
-      (oisSearch ? ' matching "' + esc(oisSearch) + '"' : '') + ' · Qty subtotal: <strong>' + subtotalQty + '</strong></p>';
+    const subtotalLine = '<p class="muted" style="margin:0 0 6px;">' + rows.length + (truncated ? '+' : '') + ' item' + (rows.length === 1 && !truncated ? '' : 's') +
+      (oisSearch ? ' matching "' + esc(oisSearch) + '"' : '') + ' · Qty subtotal: <strong>' + subtotalQty + (truncated ? '+' : '') + '</strong>' +
+      (truncated ? ' <span style="color:#b45309;">— showing the ' + ORDER_ITEM_STATUS_ROW_CAP + ' most recent; search to narrow further</span>' : '') +
+      '</p>';
 
     // Ranked by order COUNT, not qty -- "most orders" means how many separate order
     // lines an item shows up in. Recomputed from `rows`, so switching status tabs or
@@ -382,7 +392,9 @@ if (employee) {
     const filtered = oisStatusFilter !== 'all' || oisSearch;
     const top5Line = top5.length ? (
       '<div style="background:#f6f6f6;border-radius:8px;padding:10px 14px;margin-bottom:10px;">' +
-        '<div style="font-weight:600;font-size:12px;margin-bottom:6px;">Top ' + top5.length + ' Products — Most Orders' + (filtered ? ' <span class="muted" style="font-weight:normal;">(current filter)</span>' : '') + '</div>' +
+        '<div style="font-weight:600;font-size:12px;margin-bottom:6px;">Top ' + top5.length + ' Products — Most Orders' +
+          (filtered ? ' <span class="muted" style="font-weight:normal;">(current filter)</span>' : '') +
+          (truncated ? ' <span class="muted" style="font-weight:normal;">(from the ' + ORDER_ITEM_STATUS_ROW_CAP + ' most recent)</span>' : '') + '</div>' +
         '<ol style="margin:0;padding-left:18px;font-size:12px;">' +
           top5.map((t) => '<li>' + esc(t.item_name) + (t.sku ? ' <span class="muted">(' + esc(t.sku) + ')</span>' : '') +
             ' — <strong>' + t.orders + '</strong> order' + (t.orders === 1 ? '' : 's') + ' <span class="muted">· Qty ' + t.qty + '</span></li>').join('') +
