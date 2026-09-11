@@ -51,7 +51,8 @@
   <div class="card">
     <h3>Order &amp; Item Status</h3>
     <p class="muted" style="margin-top:-4px;">Monitoring only — mirrors Pancake's own Orders stages, focused on the item being pulled/shipped rather than the customer conversation (Pancake already handles that). Not synced live yet; status can be corrected by hand below.</p>
-    <div id="ois-tabs" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    <div class="field" style="max-width:380px;"><label>Search</label><input type="text" id="ois-search" placeholder="Item, SKU, order #, customer, or notes…"></div>
+    <div id="ois-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>
     <div id="ois-list" style="margin-top:10px;"><div class="muted">Loading…</div></div>
   </div>
 </main>
@@ -237,6 +238,7 @@ if (employee) {
   // column's own <th>, same pattern as Bills/Refunds/the Scrap leaderboard.
   let orderItems = [];
   let oisStatusFilter = 'all';
+  let oisSearch = '';
   let oisSort = null, oisSortDir = 'desc';
 
   async function loadOrderItems() {
@@ -249,6 +251,14 @@ if (employee) {
   }
   await loadOrderItems();
   subscribeToChanges('order_item_status', loadOrderItems);
+
+  // Lives outside renderOrderItems() (which re-renders the tabs/table on every data
+  // change) so the listener is attached once and typing doesn't lose focus/cursor
+  // position each time a webhook push re-renders the list underneath it.
+  document.getElementById('ois-search').addEventListener('input', (ev) => {
+    oisSearch = ev.target.value.trim().toLowerCase();
+    renderOrderItems();
+  });
 
   function renderOrderItems() {
     // Whatever statuses actually exist in the data right now -- see the comment by
@@ -268,8 +278,15 @@ if (employee) {
     }));
 
     let rows = oisStatusFilter === 'all' ? orderItems : orderItems.filter((r) => r.status === oisStatusFilter);
+    if (oisSearch) {
+      rows = rows.filter((r) => {
+        const hay = [r.item_name, r.sku, r.order_reference, r.customer_name, r.notes]
+          .map((v) => String(v || '').toLowerCase()).join(' ');
+        return hay.includes(oisSearch);
+      });
+    }
     const list = document.getElementById('ois-list');
-    if (!rows.length) { list.innerHTML = '<p class="muted">No items for this filter.</p>'; return; }
+    if (!rows.length) { list.innerHTML = '<p class="muted">No items match this search/filter.</p>'; return; }
 
     if (oisSort) {
       const dirMul = oisSortDir === 'desc' ? -1 : 1;
@@ -288,7 +305,7 @@ if (employee) {
     };
     const statusOptionsFor = (current) => distinctStatuses.map((s) => '<option value="' + esc(s) + '"' + (s === current ? ' selected' : '') + '>' + esc(prettyStatus(s)) + '</option>').join('');
     list.innerHTML = '<div class="table-scroll"><table><thead><tr>' +
-        sortTh('item_name', 'Item') + sortTh('qty', 'Qty') + sortTh('branch', 'Branch') + sortTh('status', 'Status') + sortTh('order_reference', 'Order / Customer') + '<th>Notes / By</th><th></th>' +
+        sortTh('item_name', 'Item') + sortTh('qty', 'Qty') + sortTh('branch', 'Branch') + sortTh('status', 'Status') + sortTh('order_reference', 'Order / Customer') + sortTh('notes', 'Notes / By') + '<th></th>' +
       '</tr></thead><tbody>' +
       rows.map((r) =>
         '<tr>' +
