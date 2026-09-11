@@ -856,7 +856,7 @@ export async function updateEmployeePosition(employeeId, position) {
  * via employees_self_read and this would look nearly empty. */
 export async function listAllEmployee201Files() {
   const { data, error } = await supabase.from('employees')
-    .select('id, employee_code, full_name, role, position, status, hire_date, contact_number, branches(name), employee_201_files(*)')
+    .select('id, employee_code, full_name, role, position, status, hire_date, contact_number, branches(name), employee_201_files!employee_201_files_employee_id_fkey(*)')
     .order('full_name');
   if (error) throw new Error(error.message);
   const rows = data.map((e) => ({ ...e, file201: e.employee_201_files?.[0] || null }));
