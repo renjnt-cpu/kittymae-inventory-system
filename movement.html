@@ -61,7 +61,7 @@
 import { initShell, toast, esc } from './js/shell.js';
 import {
   getBranches, recordMovement, recordSale, listSales, searchProducts,
-  listOrderItemStatuses, setOrderItemStatus, deleteOrderItemStatus,
+  listOrderItemStatuses, listOrderHistoryForItem, setOrderItemStatus, deleteOrderItemStatus,
   subscribeToChanges,
 } from './js/api.js';
 
@@ -291,15 +291,16 @@ if (employee) {
   });
 
   function renderOrderItems() {
-    // Delivered means fully done -- nothing left to pull/pack/ship, so it's excluded
-    // from this active fulfillment board entirely (tabs, table, top 5, search).
-    // orderItems itself stays untouched so toggleHistory() can still show a
-    // delivered order in an item's full history -- only the working view hides it.
-    const boardItems = orderItems.filter((r) => String(r.status || '').toLowerCase() !== 'delivered');
+    // Terminal statuses (delivered, canceled, returned, shipped) are excluded at the
+    // query level now -- listOrderItemStatuses() never fetches them at all, since
+    // after the historical Pancake backfill this table holds 40,000+ rows and most
+    // of them are exactly these "fully done" ones. orderItems here is already just
+    // the active working set; toggleHistory() below does its own separate query to
+    // include terminal-status rows for an item's full history.
 
     // Raw values actually present in the data right now -- still what the per-row
     // correction dropdown offers (see the comment by prettyStatus() above).
-    const distinctStatuses = [...new Set(boardItems.map((r) => r.status))].sort();
+    const distinctStatuses = [...new Set(orderItems.map((r) => r.status))].sort();
     // Anything not covered by a PANCAKE_STATUS_TABS mapping gets its own tab too, so
     // a status we haven't mapped yet (or mis-mapped) still surfaces instead of
     // silently vanishing into whichever fixed tab it happened to land under.
@@ -309,8 +310,8 @@ if (employee) {
     leftoverStatuses.forEach((s) => tabKeyMap.set(s, [s]));
 
     const tabs = document.getElementById('ois-tabs');
-    const countFor = (keys) => keys === null ? boardItems.length :
-      boardItems.filter((r) => keys.includes(String(r.status || '').toLowerCase())).length;
+    const countFor = (keys) => keys === null ? orderItems.length :
+      orderItems.filter((r) => keys.includes(String(r.status || '').toLowerCase())).length;
     const tabBtn = (id, label, keys) =>
       '<button type="button" class="btn small' + (oisStatusFilter === id ? '' : ' secondary') + '" data-ois-tab="' + esc(id) + '">' +
         esc(label) + ' <span class="muted" style="font-weight:normal;">' + countFor(keys) + '</span></button>';
@@ -322,10 +323,10 @@ if (employee) {
       renderOrderItems();
     }));
 
-    let rows = boardItems;
+    let rows = orderItems;
     if (oisStatusFilter !== 'all') {
       const keys = tabKeyMap.get(oisStatusFilter) || [oisStatusFilter];
-      rows = boardItems.filter((r) => keys.includes(String(r.status || '').toLowerCase()));
+      rows = orderItems.filter((r) => keys.includes(String(r.status || '').toLowerCase()));
     }
     if (oisSearch) {
       rows = rows.filter((r) => {
@@ -395,7 +396,7 @@ if (employee) {
       rows.map((r) =>
         '<tr>' +
           '<td data-label="Item">' +
-            '<button type="button" data-history-toggle="' + r.id + '" data-history-key="' + esc(historyKey(r)) + '" ' +
+            '<button type="button" data-history-toggle="' + r.id + '" data-history-sku="' + esc(r.sku || '') + '" data-history-name="' + esc(r.item_name) + '" ' +
               'style="background:none;border:none;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer;">' +
               '<strong style="text-decoration:underline;text-decoration-style:dotted;">' + esc(r.item_name) + '</strong>' +
             '</button>' +
@@ -445,21 +446,29 @@ if (employee) {
       }
     }));
     list.querySelectorAll('[data-history-toggle]').forEach((btn) => btn.addEventListener('click', () => {
-      toggleHistory(btn.dataset.historyToggle, btn.dataset.historyKey);
+      toggleHistory(btn.dataset.historyToggle, btn.dataset.historySku, btn.dataset.historyName);
     }));
   }
 
-  /** Full history for one item across every order it's shown up in -- looks across
-   * the whole loaded dataset, not just whatever the status tab/search currently has
-   * on screen, since the point is seeing everything regardless of the active filter. */
-  function toggleHistory(id, key) {
+  /** Full history for one item across every order it's shown up in, including
+   * terminal statuses (delivered/canceled/returned/shipped) the board's own default
+   * query excludes -- a fresh, targeted query rather than filtering orderItems,
+   * since that array no longer holds those rows at all after the historical Pancake
+   * backfill made "fetch everything, filter client-side" too expensive to keep doing. */
+  async function toggleHistory(id, sku, itemName) {
     const row = document.querySelector('tr[data-history-for="' + id + '"]');
     const isOpen = row.style.display !== 'none';
     document.querySelectorAll('.history-row').forEach((r) => { r.style.display = 'none'; r.querySelector('td').innerHTML = ''; });
     if (isOpen) return;
     row.style.display = '';
-    const matches = orderItems.filter((r) => historyKey(r) === key)
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    row.querySelector('td').innerHTML = '<div class="muted" style="padding:8px 4px;">Loading history…</div>';
+    let matches;
+    try {
+      matches = await listOrderHistoryForItem({ sku, itemName });
+    } catch (err) {
+      row.querySelector('td').innerHTML = '<div class="msg error" style="margin:8px 4px;">' + esc(err.message || err) + '</div>';
+      return;
+    }
     row.querySelector('td').innerHTML =
       '<div style="padding:8px 4px;">' +
         '<div class="muted" style="font-size:11px;margin-bottom:6px;">' + matches.length + ' order' + (matches.length === 1 ? '' : 's') + ' for this item, across every status</div>' +

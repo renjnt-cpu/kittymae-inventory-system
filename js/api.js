@@ -909,17 +909,49 @@ export async function deleteLayawayPayment(paymentId) {
 }
 
 // ---- Order & Item Status (Record Movement) -- a monitoring board mirroring
-// Pancake's own Orders view, item-focused rather than customer-focused. No manual
-// add -- rows are meant to come from a future Pancake sync; status can be corrected
-// by hand meanwhile. Company-wide read/status-update, Admin/Manager can delete
-// (75_order_item_status_tracker.sql). ----
+// Pancake's own Orders view, item-focused rather than customer-focused. Rows come
+// from the pancake-webhook Edge Function (live) and the one-time pancake-backfill
+// pull of Pancake's order history (78_order_item_status_raw_payload.sql). Company-
+// wide read/status-update, Admin/Manager can delete (75_order_item_status_tracker.sql).
+
+// Terminal states -- the order is fully done, nothing left to pull/pack/ship -- are
+// excluded from the working board by default. Excluded at the query level (not just
+// client-side) because after the historical backfill this table holds 40,000+ rows;
+// most of them are exactly these terminal ones, and fetching all of them on every
+// page load doesn't scale. Use listOrderHistoryForItem() to see an item's full
+// history including these.
+const TERMINAL_STATUSES = ['delivered', 'canceled', 'returned', 'shipped'];
+
+// raw_payload is a multi-KB JSONB blob per row kept only for confirming Pancake's
+// status_name/field mappings from real data (see 78_order_item_status_raw_payload.sql)
+// -- never needed by the UI, so it's deliberately left out of this column list rather
+// than using select('*'), which would otherwise pull it for every one of 40,000+ rows
+// on every page load.
+const ORDER_ITEM_STATUS_COLUMNS = 'id, order_reference, sku, item_name, qty, branch_id, customer_name, status, notes, created_by, created_at, updated_at, branches(name)';
 
 export async function listOrderItemStatuses() {
   const { data, error } = await supabase.from('order_item_status')
-    .select('*, branches(name)')
+    .select(ORDER_ITEM_STATUS_COLUMNS)
+    .not('status', 'in', '(' + TERMINAL_STATUSES.join(',') + ')')
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return attachEmployeeNames(data, { creator: 'created_by' });
+}
+
+/** Full history for one item across EVERY status, including the terminal ones the
+ * default board query above excludes -- a targeted on-demand query rather than
+ * something filtered from the already-loaded board data, since that data no longer
+ * contains delivered/canceled/etc. rows at all. Matches by SKU when it's a real one
+ * (not the webhook's synthetic per-order-line "pancake-item-<id>" SKU), else by
+ * item_name -- same fallback historyKey() uses in movement.html, kept in sync by hand. */
+export async function listOrderHistoryForItem({ sku, itemName }) {
+  let query = supabase.from('order_item_status').select(ORDER_ITEM_STATUS_COLUMNS);
+  query = (sku && !sku.toLowerCase().startsWith('pancake-item-'))
+    ? query.ilike('sku', sku)
+    : query.ilike('item_name', itemName);
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 /** Just the status, for the quick inline dropdown on each row -- doesn't require
