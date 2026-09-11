@@ -31,9 +31,7 @@ export async function initShell(activePage) {
   }
   pages.push(
     { id: 'products', label: 'SKU Catalog', href: 'products.html' },
-    { id: 'movement', label: 'Record Movement', href: 'movement.html' },
     { id: 'transfers', label: 'Transfers', href: 'transfers.html' },
-    { id: 'layaway', label: 'Layaway', href: 'layaway.html' },
     { id: 'bills', label: 'Bills', href: 'bills.html' },
   );
   // Refunds: anyone can request one, so it's not role-gated like the rest of this
@@ -54,13 +52,6 @@ export async function initShell(activePage) {
   if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Admin Assistant' || (employee.extra_page_access || []).includes('lbc')) {
     // COD parcels shipped via LBC for online orders -- company-wide, not per-branch.
     pages.push({ id: 'lbc', label: 'LBC Monitoring', href: 'lbc.html' });
-  }
-  // Branch Capital: restricted to Manager, Branch Supervisor, and Personal Assistant
-  // (plus Admin) -- Sales Executive, Admin Assistant, and rank-and-file employees no
-  // longer get in at all (70_branch_capital_restricted_access.sql). Only Admin can
-  // approve or delete an entry now.
-  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Personal Assistant') {
-    pages.push({ id: 'capital', label: 'Branch Capital', href: 'capital.html' });
   }
   if (employee.role === 'Admin') {
     pages.push({ id: 'access-checklist', label: 'Access Checklist', href: 'access-checklist.html' });
