@@ -31,6 +31,7 @@ export async function initShell(activePage) {
   }
   pages.push(
     { id: 'products', label: 'SKU Catalog', href: 'products.html' },
+    { id: 'item-monitoring', label: 'Item Monitoring', href: 'item-monitoring.html' },
     { id: 'transfers', label: 'Transfers', href: 'transfers.html' },
     { id: 'bills', label: 'Bills', href: 'bills.html' },
   );

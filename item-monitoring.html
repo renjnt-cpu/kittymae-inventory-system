@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Item Monitoring — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main>
+  <div id="im-msg"></div>
+  <div id="im-root"></div>
+</main>
+
+<script type="module">
+import { initShell, toast, esc } from './js/shell.js';
+import {
+  getBranches, listStockByBranch, searchProducts, logCycleCount, listRecentCycleCounts,
+  markCycleCountInvestigated, listLatestCycleCountBySkuBranch, subscribeToChanges,
+} from './js/api.js';
+import { branchBadge, branchOptionStyle } from './js/branchColors.js';
+
+const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g';
+const fmtDate = (s) => s ? new Date(s).toLocaleDateString('en-PH', { dateStyle: 'medium' }) : '—';
+
+// Same cadence-by-Value-Tier mapping as the old sheet's rebuildStockByBranchGrid():
+// A = weekly, B = monthly, C = quarterly, anything else defaults to monthly.
+const CADENCE_DAYS = { A: 7, B: 30, C: 90 };
+function cadenceForTier(tier) { return CADENCE_DAYS[tier] || 30; }
+
+// Same branch-scope rule as assert_can_act_on_branch() -- whole staff can log a count
+// for their own branch; this group (plus Admin/Manager) can do it for any branch.
+const UNSCOPED_POSITIONS = ['Sales Executive', 'Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
+
+// A wide "Log a Physical Count" form and a wide monitoring table both push the count
+// form's button and the low-stock/overdue rows far down the page -- scroll the message
+// into view every time so a result is never invisible (same fix as layaway.html).
+function notify(text, isError) {
+  toast('im-msg', text, isError);
+  document.getElementById('im-msg').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function tile(num, label) { return '<div class="tile"><div class="num">' + esc(num) + '</div><div class="lbl">' + esc(label) + '</div></div>'; }
+
+const employee = await initShell('item-monitoring');
+if (employee) {
+  const root = document.getElementById('im-root');
+  const branches = await getBranches();
+  const branchById = Object.fromEntries(branches.map((b) => [b.id, b.name]));
+  const isScoped = ['Admin', 'Manager'].includes(employee.role) ? false : !UNSCOPED_POSITIONS.includes(employee.position);
+
+  const branchFieldHtml = isScoped
+    ? '<div class="field"><label>Branch</label>' + (branchById[employee.branch_id] ? branchBadge(esc, branchById[employee.branch_id], employee.branch_id, branches) : '<input type="text" value="None assigned" disabled>') + '</div>'
+    : '<div class="field"><label>Branch *</label><select name="branchId" required>' + branches.map((b) => '<option value="' + b.id + '" style="' + branchOptionStyle(b.id, branches) + '">' + esc(b.name) + '</option>').join('') + '</select></div>';
+
+  root.innerHTML =
+    '<div class="card">' +
+      '<h3>Log a Physical Count</h3>' +
+      '<p class="muted" style="margin-top:-4px;">Counting a SKU only records what you found and how it compares to the system — it never changes stock by itself. If the variance is real, investigate first, then log the correction as an Adjustment in Record Movement (Kittymae POS).</p>' +
+      '<form id="cc-form" style="align-items:flex-end;">' +
+        '<div class="field" style="position:relative;min-width:200px;">' +
+          '<label>SKU *</label>' +
+          '<input type="text" name="sku" id="cc-sku" required autocomplete="off" placeholder="Type a SKU or item name…">' +
+          '<div id="cc-sku-name" class="muted" style="font-size:11px;"></div>' +
+          '<div id="cc-sku-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>' +
+        '</div>' +
+        branchFieldHtml +
+        '<div class="field"><label>Counted Qty *</label><input type="number" name="countedQty" min="0" required></div>' +
+        '<div class="field"><label>Actual Weight (g)</label><input type="number" name="actualWeightG" step="0.001" min="0" placeholder="optional"></div>' +
+        '<div class="field" style="min-width:180px;"><label>Notes</label><input type="text" name="notes"></div>' +
+        '<button class="btn" type="submit">Log Count</button>' +
+      '</form>' +
+    '</div>' +
+
+    '<div class="tiles" id="im-tiles"></div>' +
+
+    '<h2 style="margin-top:24px;">Stock by Branch</h2>' +
+    '<p class="muted" style="margin-top:-4px;">A row appears here once a SKU has had at least one movement at that branch — nothing to monitor yet for a SKU that's never been stocked anywhere.</p>' +
+    '<div class="card">' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+        '<div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="f-search" placeholder="SKU or product name…"></div>' +
+        '<div class="field"><label>Branch</label><select id="f-branch"><option value="all">All Branches</option>' + branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('') + '</select></div>' +
+        '<div class="field"><label>Status</label><select id="f-status"><option value="low">Low Stock Only</option><option value="all">All</option></select></div>' +
+        '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="sbb-list"><div class="muted">Loading…</div></div>' +
+
+    '<h2 style="margin-top:30px;">Recent Counts</h2>' +
+    '<div id="cc-list"><div class="muted">Loading…</div></div>';
+
+  // ---- SKU autocomplete for the count form, same pattern as movement.html/layaway.html ----
+  const skuInput = document.getElementById('cc-sku');
+  const skuSuggest = document.getElementById('cc-sku-suggest');
+  const skuNamePreview = document.getElementById('cc-sku-name');
+  let skuSearchToken = 0, skuSearchTimer = null;
+  function hideSkuSuggestions() { skuSuggest.style.display = 'none'; skuSuggest.innerHTML = ''; }
+  function pickSku(p) {
+    skuInput.value = p.sku;
+    skuNamePreview.textContent = p.item_name + (p.category || p.product_line ? ' · ' + (p.category || p.product_line) : '');
+    hideSkuSuggestions();
+  }
+  function renderSkuSuggestions(matches) {
+    if (!matches.length) { hideSkuSuggestions(); return; }
+    skuSuggest.innerHTML = matches.map((p) =>
+      '<div data-sku="' + esc(p.sku) + '" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;">' +
+        '<strong>' + esc(p.sku) + '</strong> — ' + esc(p.item_name) +
+      '</div>'
+    ).join('');
+    skuSuggest.style.display = '';
+    skuSuggest.querySelectorAll('[data-sku]').forEach((row, i) => {
+      row.addEventListener('mousedown', (ev) => { ev.preventDefault(); pickSku(matches[i]); });
+    });
+  }
+  skuInput.addEventListener('input', () => {
+    skuNamePreview.textContent = '';
+    const q = skuInput.value.trim();
+    clearTimeout(skuSearchTimer);
+    if (!q) { hideSkuSuggestions(); return; }
+    skuSearchTimer = setTimeout(async () => {
+      const token = ++skuSearchToken;
+      try {
+        const results = await searchProducts(q);
+        if (token !== skuSearchToken) return;
+        renderSkuSuggestions(results);
+      } catch (err) { /* a failed lookup shouldn't block typing a SKU by hand */ }
+    }, 200);
+  });
+  skuInput.addEventListener('blur', () => setTimeout(hideSkuSuggestions, 150));
+  skuInput.addEventListener('focus', () => { if (skuSuggest.innerHTML) skuSuggest.style.display = ''; });
+
+  document.getElementById('cc-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    const branchId = isScoped ? employee.branch_id : Number(f.branchId.value);
+    const btn = f.querySelector('button[type=submit]');
+    btn.disabled = true;
+    try {
+      const id = await logCycleCount({
+        sku: f.sku.value.trim(), branchId, countedQty: Number(f.countedQty.value),
+        actualWeightG: f.actualWeightG.value ? Number(f.actualWeightG.value) : null, notes: f.notes.value.trim(),
+      });
+      f.reset();
+      skuNamePreview.textContent = '';
+      hideSkuSuggestions();
+      await load();
+      const logged = cycleCounts.find((c) => c.id === id);
+      notify(logged && logged.variance !== 0
+        ? 'Count logged — variance ' + (logged.variance > 0 ? '+' : '') + logged.variance + ' vs. system.'
+        : 'Count logged — matches the system exactly.', false);
+    } catch (err) {
+      notify(String(err.message || err), true);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  let stockRows = [];
+  let cycleCounts = [];
+  let latestCounts = {};
+  await load();
+  subscribeToChanges(['inventory', 'cycle_counts'], load);
+
+  document.getElementById('f-search').addEventListener('input', renderStockByBranch);
+  document.getElementById('f-branch').addEventListener('change', renderStockByBranch);
+  document.getElementById('f-status').addEventListener('change', renderStockByBranch);
+  document.getElementById('f-clear').addEventListener('click', () => {
+    document.getElementById('f-search').value = '';
+    document.getElementById('f-branch').value = 'all';
+    document.getElementById('f-status').value = 'low';
+    renderStockByBranch();
+  });
+
+  async function load() {
+    try {
+      [stockRows, cycleCounts, latestCounts] = await Promise.all([
+        listStockByBranch(), listRecentCycleCounts(100), listLatestCycleCountBySkuBranch(),
+      ]);
+      renderTiles();
+      renderStockByBranch();
+      renderRecentCounts();
+    } catch (err) {
+      document.getElementById('sbb-list').innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+    }
+  }
+
+  function nextDueInfo(sku, branchId, valueTier) {
+    const lastCounted = latestCounts[sku + '|' + branchId] || null;
+    const cadence = cadenceForTier(valueTier);
+    const due = lastCounted ? new Date(new Date(lastCounted).getTime() + cadence * 86400000) : new Date();
+    return { lastCounted, due, overdue: due <= new Date() };
+  }
+
+  function isLowStock(row) {
+    const p = row.products || {};
+    return p.reorder_level != null && Number(row.qty_available) <= Number(p.reorder_level);
+  }
+
+  // Tiles reflect the whole monitored set regardless of the table's current filter --
+  // a KPI summary should show real totals, not shrink every time someone searches.
+  function renderTiles() {
+    let lowCount = 0, overdueCount = 0;
+    stockRows.forEach((r) => {
+      if (isLowStock(r)) lowCount++;
+      if (nextDueInfo(r.sku, r.branch_id, (r.products || {}).value_tier).overdue) overdueCount++;
+    });
+    document.getElementById('im-tiles').innerHTML =
+      tile(stockRows.length, 'SKU × Branch Monitored') +
+      tile(lowCount, 'Low Stock') +
+      tile(overdueCount, 'Counts Overdue');
+  }
+
+  function renderStockByBranch() {
+    const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
+    const fBranch = document.getElementById('f-branch').value;
+    const fStatus = document.getElementById('f-status').value;
+
+    let rows = stockRows;
+    if (fSearch) rows = rows.filter((r) => r.sku.toLowerCase().includes(fSearch) || ((r.products || {}).item_name || '').toLowerCase().includes(fSearch));
+    if (fBranch !== 'all') rows = rows.filter((r) => String(r.branch_id) === fBranch);
+    if (fStatus === 'low') rows = rows.filter((r) => isLowStock(r));
+
+    const list = document.getElementById('sbb-list');
+    if (!rows.length) { list.innerHTML = '<p class="muted">No rows match this filter.</p>'; return; }
+
+    list.innerHTML = '<div class="table-scroll table-mini"><table><thead><tr>' +
+      '<th>SKU</th><th>Product Name</th><th>Branch</th><th>Product Line</th><th>Metal Purity</th><th>Current Stock</th><th>Status</th><th>Weight on Hand</th><th>Next Count Due</th>' +
+      '</tr></thead><tbody>' +
+      rows.map((r) => {
+        const p = r.products || {};
+        const low = isLowStock(r);
+        const { lastCounted, due, overdue } = nextDueInfo(r.sku, r.branch_id, p.value_tier);
+        return '<tr' + (low ? ' style="background:#fdecea;"' : '') + '>' +
+          '<td data-label="SKU"><b>' + esc(r.sku) + '</b></td>' +
+          '<td data-label="Product Name">' + esc(p.item_name || '—') + '</td>' +
+          '<td data-label="Branch">' + (branchById[r.branch_id] ? branchBadge(esc, branchById[r.branch_id], r.branch_id, branches) : '') + '</td>' +
+          '<td data-label="Product Line">' + esc(p.product_line || '—') + '</td>' +
+          '<td data-label="Metal Purity">' + esc(p.metal_purity || '—') + '</td>' +
+          '<td data-label="Current Stock">' + r.qty_available + (r.qty_reserved ? '<div class="muted" style="font-size:10px;">' + r.qty_reserved + ' reserved</div>' : '') + '</td>' +
+          '<td data-label="Status"><span class="badge ' + (low ? 'low' : 'ok') + '">' + (low ? '⚠ LOW STOCK' : 'OK') + '</span></td>' +
+          '<td data-label="Weight on Hand">' + weight(r.total_grams_on_hand) + '</td>' +
+          '<td data-label="Next Count Due">' + fmtDate(due) + (overdue ? ' <span class="badge low">DUE</span>' : '') +
+            '<div class="muted" style="font-size:10px;">' + (lastCounted ? 'Last: ' + fmtDate(lastCounted) : 'Never counted') + '</div>' +
+          '</td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  // ---- Recent Counts: every logged physical count, newest first, with the variance
+  // that motivates the old sheet's "investigate first, then Adjustment" workflow. ----
+  function renderRecentCounts() {
+    const box = document.getElementById('cc-list');
+    if (!cycleCounts.length) { box.innerHTML = '<p class="muted">No physical counts logged yet.</p>'; return; }
+
+    box.innerHTML = '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
+      '<thead><tr><th>Date</th><th>SKU</th><th>Branch</th><th>Counted</th><th>System</th><th>Variance</th><th>Weight Variance</th><th>Counted By</th><th>Notes</th><th></th></tr></thead><tbody>' +
+      cycleCounts.map((c) => {
+        const varStyle = c.variance === 0 ? '' : 'font-weight:600;' + (c.variance > 0 ? 'color:#2e7d4f;' : 'color:#b23c3c;');
+        return '<tr>' +
+          '<td data-label="Date">' + fmtDate(c.counted_at) + '</td>' +
+          '<td data-label="SKU">' + esc(c.sku) + '</td>' +
+          '<td data-label="Branch">' + (c.branches ? esc(c.branches.name) : '') + '</td>' +
+          '<td data-label="Counted">' + c.counted_qty + '</td>' +
+          '<td data-label="System">' + c.system_qty_at_count + '</td>' +
+          '<td data-label="Variance" style="' + varStyle + '">' + (c.variance > 0 ? '+' : '') + c.variance + '</td>' +
+          '<td data-label="Weight Variance">' + (c.weight_variance_g != null ? weight(c.weight_variance_g) : '—') + '</td>' +
+          '<td data-label="Counted By">' + (c.counter ? esc(c.counter.full_name) : '—') + '</td>' +
+          '<td data-label="Notes" class="full-row">' + esc(c.notes || '—') + '</td>' +
+          '<td data-label="" class="full-row">' +
+            (c.variance !== 0
+              ? '<button class="btn small secondary" data-act="investigated" data-id="' + c.id + '" data-val="' + (!c.investigated) + '">' +
+                  (c.investigated ? 'Investigated ✓ (undo)' : 'Mark Investigated') +
+                '</button>'
+              : '') +
+          '</td>' +
+        '</tr>';
+      }).join('') + '</tbody></table></div>';
+
+    box.querySelectorAll('[data-act="investigated"]').forEach((btn) => btn.addEventListener('click', async () => {
+      try {
+        await markCycleCountInvestigated(Number(btn.dataset.id), btn.dataset.val === 'true');
+        notify('Updated.', false);
+        await load();
+      } catch (err) {
+        notify(String(err.message || err), true);
+      }
+    }));
+  }
+}
+</script>
+</body>
+</html>
