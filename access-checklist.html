@@ -45,6 +45,7 @@ import { initShell, toast, esc } from './js/shell.js';
 import { getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, listScrapEntries, subscribeToChanges } from './js/api.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g';
 
 // Every position value that currently drives an access rule somewhere, plus the other
 // job titles already in use -- kept as a fixed list (not free text) so a typo here
@@ -227,9 +228,11 @@ if (employee) {
       const byEmp = {};
       rows.forEach((r) => {
         const name = (r.creator && r.creator.full_name) || 'Unknown';
-        const e = byEmp[name] || (byEmp[name] = { count: 0, total: 0 });
+        const e = byEmp[name] || (byEmp[name] = { count: 0, total: 0, grams: 0 });
         e.count += 1;
         e.total += Number(r.total_amount || 0);
+        // "Received" -- scrap bought from a customer, not what was later sold back out.
+        if (r.entry_type === 'In') e.grams += Number(r.weight_grams || 0);
       });
       const dirMul = scrapSortDir === 'desc' ? -1 : 1;
       const ranked = Object.entries(byEmp).map(([name, v]) => ({ name, ...v }))
@@ -238,6 +241,7 @@ if (employee) {
           return (typeof av === 'string' ? av.localeCompare(bv) : av - bv) * dirMul;
         });
       const grandTotal = rows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
+      const grandGrams = rows.reduce((s, r) => s + (r.entry_type === 'In' ? Number(r.weight_grams || 0) : 0), 0);
       // Rank 1 only reads as "the busiest" (bold, gold row, trophy) when sorted
       // highest-first by a performance metric -- sorted the other way, or sorted
       // alphabetically by name, rank 1 isn't a trophy moment.
@@ -257,14 +261,15 @@ if (employee) {
       box.innerHTML =
         (!ranked.length
         ? '<p class="muted">No scrap entries for this range.</p>'
-        : '<div class="table-scroll"><table><thead><tr><th>Rank</th>' + sortTh('name', 'Employee') + sortTh('count', 'Entries Encoded') + sortTh('total', 'Total') + '</tr></thead><tbody>' +
+        : '<div class="table-scroll"><table><thead><tr><th>Rank</th>' + sortTh('name', 'Employee') + sortTh('count', 'Entries Encoded') + sortTh('total', 'Total') + sortTh('grams', 'Grams Received') + '</tr></thead><tbody>' +
             ranked.map((r, i) => '<tr' + (i === 0 && topIsHighlighted ? ' style="font-weight:bold;background:#fdf6e3;"' : '') + '>' +
               '<td data-label="Rank">' + (i + 1) + (i === 0 && topIsHighlighted ? ' 🏆' : '') + '</td>' +
               '<td data-label="Employee">' + esc(r.name) + '</td>' +
               '<td data-label="Entries Encoded">' + r.count + '</td>' +
               '<td data-label="Total">' + money(r.total) + '</td>' +
+              '<td data-label="Grams Received">' + weight(r.grams) + '</td>' +
             '</tr>').join('') +
-            '</tbody><tfoot><tr style="font-weight:bold;background:#f7f7f7;"><td colspan="2">Total</td><td>' + rows.length + '</td><td>' + money(grandTotal) + '</td></tr></tfoot>' +
+            '</tbody><tfoot><tr style="font-weight:bold;background:#f7f7f7;"><td colspan="2">Total</td><td>' + rows.length + '</td><td>' + money(grandTotal) + '</td><td>' + weight(grandGrams) + '</td></tr></tfoot>' +
           '</table></div>');
 
       box.querySelectorAll('[data-sort]').forEach((btn) => btn.addEventListener('click', () => {
@@ -275,6 +280,33 @@ if (employee) {
         else { scrapSort = key; scrapSortDir = 'desc'; }
         renderScrapLeaderboard();
       }));
+
+      renderScrapGramsByPurity(rows);
+    }
+
+    // "Total grams received, by purity" -- company-wide for the same range/filter as
+    // the leaderboard above, since a purity total isn't really an employee's own
+    // number the way Entries Encoded/Total are. "Received" means bought from a
+    // customer (entry_type 'In'); what was later sold back out doesn't count here.
+    function renderScrapGramsByPurity(rows) {
+      const box = document.getElementById('ac-scrap-grams');
+      if (!box) return;
+      const inRows = rows.filter((r) => r.entry_type === 'In' && r.weight_grams != null);
+      if (!inRows.length) { box.innerHTML = '<p class="muted">No scrap received for this range.</p>'; return; }
+
+      const byKey = {};
+      inRows.forEach((r) => {
+        const key = r.metal_type + '|' + (r.karat || '');
+        byKey[key] = (byKey[key] || 0) + Number(r.weight_grams);
+      });
+      const items = Object.keys(byKey).map((key) => {
+        const [metalType, karat] = key.split('|');
+        return { metalType, karat: karat || '—', grams: byKey[key] };
+      }).sort((a, b) => a.metalType.localeCompare(b.metalType) || a.karat.localeCompare(b.karat));
+
+      box.innerHTML = '<div class="table-scroll table-mini"><table><tr><th>Metal</th><th>Karat/Purity</th><th>Total Grams Received</th></tr>' +
+        items.map((it) => '<tr><td data-label="Metal">' + esc(it.metalType) + '</td><td data-label="Karat/Purity">' + esc(it.karat) + '</td><td data-label="Total Grams Received">' + weight(it.grams) + '</td></tr>').join('') +
+        '</table></div>';
     }
 
     async function load() {
@@ -378,6 +410,8 @@ if (employee) {
             '<button type="button" class="btn small secondary" id="scrap-lb-clear">All Time</button>' +
           '</div>' +
           '<div id="ac-scrap-leaderboard"><div class="muted">Loading…</div></div>' +
+          '<h4 style="margin:16px 0 2px;">Total Grams Received <span class="muted" style="font-weight:normal;">— by purity, same range as above</span></h4>' +
+          '<div id="ac-scrap-grams"><div class="muted">Loading…</div></div>' +
         '</div>' +
         '<div class="ac-layout">' +
           '<div class="card ac-emp-list">' + empListHtml + '</div>' +
