@@ -235,6 +235,29 @@ export async function listSales({ branchId, fromDate, toDate } = {}) {
   return data;
 }
 
+/** Walk-in POS checkout (Branches page) -- one atomic multi-item sale via
+ * create_pos_sale() (91_pos_walkin_sale.sql), which loops record_sale() per item
+ * inside one Postgres function call so a later item's failure rolls back everything
+ * already recorded in the same call, no manual client-side rollback needed. */
+export async function createPosSale({ branchId, items, customerName, contactNumber, orderNumber, payments }) {
+  const { data, error } = await supabase.rpc('create_pos_sale', {
+    p_branch_id: branchId,
+    p_items: items.map((it) => ({ sku: it.sku, qty: it.qty, unit_price: it.unitPrice ?? null })),
+    p_customer_name: customerName || null, p_contact_number: contactNumber || null,
+    p_order_number: orderNumber || null,
+    p_payments: (payments || []).map((p) => ({ method: p.method, amount: p.amount, reference: p.reference || null })),
+  });
+  if (error) throw new Error(error.message);
+  return data; // the new sale_group_id
+}
+
+export async function listSalePayments(groupIds) {
+  if (!groupIds || !groupIds.length) return [];
+  const { data, error } = await supabase.from('sale_payments').select('*').in('sale_group_id', groupIds);
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function getTransactionHistory(sku, branchId) {
   let query = supabase
     .from('inventory_transactions')
@@ -1107,12 +1130,15 @@ function sanitizeForOrFilter(s) {
  * takes an array for any tab that ever needs more than one). search: free text,
  * matched against item/SKU/order/customer/notes -- same fields the old client-side
  * filter checked, just done server-side now so a tab load only pulls what that tab
- * actually needs instead of the whole active dataset. */
-export async function listOrderItemStatuses({ statusKeys = null, search = '' } = {}) {
+ * actually needs instead of the whole active dataset. branchId: null for the
+ * company-wide board, or one branch's id for the Branches page's Online Orders tab
+ * (92_order_item_status_branch_scope.sql). */
+export async function listOrderItemStatuses({ statusKeys = null, search = '', branchId = null } = {}) {
   let query = supabase.from('order_item_status')
     .select(ORDER_ITEM_STATUS_COLUMNS)
     .not('status', 'in', '(' + TERMINAL_STATUSES.join(',') + ')');
   if (statusKeys) query = query.in('status', statusKeys);
+  if (branchId != null) query = query.eq('branch_id', branchId);
   const term = sanitizeForOrFilter(search || '');
   if (term) {
     const pat = '%' + term + '%';
@@ -1127,11 +1153,12 @@ export async function listOrderItemStatuses({ statusKeys = null, search = '' } =
 }
 
 /** Per-status counts for the tab badges -- a lightweight aggregate (see
- * 80_order_item_status_counts_fn.sql) instead of counting a client-side array,
+ * 80_order_item_status_counts_fn.sql, extended to take an optional branch filter in
+ * 92_order_item_status_branch_scope.sql) instead of counting a client-side array,
  * since that array is now capped/scoped to one tab at a time and would give wrong
  * counts for every OTHER tab. */
-export async function getOrderItemStatusCounts() {
-  const { data, error } = await supabase.rpc('order_item_status_counts');
+export async function getOrderItemStatusCounts(branchId = null) {
+  const { data, error } = await supabase.rpc('order_item_status_counts', { p_branch_id: branchId });
   if (error) throw new Error(error.message);
   const counts = { all: 0 };
   (data || []).forEach((row) => { counts[row.status] = Number(row.cnt); counts.all += Number(row.cnt); });
