@@ -38,38 +38,36 @@ if (employee) {
       '<option value="' + e.id + '"' + (e.id === selected ? ' selected' : '') + '>' + esc(e.full_name) + '</option>'
     ).join('');
 
+    // Not layout-2col -- a 300px sidebar next to this particular table left too
+    // little of the page's 1100px main width for 10 columns to read comfortably
+    // (Notes and the Edit/Delete buttons kept getting squeezed). Add Item as a full-
+    // width top card instead, so the monitoring table below gets the whole width.
     root.innerHTML =
-      '<div class="layout-2col">' +
-        '<div class="layout-2col-side">' +
-          '<div class="card">' +
-            '<h3>Add Item</h3>' +
-            '<form id="asset-form" style="flex-direction:column;align-items:stretch;flex-wrap:nowrap;">' +
-              '<div class="field"><label>Item Name *</label><input type="text" name="itemName" required></div>' +
-              '<div class="field"><label>Type *</label><select name="itemType" required><option>Asset</option><option>Supplies</option></select></div>' +
-              '<div class="field"><label>Custodian</label><select name="custodianId">' + custodianOptions() + '</select></div>' +
-              '<div class="field"><label>Branch</label><select name="branchId">' + branchOptions() + '</select></div>' +
-              '<div class="field"><label>Quantity</label><input type="number" name="quantity" min="1" value="1"></div>' +
-              '<div class="field"><label>Unit Value (PHP)</label><input type="number" name="unitValue" step="0.01" min="0"></div>' +
-              '<div class="field"><label>Condition</label><select name="condition">' + CONDITION_OPTIONS('Good') + '</select></div>' +
-              '<div class="field"><label>Date Assigned</label><input type="date" name="dateAssigned"></div>' +
-              '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
-              '<button class="btn" type="submit">Add Item</button>' +
-            '</form>' +
-          '</div>' +
+      '<div class="card">' +
+        '<h3>Add Item</h3>' +
+        '<form id="asset-form">' +
+          '<div class="field"><label>Item Name *</label><input type="text" name="itemName" required></div>' +
+          '<div class="field"><label>Type *</label><select name="itemType" required><option>Asset</option><option>Supplies</option></select></div>' +
+          '<div class="field"><label>Custodian</label><select name="custodianId">' + custodianOptions() + '</select></div>' +
+          '<div class="field"><label>Branch</label><select name="branchId">' + branchOptions() + '</select></div>' +
+          '<div class="field"><label>Quantity</label><input type="number" name="quantity" min="1" value="1"></div>' +
+          '<div class="field"><label>Unit Value (PHP)</label><input type="number" name="unitValue" step="0.01" min="0"></div>' +
+          '<div class="field"><label>Condition</label><select name="condition">' + CONDITION_OPTIONS('Good') + '</select></div>' +
+          '<div class="field"><label>Date Assigned</label><input type="date" name="dateAssigned"></div>' +
+          '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
+          '<button class="btn" type="submit">Add Item</button>' +
+        '</form>' +
+      '</div>' +
+      '<div class="tiles" id="asset-tiles"></div>' +
+      '<div class="card">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+          '<div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="f-search" placeholder="Item, custodian, notes…"></div>' +
+          '<div class="field"><label>Type</label><select id="f-type"><option value="all">All</option><option>Asset</option><option>Supplies</option></select></div>' +
+          '<div class="field"><label>Condition</label><select id="f-condition"><option value="all">All</option>' + CONDITION_OPTIONS() + '</select></div>' +
+          '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
         '</div>' +
-        '<div class="layout-2col-main">' +
-          '<div class="tiles" id="asset-tiles"></div>' +
-          '<div class="card">' +
-            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
-              '<div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="f-search" placeholder="Item, custodian, notes…"></div>' +
-              '<div class="field"><label>Type</label><select id="f-type"><option value="all">All</option><option>Asset</option><option>Supplies</option></select></div>' +
-              '<div class="field"><label>Condition</label><select id="f-condition"><option value="all">All</option>' + CONDITION_OPTIONS() + '</select></div>' +
-              '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
-            '</div>' +
-          '</div>' +
-          '<div id="asset-list"><div class="muted">Loading…</div></div>' +
-        '</div>' +
-      '</div>';
+      '</div>' +
+      '<div id="asset-list"><div class="muted">Loading…</div></div>';
 
     document.getElementById('asset-form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -138,9 +136,9 @@ if (employee) {
       // column instead of stretching the table wider than the page (which pushed
       // Actions off-screen, needing a scroll just to see Edit/Delete or read Notes).
       list.innerHTML = '<div class="table-scroll"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
-        '<colgroup><col style="width:14%"><col style="width:7%"><col style="width:10%"><col style="width:9%">' +
-          '<col style="width:5%"><col style="width:9%"><col style="width:8%"><col style="width:9%">' +
-          '<col style="width:17%"><col style="width:12%"></colgroup>' +
+        '<colgroup><col style="width:15%"><col style="width:6%"><col style="width:10%"><col style="width:9%">' +
+          '<col style="width:4%"><col style="width:9%"><col style="width:8%"><col style="width:9%">' +
+          '<col style="width:16%"><col style="width:14%"></colgroup>' +
         '<tr><th>Item</th><th>Type</th><th>Custodian</th><th>Branch</th><th>Qty</th><th>Unit Value</th><th>Condition</th><th>Date Assigned</th><th>Notes</th><th></th></tr>' +
         rows.map((r) =>
           '<tr data-row-id="' + r.id + '">' +
@@ -155,7 +153,7 @@ if (employee) {
             '<td data-label="Condition"><span class="badge ' + (CONDITION_BADGE[r.condition] || 'ok') + '">' + esc(r.condition) + '</span></td>' +
             '<td data-label="Date Assigned">' + (r.date_assigned || '—') + '</td>' +
             '<td data-label="Notes">' + esc(r.notes || '') + '</td>' +
-            '<td data-label="Actions" style="white-space:nowrap;">' +
+            '<td data-label="Actions">' +
               '<button class="btn small secondary" data-id="' + r.id + '" data-act="edit">Edit</button> ' +
               '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' +
             '</td>' +
