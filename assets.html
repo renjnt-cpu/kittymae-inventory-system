@@ -134,7 +134,14 @@ if (employee) {
 
       const list = document.getElementById('asset-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No items for this filter.</p>'; return; }
-      list.innerHTML = '<div class="table-scroll"><table><tr><th>Item</th><th>Type</th><th>Custodian</th><th>Branch</th><th>Qty</th><th>Unit Value</th><th>Condition</th><th>Date Assigned</th><th>Notes</th><th></th></tr>' +
+      // table-layout:fixed + a colgroup so long Item/Notes text wraps within its own
+      // column instead of stretching the table wider than the page (which pushed
+      // Actions off-screen, needing a scroll just to see Edit/Delete or read Notes).
+      list.innerHTML = '<div class="table-scroll"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
+        '<colgroup><col style="width:14%"><col style="width:7%"><col style="width:10%"><col style="width:9%">' +
+          '<col style="width:5%"><col style="width:9%"><col style="width:8%"><col style="width:9%">' +
+          '<col style="width:17%"><col style="width:12%"></colgroup>' +
+        '<tr><th>Item</th><th>Type</th><th>Custodian</th><th>Branch</th><th>Qty</th><th>Unit Value</th><th>Condition</th><th>Date Assigned</th><th>Notes</th><th></th></tr>' +
         rows.map((r) =>
           '<tr data-row-id="' + r.id + '">' +
             '<td data-label="Item">' + esc(r.item_name) +
