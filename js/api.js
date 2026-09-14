@@ -992,11 +992,29 @@ export async function upsertEmployee201File(employeeId, fields) {
     emergency_contact_name: fields.emergencyContactName || null,
     emergency_contact_number: fields.emergencyContactNumber || null,
     emergency_contact_relationship: fields.emergencyContactRelationship || null,
+    basic_salary: fields.basicSalary || null,
+    payroll_details: fields.payrollDetails || null,
     notes: fields.notes || null,
     updated_by: me,
     updated_at: new Date().toISOString(),
   });
   if (error) throw new Error(error.message);
+}
+
+/** Adds a brand-new employee to the roster -- Admin or HR Supervisor only
+ * (101_hr_201_add_employee_and_payroll_fields.sql). Returns the new employees row so
+ * the caller can immediately open its 201-File edit panel to fill in the rest
+ * (department, salary, etc.) without a second lookup. Login access (Google or
+ * ID+password) is separate from this -- it's granted the first time this person
+ * actually signs in, matched by the email/employee_code entered here. */
+export async function createEmployee({ employeeCode, fullName, email, role, branchId, position, hireDate, contactNumber }) {
+  const { data, error } = await supabase.rpc('create_employee', {
+    p_employee_code: employeeCode, p_full_name: fullName, p_email: email, p_role: role || 'Staff',
+    p_branch_id: branchId || null, p_position: position || null, p_hire_date: hireDate || null,
+    p_contact_number: contactNumber || null,
+  });
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 export async function listEmployee201Documents(employeeId) {

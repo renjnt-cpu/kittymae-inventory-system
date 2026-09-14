@@ -15,9 +15,19 @@
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
 import {
-  listAllEmployee201Files, upsertEmployee201File,
+  listAllEmployee201Files, upsertEmployee201File, createEmployee, getBranches,
   listEmployee201Documents, uploadEmployee201Document, getEmployee201DocumentUrl, deleteEmployee201Document,
 } from './js/api.js';
+
+// Roles mirror employees.role's own CHECK constraint exactly (Admin/Manager
+// picked here are rare via this form -- almost every new hire is Staff or Branch
+// Supervisor -- but included so a manager-level hire never needs a follow-up SQL
+// edit). Position is a free-text field with a <datalist> of the positions actually
+// used elsewhere in this app, same reasoning as Job Title below -- there's no fixed
+// list to enforce here (Personal Assistant/Sales Executive/etc. don't map to any
+// single department the way Job Title does).
+const EMPLOYEE_ROLES = ['Staff', 'Branch Supervisor', 'Manager', 'Admin', 'None'];
+const KNOWN_POSITIONS = ['HR Supervisor', 'Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant', 'Sales Executive', 'Personal Assistant'];
 
 // Kittymae's real departments/positions only -- the reference roster sheet this
 // mirrors ("OFFICE NEEDED") has a much bigger Department/Position code list built for
@@ -81,6 +91,10 @@ if (employee) {
     root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">The 201-File is restricted to HR Supervisor and Admin.</p></div></div>';
   } else {
     let allRows = [];
+    const branches = await getBranches();
+    const branchOptions = (selected) => branches.map((b) =>
+      '<option value="' + b.id + '"' + (b.id === selected ? ' selected' : '') + '>' + esc(b.name) + '</option>'
+    ).join('');
     await load();
 
     async function load() {
@@ -96,9 +110,54 @@ if (employee) {
     function render() {
       root.innerHTML =
         '<div class="card">' +
+          '<button type="button" class="btn small secondary" id="hr-add-toggle">+ Add Employee</button>' +
+          '<div id="hr-add-panel" style="display:none;margin-top:12px;">' +
+            '<form id="hr-add-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+              '<div class="field"><label>Employee ID *</label><input type="text" name="employeeCode" placeholder="e.g. MK26018" required></div>' +
+              '<div class="field" style="min-width:180px;"><label>Full Name *</label><input type="text" name="fullName" required></div>' +
+              '<div class="field" style="min-width:200px;"><label>Email *</label><input type="email" name="email" required></div>' +
+              '<div class="field"><label>Role</label><select name="role">' + EMPLOYEE_ROLES.map((r) => '<option' + (r === 'Staff' ? ' selected' : '') + '>' + r + '</option>').join('') + '</select></div>' +
+              '<div class="field"><label>Position</label><input type="text" name="position" list="hr-add-position-list"><datalist id="hr-add-position-list">' + KNOWN_POSITIONS.map((p) => '<option value="' + esc(p) + '">').join('') + '</datalist></div>' +
+              '<div class="field"><label>Branch</label><select name="branchId"><option value="">— none —</option>' + branchOptions() + '</select></div>' +
+              '<div class="field"><label>Date Hired</label><input type="date" name="hireDate"></div>' +
+              '<div class="field"><label>Contact Number</label><input type="text" name="contactNumber"></div>' +
+              '<button class="btn small" type="submit">Add Employee</button>' +
+            '</form>' +
+            '<p class="muted" style="font-size:11px;margin-top:6px;">This creates their 201-File and roster entry. It does not set up sign-in — they get access the first time they sign in with Google (matched by the email above) or once an Admin sets an ID+password login.</p>' +
+          '</div>' +
+        '</div>' +
+        '<div class="card">' +
           '<div class="field" style="max-width:320px;"><label>Search</label><input type="text" id="hr-search" placeholder="Name, employee #, department…"></div>' +
         '</div>' +
         '<div id="hr-table"></div>';
+
+      document.getElementById('hr-add-toggle').addEventListener('click', () => {
+        const panel = document.getElementById('hr-add-panel');
+        panel.style.display = panel.style.display === 'none' ? '' : 'none';
+      });
+      document.getElementById('hr-add-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        const btn = f.querySelector('button[type=submit]');
+        btn.disabled = true;
+        try {
+          const newEmp = await createEmployee({
+            employeeCode: f.employeeCode.value.trim(), fullName: f.fullName.value.trim(), email: f.email.value.trim(),
+            role: f.role.value, position: f.position.value.trim() || null,
+            branchId: f.branchId.value ? Number(f.branchId.value) : null,
+            hireDate: f.hireDate.value || null, contactNumber: f.contactNumber.value.trim(),
+          });
+          toast('hr-msg', 'Employee added. Opening their 201-File to fill in the rest…', false);
+          f.reset();
+          document.getElementById('hr-add-panel').style.display = 'none';
+          await load();
+          openEdit(newEmp.id, allRows);
+        } catch (err) {
+          toast('hr-msg', String(err.message || err), true);
+        } finally {
+          btn.disabled = false;
+        }
+      });
 
       document.getElementById('hr-search').addEventListener('input', renderTable);
       renderTable();
@@ -187,6 +246,7 @@ if (employee) {
             pagibigNumber: ff.pagibigNumber.value.trim(), tinNumber: ff.tinNumber.value.trim(),
             emergencyContactName: ff.emergencyContactName.value.trim(), emergencyContactNumber: ff.emergencyContactNumber.value.trim(),
             emergencyContactRelationship: ff.emergencyContactRelationship.value.trim(), notes: ff.notes.value.trim(),
+            basicSalary: ff.basicSalary.value ? Number(ff.basicSalary.value) : null, payrollDetails: ff.payrollDetails.value.trim(),
           });
           toast('hr-msg', 'Saved.', false);
           await load();
@@ -252,6 +312,8 @@ if (employee) {
             TAX_STATUS_CODES.map((c) => '<option' + (c === f.tax_status_code ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
           '<div class="field"><label>Payment Mode</label><select name="paymentMode"><option value="">—</option>' +
             PAYMENT_MODES.map((m) => '<option' + (m === f.payment_mode ? ' selected' : '') + '>' + m + '</option>').join('') + '</select></div>' +
+          '<div class="field"><label>Basic Salary</label><input type="number" name="basicSalary" step="0.01" min="0" placeholder="PHP" value="' + (f.basic_salary ?? '') + '"></div>' +
+          '<div class="field" style="min-width:220px;"><label>Payroll Details</label><input type="text" name="payrollDetails" placeholder="e.g. bank, account #, pay schedule" value="' + esc(f.payroll_details || '') + '"></div>' +
           '<div class="field"><label>Minimum Wage Earner</label><select name="minimumWageEarner"><option value="">—</option>' +
             YES_NO.map((y) => '<option' + (y === f.minimum_wage_earner ? ' selected' : '') + '>' + y + '</option>').join('') + '</select></div>' +
           '<div class="field"><label>Educational Attainment</label><select name="educationalAttainment"><option value="">—</option>' +
