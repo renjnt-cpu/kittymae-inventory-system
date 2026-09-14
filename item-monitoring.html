@@ -16,12 +16,14 @@
 import { initShell, toast, esc } from './js/shell.js';
 import {
   getBranches, listStockByBranch, searchProducts, logCycleCount, listRecentCycleCounts,
-  markCycleCountInvestigated, listLatestCycleCountBySkuBranch, subscribeToChanges,
+  markCycleCountInvestigated, listLatestCycleCountBySkuBranch, listProductChangeLog, subscribeToChanges,
 } from './js/api.js';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js';
 
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g';
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString('en-PH', { dateStyle: 'medium' }) : '—';
+const fmtDateTime = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+const PRODUCT_CHANGE_BADGE = { Added: 'ok', Edited: 'transit', Discontinued: 'low', Reactivated: 'ok' };
 
 // Same cadence-by-Value-Tier mapping as the old sheet's rebuildStockByBranchGrid():
 // A = weekly, B = monthly, C = quarterly, anything else defaults to monthly.
@@ -87,7 +89,11 @@ if (employee) {
     '<div id="sbb-list"><div class="muted">Loading…</div></div>' +
 
     '<h2 style="margin-top:30px;">Recent Counts</h2>' +
-    '<div id="cc-list"><div class="muted">Loading…</div></div>';
+    '<div id="cc-list"><div class="muted">Loading…</div></div>' +
+
+    '<h2 style="margin-top:30px;">Product Changes</h2>' +
+    '<p class="muted" style="margin-top:-4px;">Every Add/Edit/Discontinue/Reactivate made in the SKU Catalog, with who and when.</p>' +
+    '<div id="pcl-list"><div class="muted">Loading…</div></div>';
 
   // ---- SKU autocomplete for the count form, same pattern as movement.html/layaway.html ----
   const skuInput = document.getElementById('cc-sku');
@@ -158,8 +164,10 @@ if (employee) {
   let stockRows = [];
   let cycleCounts = [];
   let latestCounts = {};
+  let productChanges = [];
   await load();
   subscribeToChanges(['inventory', 'cycle_counts'], load);
+  subscribeToChanges('product_change_log', async () => { productChanges = await listProductChangeLog(100); renderProductChanges(); });
 
   document.getElementById('f-search').addEventListener('input', renderStockByBranch);
   document.getElementById('f-branch').addEventListener('change', renderStockByBranch);
@@ -173,12 +181,13 @@ if (employee) {
 
   async function load() {
     try {
-      [stockRows, cycleCounts, latestCounts] = await Promise.all([
-        listStockByBranch(), listRecentCycleCounts(100), listLatestCycleCountBySkuBranch(),
+      [stockRows, cycleCounts, latestCounts, productChanges] = await Promise.all([
+        listStockByBranch(), listRecentCycleCounts(100), listLatestCycleCountBySkuBranch(), listProductChangeLog(100),
       ]);
       renderTiles();
       renderStockByBranch();
       renderRecentCounts();
+      renderProductChanges();
     } catch (err) {
       document.getElementById('sbb-list').innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
     }
@@ -285,6 +294,24 @@ if (employee) {
         notify(String(err.message || err), true);
       }
     }));
+  }
+
+  // ---- Product Changes: every Add/Edit/Discontinue/Reactivate written by
+  // trg_log_product_change (96_product_change_log.sql) regardless of which page made
+  // the change -- monitoring only, nothing here is editable. ----
+  function renderProductChanges() {
+    const box = document.getElementById('pcl-list');
+    if (!productChanges.length) { box.innerHTML = '<p class="muted">No SKU Catalog changes logged yet.</p>'; return; }
+
+    box.innerHTML = '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
+      '<thead><tr><th>Date</th><th>SKU</th><th>Action</th><th>Details</th><th>Changed By</th></tr></thead><tbody>' +
+      productChanges.map((c) => '<tr>' +
+        '<td data-label="Date">' + fmtDateTime(c.changed_at) + '</td>' +
+        '<td data-label="SKU">' + esc(c.sku) + '</td>' +
+        '<td data-label="Action"><span class="badge ' + (PRODUCT_CHANGE_BADGE[c.action] || 'pending') + '">' + esc(c.action) + '</span></td>' +
+        '<td data-label="Details" class="full-row">' + esc(c.details || '—') + '</td>' +
+        '<td data-label="Changed By" class="full-row">' + (c.changer ? esc(c.changer.full_name) : '—') + '</td>' +
+      '</tr>').join('') + '</tbody></table></div>';
   }
 }
 </script>

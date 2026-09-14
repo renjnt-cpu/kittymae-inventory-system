@@ -152,8 +152,38 @@ export async function listAllInventoryQty() {
   return all;
 }
 
-/** New SKUs are added in the Google Sheet, not here — this only patches a detail on an
- * existing row. Keys are all optional camelCase — only the ones present are patched.
+/** Adds a brand-new SKU (products.html's "Add Item" form) -- previously every SKU
+ * only ever arrived externally via the "SKU 2026" Google Sheet; this is the first
+ * in-app way to create one. Admin/Manager/Branch Supervisor/Admin Assistant only
+ * (95_products_add_item.sql). Every field but sku/itemName is optional -- the table
+ * itself only requires those two (see products' NOT NULL columns). The insert is
+ * itself picked up by trg_log_product_change (96_product_change_log.sql), so no
+ * separate logging call is needed here. */
+export async function createProduct({ sku, itemName, category, subSku, price, grossWeightG, productLine, metalPurity, valueTier }) {
+  const row = {
+    sku: sku.trim(), item_name: itemName.trim(),
+    category: category?.trim() || null, sub_sku: subSku?.trim() || null,
+    system_selling_price: price ? Number(price) : null,
+    gross_weight_g: grossWeightG ? Number(grossWeightG) : null,
+    product_line: productLine || null, metal_purity: metalPurity || null,
+    value_tier: valueTier || null,
+  };
+  const { error } = await supabase.from('products').insert(row);
+  if (error) throw new Error(error.message);
+}
+
+/** SKU Catalog audit trail for Item Monitoring's "Product Changes" section -- every
+ * Add/Edit/Discontinue/Reactivate on `products`, written by trg_log_product_change
+ * (96_product_change_log.sql) regardless of which page/path made the change. */
+export async function listProductChangeLog(limit = 100) {
+  const { data, error } = await supabase.from('product_change_log')
+    .select('*').order('changed_at', { ascending: false }).limit(limit);
+  if (error) throw new Error(error.message);
+  return attachEmployeeNames(data, { changer: 'changed_by' });
+}
+
+/** Patches a detail on an existing row (createProduct() above is the only other
+ * write path). Keys are all optional camelCase — only the ones present are patched.
  * productStatus ('Active'/'Discontinued') also goes through this. */
 export async function updateProduct(sku, fields) {
   const patch = { updated_at: new Date().toISOString() };

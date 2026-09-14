@@ -14,11 +14,15 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { listProducts, updateProduct, getBranches, listAllInventoryQty, subscribeToChanges } from './js/api.js';
+import { listProducts, updateProduct, createProduct, getBranches, listAllInventoryQty, subscribeToChanges } from './js/api.js';
 import { branchColor } from './js/branchColors.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g';
+
+const PRODUCT_LINES = ['18K Saudi Gold', '18K Coated', 'Moissanite', 'Silver 925/999', 'Stainless/Fashion'];
+const METAL_PURITIES = ['24K', '21K', '18K', '925', '999', 'N/A'];
+const VALUE_TIERS = ['A', 'B', 'C'];
 
 const employee = await initShell('products');
 if (employee) {
@@ -30,15 +34,34 @@ if (employee) {
   // this at the RLS level too (a single UPDATE policy, so it can't be split
   // column-by-column the way this UI split is).
   const canEdit = canManage || employee.role === 'Branch Supervisor';
+  // Add Item: Admin/Manager (already had insert via is_manager_or_admin()), plus
+  // Branch Supervisor and the Admin Assistant position specifically, per Ren's
+  // request -- 95_products_add_item.sql grants this same set at the RLS level.
+  const canAddItem = canManage || employee.role === 'Branch Supervisor' || employee.position === 'Admin Assistant';
   const branches = await getBranches();
 
-  // New SKUs are added in the "SKU 2026" Google Sheet, not here -- this page only
-  // reflects that catalog (search/browse, plus correcting a detail already on file).
   root.innerHTML =
+    (canAddItem ? '<div class="card">' +
+      '<h3>Add Item</h3>' +
+      '<p class="muted" style="margin-top:-4px;">New SKUs otherwise come from the "SKU 2026" Google Sheet -- use this only when a new SKU needs to exist here right away.</p>' +
+      '<form id="add-form">' +
+        '<div class="field"><label>SKU *</label><input type="text" name="sku" required></div>' +
+        '<div class="field" style="min-width:180px;"><label>Product Name *</label><input type="text" name="itemName" required></div>' +
+        '<div class="field"><label>Category</label><input type="text" name="category" placeholder="e.g. MK RING"></div>' +
+        '<div class="field"><label>Sub SKU</label><input type="text" name="subSku"></div>' +
+        '<div class="field"><label>Product Line</label><select name="productLine"><option value="">—</option>' + PRODUCT_LINES.map((l) => '<option>' + l + '</option>').join('') + '</select></div>' +
+        '<div class="field"><label>Metal Purity</label><select name="metalPurity"><option value="">—</option>' + METAL_PURITIES.map((m) => '<option>' + m + '</option>').join('') + '</select></div>' +
+        '<div class="field"><label>Value Tier</label><select name="valueTier"><option value="">—</option>' + VALUE_TIERS.map((t) => '<option>' + t + '</option>').join('') + '</select></div>' +
+        '<div class="field"><label>Price (PHP)</label><input type="number" name="price" step="0.01" min="0"></div>' +
+        '<div class="field"><label>Est. Gram</label><input type="number" name="grossWeightG" step="0.001" min="0"></div>' +
+        '<button class="btn" type="submit">Add Item</button>' +
+      '</form>' +
+    '</div>' : '') +
     '<div class="card">' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
         '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="SKU, Sub SKU, or product name…"></div>' +
         '<div class="field"><label>Status</label><select id="f-status"><option value="all">All</option><option value="Active" selected>Active</option><option value="Discontinued">Discontinued</option></select></div>' +
+        '<div class="field"><label>Category</label><select id="f-category"><option value="all">All</option></select></div>' +
         '<div class="field"><label>Sort by Branch</label><select id="f-sort-branch"><option value="none">— none (SKU order) —</option>' +
           branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('') +
         '</select></div>' +
@@ -49,6 +72,29 @@ if (employee) {
     '<div class="tiles" id="prod-tiles"></div>' +
     '<div id="prod-list"><div class="muted">Loading…</div></div>';
 
+  if (canAddItem) {
+    document.getElementById('add-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      const btn = f.querySelector('button[type=submit]');
+      btn.disabled = true;
+      try {
+        await createProduct({
+          sku: f.sku.value, itemName: f.itemName.value, category: f.category.value,
+          subSku: f.subSku.value, price: f.price.value, grossWeightG: f.grossWeightG.value,
+          productLine: f.productLine.value, metalPurity: f.metalPurity.value, valueTier: f.valueTier.value,
+        });
+        toast('prod-msg', 'SKU added.', false);
+        f.reset();
+        await load();
+      } catch (err) {
+        toast('prod-msg', String(err.message || err), true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
   // With 7,392 SKUs, search/status filters query the server directly (listProducts
   // pages through everything that matches instead of stopping at PostgREST's 1000-row
   // per-request cap) rather than fetching everything and filtering client-side.
@@ -58,6 +104,7 @@ if (employee) {
   let searchTimer = null;
   let realtimeTimer = null;
   await load();
+  document.getElementById('f-category').addEventListener('change', render);
   // Debounced: an edit or the Active/Discontinued toggle firing on one row shouldn't
   // matter much here, but this keeps the same safety pattern as movement.html in
   // case of another bulk import later. Inventory changes (a sale, a stock-in, a
@@ -77,6 +124,7 @@ if (employee) {
   document.getElementById('f-clear').addEventListener('click', () => {
     document.getElementById('f-search').value = '';
     document.getElementById('f-status').value = 'all';
+    document.getElementById('f-category').value = 'all';
     document.getElementById('f-sort-branch').value = 'none';
     document.getElementById('f-sort-dir').value = 'desc';
     filterBranchId = null;
@@ -107,6 +155,16 @@ if (employee) {
 
   function render() {
     let rows = allProducts; // already scoped to the current search + status at the query level
+
+    // Category options reflect whatever's currently loaded (search + status), same
+    // as every other filter here -- rebuilt on each render so a value that stops
+    // matching (e.g. after a search) drops out instead of pointing at nothing.
+    const categorySelect = document.getElementById('f-category');
+    const currentCategory = categorySelect.value || 'all';
+    const categories = [...new Set(allProducts.map((p) => p.category).filter(Boolean))].sort();
+    categorySelect.innerHTML = '<option value="all">All</option>' +
+      categories.map((c) => '<option value="' + esc(c) + '"' + (c === currentCategory ? ' selected' : '') + '>' + esc(c) + '</option>').join('');
+    if (currentCategory !== 'all' && categories.includes(currentCategory)) rows = rows.filter((p) => p.category === currentCategory);
 
     // Click a branch column header to filter down to just the SKUs actually stocked
     // there (pcs > 0) -- click it again to clear. Applied before the tiles below so
@@ -144,16 +202,19 @@ if (employee) {
     }
     const countNotice = '<p class="muted" style="margin:0 0 8px;">' + rows.length.toLocaleString('en-PH') + ' SKU(s)</p>';
 
-    const colCount = 7 + branches.length;
+    const colCount = 9 + branches.length;
 
     function rowHtml(p) {
       const qtyForSku = qtyBySku[p.sku] || {};
+      const totalPcs = Object.values(qtyForSku).reduce((s, q) => s + Number(q || 0), 0);
       return '<tr data-row-id="' + esc(p.sku) + '">' +
           '<td data-label="SKU"><b>' + esc(p.sku) + '</b></td>' +
           '<td data-label="Product Name">' + esc(p.item_name) + '</td>' +
+          '<td data-label="Category">' + esc(p.category || '—') + '</td>' +
           '<td data-label="Sub SKU">' + esc(p.sub_sku || '—') + '</td>' +
           '<td data-label="Price">' + money(p.system_selling_price) + '</td>' +
           '<td data-label="Est. Gram">' + weight(p.gross_weight_g) + '</td>' +
+          '<td data-label="Total Pcs"><b>' + totalPcs.toLocaleString('en-PH') + '</b></td>' +
           '<td data-label="Status"><span class="badge ' + (p.product_status === 'Active' ? 'ok' : 'low') + '">' + esc(p.product_status) + '</span></td>' +
           branches.map((b) => '<td data-label="' + esc(b.name) + '" style="text-align:center;">' + (qtyForSku[b.id] ?? '—') + '</td>').join('') +
           '<td data-label="Actions" style="white-space:nowrap;">' +
@@ -177,7 +238,7 @@ if (employee) {
 
     list.innerHTML = (filterBranchId != null ? '<p class="muted" style="margin:0 0 8px;">Showing only SKUs stocked at <b>' + esc((branches.find((b) => b.id === filterBranchId) || {}).name) + '</b> — click the column again to clear.</p>' : '') +
       countNotice + '<div class="table-scroll table-mini"><table><thead><tr style="white-space:nowrap;">' +
-      '<th>SKU</th><th>Product Name</th><th>Sub SKU</th><th>Price</th><th>Est. Gram</th><th>Status</th>' + branchThs + '<th></th>' +
+      '<th>SKU</th><th>Product Name</th><th>Category</th><th>Sub SKU</th><th>Price</th><th>Est. Gram</th><th>Total Pcs</th><th>Status</th>' + branchThs + '<th></th>' +
       '</tr></thead><tbody>' + rows.map(rowHtml).join('') + '</tbody></table></div>';
 
     list.querySelectorAll('[data-branch-filter]').forEach((th) => th.addEventListener('click', () => {
@@ -217,6 +278,7 @@ if (employee) {
     cell.querySelector('td').innerHTML =
       '<form class="edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
         '<div class="field"><label>Product Name</label><input type="text" name="itemName" value="' + esc(p.item_name) + '" required></div>' +
+        '<div class="field"><label>Category</label><input type="text" name="category" value="' + esc(p.category || '') + '"></div>' +
         '<div class="field"><label>Sub SKU</label><input type="text" name="subSku" value="' + esc(p.sub_sku || '') + '"></div>' +
         '<div class="field"><label>Price (PHP)</label><input type="number" name="price" step="0.01" min="0" value="' + (p.system_selling_price ?? '') + '"></div>' +
         '<div class="field"><label>Est. Gram</label><input type="number" name="grossWeightG" step="0.001" min="0" value="' + (p.gross_weight_g ?? '') + '"></div>' +
@@ -230,7 +292,7 @@ if (employee) {
       const f = ev.target;
       try {
         await updateProduct(sku, {
-          itemName: f.itemName.value.trim(), subSku: f.subSku.value.trim(),
+          itemName: f.itemName.value.trim(), category: f.category.value.trim(), subSku: f.subSku.value.trim(),
           price: f.price.value, grossWeightG: f.grossWeightG.value,
         });
         toast('prod-msg', 'SKU updated.', false);
