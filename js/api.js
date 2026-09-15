@@ -944,6 +944,16 @@ export async function updateEmployeePosition(employeeId, position) {
   if (error) throw new Error(error.message);
 }
 
+/** Lets the 201-File edit form set/correct hire_date after the employee already
+ * exists -- createEmployee() only sets it at initial creation, and employees table's
+ * own RLS update policy is Admin-only, which would lock out an HR Supervisor editing
+ * this from the 201-File page, so this goes through a SECURITY DEFINER function
+ * mirroring create_employee()'s own Admin-or-HR-Supervisor check. */
+export async function updateEmployeeHireDate(employeeId, hireDate) {
+  const { error } = await supabase.rpc('update_employee_hire_date', { p_employee_id: employeeId, p_hire_date: hireDate || null });
+  if (error) throw new Error(error.message);
+}
+
 // ---- HR 201-File (strictly HR Supervisor + Admin -- is_hr_or_admin() in
 // 83_hr_201_file.sql) -- personal info + document uploads per employee. ----
 

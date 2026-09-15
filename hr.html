@@ -15,7 +15,7 @@
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
 import {
-  listAllEmployee201Files, upsertEmployee201File, createEmployee, getBranches,
+  listAllEmployee201Files, upsertEmployee201File, createEmployee, getBranches, updateEmployeeHireDate,
   listEmployee201Documents, uploadEmployee201Document, getEmployee201DocumentUrl, deleteEmployee201Document,
 } from './js/api.js';
 
@@ -164,8 +164,8 @@ if (employee) {
       if (!rows.length) { box.innerHTML = '<p class="muted">No employees match.</p>'; return; }
 
       box.innerHTML = '<div class="table-scroll"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
-        '<colgroup><col style="width:7%"><col style="width:14%"><col style="width:10%"><col style="width:11%"><col style="width:9%"><col style="width:7%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:7%"><col style="width:6%"></colgroup>' +
-        '<thead><tr><th>Employee #</th><th>Complete Name</th><th>Company</th><th>Department</th><th>Job Title</th><th>Status</th><th>Date Hired</th><th>End of Employment</th><th>Civil Status</th><th>Gender</th><th></th></tr></thead><tbody>' +
+        '<colgroup><col style="width:7%"><col style="width:13%"><col style="width:9%"><col style="width:10%"><col style="width:10%"><col style="width:7%"><col style="width:7%"><col style="width:8%"><col style="width:7%"><col style="width:6%"><col style="width:6%"><col style="width:6%"></colgroup>' +
+        '<thead><tr><th>Employee #</th><th>Complete Name</th><th>Company</th><th>Department</th><th>Job Title</th><th>Status</th><th>Date Hired</th><th>End of Employment</th><th>Birthdate</th><th>Civil Status</th><th>Gender</th><th></th></tr></thead><tbody>' +
         rows.map((r) => {
           const f = r.file201 || {};
           return '<tr>' +
@@ -177,11 +177,12 @@ if (employee) {
             '<td data-label="Status"><span class="badge ' + (r.status === 'Active' ? 'ok' : 'low') + '">' + esc(r.status) + '</span></td>' +
             '<td data-label="Date Hired">' + fmtDate(r.hire_date) + '</td>' +
             '<td data-label="End of Employment">' + fmtDate(f.end_of_employment_date) + '</td>' +
+            '<td data-label="Birthdate">' + fmtDate(f.birthdate) + '</td>' +
             '<td data-label="Civil Status">' + esc(f.civil_status || '—') + '</td>' +
             '<td data-label="Gender">' + esc(f.gender || '—') + '</td>' +
             '<td><button class="btn small secondary" data-act="edit" data-id="' + r.id + '">Edit</button></td>' +
           '</tr>' +
-          '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="11"></td></tr>';
+          '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="12"></td></tr>';
         }).join('') +
         '</tbody></table></div>';
 
@@ -230,6 +231,7 @@ if (employee) {
             emergencyContactRelationship: ff.emergencyContactRelationship.value.trim(), notes: ff.notes.value.trim(),
             basicSalary: ff.basicSalary.value ? Number(ff.basicSalary.value) : null, payrollDetails: ff.payrollDetails.value.trim(),
           });
+          await updateEmployeeHireDate(row.id, ff.hireDate.value || null);
           toast('hr-msg', 'Saved.', false);
           await load();
         } catch (err) {
@@ -272,6 +274,7 @@ if (employee) {
       const id = row.id;
       return '<div style="padding:10px 4px;">' +
         '<form class="hr-edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+          '<div class="field"><label>Date Hired</label><input type="date" name="hireDate" value="' + (row.hire_date || '') + '"></div>' +
           '<div class="field"><label>First Name</label><input type="text" name="firstName" value="' + esc(f.first_name || '') + '"></div>' +
           '<div class="field"><label>Middle Name</label><input type="text" name="middleName" value="' + esc(f.middle_name || '') + '"></div>' +
           '<div class="field"><label>Last Name</label><input type="text" name="lastName" value="' + esc(f.last_name || '') + '"></div>' +
