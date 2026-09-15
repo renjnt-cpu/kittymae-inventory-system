@@ -38,6 +38,17 @@ export async function linkEmployee() {
   return data;
 }
 
+/** The signed-in employee's 201-File Job Title (or null if they don't have a
+ * 201-File yet) -- employee_201_files is otherwise HR/Admin-only readable via RLS,
+ * so this goes through a SECURITY DEFINER function that only ever resolves the
+ * caller's own row (99_current_employee_job_title.sql). Used by initShell() to gate
+ * ERP-wide access by job title, ERP-only -- kittymae-pos has no equivalent call. */
+export async function getMyJobTitle() {
+  const { data, error } = await supabase.rpc('current_employee_job_title');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 /** Self-service name correction — several employees were bulk-added from a roster
  * screenshot with placeholder/generic names, so anyone can fix their own display name
  * (and nothing else — see update_my_name() in 30_update_my_name.sql for why this isn't

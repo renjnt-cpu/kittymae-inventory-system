@@ -1,7 +1,14 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, signOut, updateMyName } from './auth.js';
+import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js';
+
+// ERP access is now also gated by 201-File Job Title, on top of role/position --
+// "Sales Admin Associate" specifically lost ERP access per Ren's request (the
+// "Senior Sales Admin Associate" tier keeps it). ERP-only: kittymae-pos has no
+// equivalent check, so this list never affects POS access. Extend this array if
+// another job title needs the same treatment later.
+const ERP_BLOCKED_JOB_TITLES = ['Sales Admin Associate'];
 
 export async function initShell(activePage) {
   const session = await requireSession();
@@ -18,6 +25,18 @@ export async function initShell(activePage) {
         ? '<div class="center-screen"><div><h2>Account inactive</h2><p>Your record is marked Inactive. Contact an Admin.</p></div></div>'
         : '<div class="center-screen"><div><h2>Something went wrong</h2><p class="muted">' + msg + '</p></div></div>';
     return null;
+  }
+
+  try {
+    const jobTitle = await getMyJobTitle();
+    if (jobTitle && ERP_BLOCKED_JOB_TITLES.includes(jobTitle)) {
+      document.body.innerHTML = '<div class="center-screen"><div><h2>No ERP access</h2><p>Your position (' + jobTitle + ') no longer has access to this system.</p><p class="muted">You can still use the POS app. Contact an Admin if you think this is wrong.</p></div></div>';
+      return null;
+    }
+  } catch (err) {
+    // A failed lookup here shouldn't be the reason someone otherwise entitled gets
+    // locked out -- fail open, same spirit as the SKU autocomplete's own failed-
+    // lookup handling elsewhere in this app.
   }
 
   const pages = [
