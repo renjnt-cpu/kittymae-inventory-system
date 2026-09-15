@@ -278,13 +278,14 @@ export async function listSales({ branchId, fromDate, toDate } = {}) {
  * create_pos_sale() (91_pos_walkin_sale.sql), which loops record_sale() per item
  * inside one Postgres function call so a later item's failure rolls back everything
  * already recorded in the same call, no manual client-side rollback needed. */
-export async function createPosSale({ branchId, items, customerName, contactNumber, orderNumber, payments }) {
+export async function createPosSale({ branchId, items, customerName, contactNumber, orderNumber, payments, saleDate }) {
   const { data, error } = await supabase.rpc('create_pos_sale', {
     p_branch_id: branchId,
     p_items: items.map((it) => ({ sku: it.sku, qty: it.qty, unit_price: it.unitPrice ?? null })),
     p_customer_name: customerName || null, p_contact_number: contactNumber || null,
     p_order_number: orderNumber || null,
     p_payments: (payments || []).map((p) => ({ method: p.method, amount: p.amount, reference: p.reference || null })),
+    p_sale_date: saleDate || null,
   });
   if (error) throw new Error(error.message);
   return data; // the new sale_group_id

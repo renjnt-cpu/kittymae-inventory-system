@@ -219,11 +219,20 @@ if (employee) {
     const fpSkuNamePreview = document.getElementById('fp-sku-name');
     let fpSearchToken = 0, fpSearchTimer = null;
     function hideFpSuggestions() { fpSkuSuggest.style.display = 'none'; fpSkuSuggest.innerHTML = ''; }
-    function pickFpSku(p) {
-      fpSkuInput.value = p.sku;
+    // Filling in Pancake Price/Grams from an existing SKU is a starting point, not a
+    // lock -- every one of these fields stays a plain editable input, so a real change
+    // this time (a price bump, a re-weigh) is just typed over it before saving.
+    function fillFromExistingProduct(p) {
       fpForm.itemName.value = p.item_name || '';
       fpForm.category.value = p.category || '';
-      fpSkuNamePreview.textContent = 'Existing SKU: ' + p.item_name + (p.category || p.product_line ? ' · ' + (p.category || p.product_line) : '');
+      if (p.system_selling_price != null) fpForm.pancakePrice.value = p.system_selling_price;
+      if (p.gross_weight_g != null) fpForm.grams.value = p.gross_weight_g;
+      recalcFp();
+    }
+    function pickFpSku(p) {
+      fpSkuInput.value = p.sku;
+      fillFromExistingProduct(p);
+      fpSkuNamePreview.textContent = 'Existing SKU — details filled in below, edit anything that changed: ' + p.item_name + (p.category || p.product_line ? ' · ' + (p.category || p.product_line) : '');
       hideFpSuggestions();
     }
     function renderFpSuggestions(matches) {
@@ -249,8 +258,14 @@ if (employee) {
           const results = await searchProducts(q);
           if (token !== fpSearchToken) return;
           renderFpSuggestions(results);
+          // An exact SKU typed by hand (not clicked from the dropdown) still counts
+          // as picking that product -- fill in its details the same way, without
+          // stealing focus by closing the still-open suggestion list.
           const exact = results.find((p) => p.sku.toLowerCase() === q.toLowerCase());
-          if (exact) fpSkuNamePreview.textContent = 'Existing SKU: ' + exact.item_name;
+          if (exact) {
+            fillFromExistingProduct(exact);
+            fpSkuNamePreview.textContent = 'Existing SKU — details filled in below, edit anything that changed: ' + exact.item_name;
+          }
         } catch (err) { /* a failed lookup shouldn't block typing a SKU by hand */ }
       }, 200);
     });
