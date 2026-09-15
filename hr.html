@@ -80,7 +80,10 @@ function completeName(row) {
 const employee = await initShell('hr');
 if (employee) {
   const root = document.getElementById('hr-root');
-  const hasAccess = employee.role === 'Admin' || employee.position === 'HR Supervisor';
+  // hr_201_file_blocked lets one specific Admin (Glenn) keep full Admin access
+  // everywhere else while being carved back out of HR -- 201 File specifically --
+  // see is_hr_or_admin() in the hr_201_file_per_employee_block migration.
+  const hasAccess = (employee.role === 'Admin' || employee.position === 'HR Supervisor') && !employee.hr_201_file_blocked;
 
   if (!hasAccess) {
     root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">The 201-File is restricted to HR Supervisor and Admin.</p></div></div>';

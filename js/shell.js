@@ -76,7 +76,7 @@ export async function initShell(activePage) {
   // 201-File: strictly HR Supervisor + Admin -- matches is_hr_or_admin() in
   // 83_hr_201_file.sql exactly, so this link is never shown to someone who'd just
   // hit "No access" on it.
-  if (employee.role === 'Admin' || employee.position === 'HR Supervisor') {
+  if ((employee.role === 'Admin' || employee.position === 'HR Supervisor') && !employee.hr_201_file_blocked) {
     pages.push({ id: 'hr', label: 'HR — 201 File', href: 'hr.html' });
   }
   // Personal Assistant gets a read-only view (see access-checklist.html's own
