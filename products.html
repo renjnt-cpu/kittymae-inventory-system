@@ -56,23 +56,34 @@ if (employee) {
   let qtyBySku = {}; // { sku: { branchId: qty_available } }, from listAllInventoryQty()
   let filterBranchId = null; // set by clicking a branch column header -- only SKUs with pcs > 0 there
   let searchTimer = null;
-  let realtimeTimer = null;
-  await load();
+  let productsRealtimeTimer = null;
+  let qtyRealtimeTimer = null;
+  // Loaded once up front, then only re-fetched on an actual inventory change (below) --
+  // this used to be re-fetched on every search/status load() call too, which meant
+  // every keystroke paid for a second full inventory scan it didn't need and had
+  // nothing to do with (typing a search term doesn't change anyone's stock). That was
+  // most of the "SKU Catalog is lagging" feel while searching.
+  await loadQty();
+  await loadProducts();
   document.getElementById('f-category').addEventListener('change', render);
-  // Debounced: an edit or the Active/Discontinued toggle firing on one row shouldn't
-  // matter much here, but this keeps the same safety pattern as movement.html in
-  // case of another bulk import later. Inventory changes (a sale, a stock-in, a
-  // transfer) need the same debounce so the per-branch pcs columns stay live too.
-  subscribeToChanges(['products', 'inventory'], () => {
-    clearTimeout(realtimeTimer);
-    realtimeTimer = setTimeout(load, 500);
+  // Split by table so a search keystroke's debounce isn't sharing a timer with
+  // inventory's -- a sale/stock-in elsewhere shouldn't cancel/delay a pending search,
+  // and vice versa.
+  subscribeToChanges(['products', 'inventory'], (payload) => {
+    if (payload.table === 'inventory') {
+      clearTimeout(qtyRealtimeTimer);
+      qtyRealtimeTimer = setTimeout(async () => { await loadQty(); render(); }, 500);
+    } else {
+      clearTimeout(productsRealtimeTimer);
+      productsRealtimeTimer = setTimeout(loadProducts, 500);
+    }
   });
 
   document.getElementById('f-search').addEventListener('input', () => {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(load, 300);
+    searchTimer = setTimeout(loadProducts, 300);
   });
-  document.getElementById('f-status').addEventListener('change', load);
+  document.getElementById('f-status').addEventListener('change', loadProducts);
   document.getElementById('f-sort-branch').addEventListener('change', render);
   document.getElementById('f-sort-dir').addEventListener('change', render);
   document.getElementById('f-clear').addEventListener('click', () => {
@@ -82,24 +93,24 @@ if (employee) {
     document.getElementById('f-sort-branch').value = 'none';
     document.getElementById('f-sort-dir').value = 'desc';
     filterBranchId = null;
-    load();
+    loadProducts();
   });
 
-  async function load() {
+  async function loadQty() {
+    const qtyRows = await listAllInventoryQty();
+    qtyBySku = {};
+    qtyRows.forEach((r) => {
+      (qtyBySku[r.sku] || (qtyBySku[r.sku] = {}))[r.branch_id] = r.qty_available;
+    });
+  }
+
+  async function loadProducts() {
     const list = document.getElementById('prod-list');
     list.innerHTML = '<div class="muted">Loading…</div>';
     try {
-      const [products, qtyRows] = await Promise.all([
-        listProducts({
-          search: document.getElementById('f-search').value.trim(),
-          status: document.getElementById('f-status').value,
-        }),
-        listAllInventoryQty(),
-      ]);
-      allProducts = products;
-      qtyBySku = {};
-      qtyRows.forEach((r) => {
-        (qtyBySku[r.sku] || (qtyBySku[r.sku] = {}))[r.branch_id] = r.qty_available;
+      allProducts = await listProducts({
+        search: document.getElementById('f-search').value.trim(),
+        status: document.getElementById('f-status').value,
       });
       render();
     } catch (err) {
@@ -209,12 +220,12 @@ if (employee) {
 
     list.querySelectorAll('[data-act="discontinue"]').forEach((btn) => btn.addEventListener('click', async () => {
       if (!confirm('Mark ' + btn.dataset.sku + ' as Discontinued? It stays visible in history, just hidden from the default Active view.')) return;
-      try { await updateProduct(btn.dataset.sku, { productStatus: 'Discontinued' }); toast('prod-msg', 'SKU discontinued.', false); await load(); }
+      try { await updateProduct(btn.dataset.sku, { productStatus: 'Discontinued' }); toast('prod-msg', 'SKU discontinued.', false); await loadProducts(); }
       catch (err) { toast('prod-msg', String(err.message || err), true); }
     }));
 
     list.querySelectorAll('[data-act="reactivate"]').forEach((btn) => btn.addEventListener('click', async () => {
-      try { await updateProduct(btn.dataset.sku, { productStatus: 'Active' }); toast('prod-msg', 'SKU reactivated.', false); await load(); }
+      try { await updateProduct(btn.dataset.sku, { productStatus: 'Active' }); toast('prod-msg', 'SKU reactivated.', false); await loadProducts(); }
       catch (err) { toast('prod-msg', String(err.message || err), true); }
     }));
   }
@@ -250,7 +261,7 @@ if (employee) {
           price: f.price.value, grossWeightG: f.grossWeightG.value,
         });
         toast('prod-msg', 'SKU updated.', false);
-        await load();
+        await loadProducts();
       } catch (err) {
         toast('prod-msg', String(err.message || err), true);
       }

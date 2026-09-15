@@ -118,7 +118,10 @@ const skuCollator = new Intl.Collator('en', { numeric: true, sensitivity: 'base'
 export async function listProducts({ search = '', status = 'Active' } = {}) {
   const term = sanitizeForOrFilter(search || '');
   function buildQuery() {
-    let query = supabase.from('products').select('*');
+    // Narrowed from select('*') -- products.html's table/edit form only ever reads
+    // these columns, and with 7,400+ rows the unused ones (cost fields, gold rates,
+    // audit columns) were pure payload/parse overhead on every search keystroke.
+    let query = supabase.from('products').select('sku, sub_sku, item_name, category, system_selling_price, gross_weight_g, product_status');
     if (status !== 'all') query = query.eq('product_status', status);
     if (term) {
       const pat = '%' + term + '%';
