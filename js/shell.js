@@ -79,7 +79,9 @@ export async function initShell(activePage) {
   if (employee.role === 'Admin' || employee.position === 'HR Supervisor') {
     pages.push({ id: 'hr', label: 'HR — 201 File', href: 'hr.html' });
   }
-  if (employee.role === 'Admin') {
+  // Personal Assistant gets a read-only view (see access-checklist.html's own
+  // canEdit gate) -- Admin remains the only one who can actually change anything.
+  if (employee.role === 'Admin' || employee.position === 'Personal Assistant') {
     pages.push({ id: 'access-checklist', label: 'Access Checklist', href: 'access-checklist.html' });
   }
 

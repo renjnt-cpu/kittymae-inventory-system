@@ -1078,14 +1078,17 @@ export async function deleteEmployee201Document(id, path) {
 /** Everyone except Admin, since Admin has full access by definition and isn't
  * worth verifying. Pulled live so a role/branch/bills_access change shows up
  * here immediately -- the checklist tracks today's roster, not a snapshot. */
+/** Goes through a SECURITY DEFINER RPC (get_employees_for_checklist(), see the
+ * access_checklist_pa_view_kittymae_only migration) rather than a direct table read
+ * -- Personal Assistant can view this page now too, but employees_select_combined's
+ * RLS doesn't let her read other employees' rows directly (she's role 'None', not
+ * HR/Manager/Admin). The RPC also excludes Layover staff server-side, since Miss
+ * Kittymae and Layover share this one employees table for HR-201-File purposes, but
+ * Layover people have no access to this Kittymae ERP to verify in the first place. */
 export async function getEmployeesForChecklist() {
-  const { data, error } = await supabase.from('employees')
-    .select('id, full_name, role, position, bills_access, refund_approval_access, extra_page_access, branches(name)')
-    .neq('role', 'Admin')
-    .eq('status', 'Active')
-    .order('full_name');
+  const { data, error } = await supabase.rpc('get_employees_for_checklist');
   if (error) throw new Error(error.message);
-  return data;
+  return (data || []).map((e) => ({ ...e, branches: e.branch_name ? { name: e.branch_name } : null }));
 }
 
 export async function getAccessChecklist() {

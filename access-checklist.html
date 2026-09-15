@@ -184,8 +184,15 @@ const employee = await initShell('access-checklist');
 if (employee) {
   const root = document.getElementById('ac-root');
 
-  if (employee.role !== 'Admin') {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">This checklist is Admin-only.</p></div></div>';
+  // Admin can view AND edit. Personal Assistant can view only -- the level pills and
+  // Position selector below render as plain, non-interactive display for her; the
+  // actual write paths (updateEmployeePosition/setAccessChecklistItem) are already
+  // Admin-only at the RLS level regardless, this just avoids showing controls that
+  // would only reject her click.
+  const canView = employee.role === 'Admin' || employee.position === 'Personal Assistant';
+  const canEdit = employee.role === 'Admin';
+  if (!canView) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">This checklist is limited to Admin (view &amp; edit) and Personal Assistant (view only).</p></div></div>';
   } else {
     let people = [];
     let selectedId = null;
@@ -372,7 +379,11 @@ if (employee) {
               // independently -- Ren can combine any of them, e.g. Edit + Approver.
               const pill = (lvl, label) => {
                 const active = lvl === 'none' ? current.length === 0 : current.includes(lvl);
-                return '<button type="button" class="lvl-pill ' + lvl + (active ? ' active' : '') + '" data-key="' + key + '" data-level="' + lvl + '">' + label + '</button>';
+                return '<button type="button" class="lvl-pill ' + lvl + (active ? ' active' : '') + '"' +
+                  (canEdit
+                    ? ' data-key="' + key + '" data-level="' + lvl + '">'
+                    : ' disabled style="cursor:default;' + (active ? '' : 'opacity:0.35;') + '">') +
+                  label + '</button>';
               };
               return '<div class="ac-item">' +
                 '<span class="lbl-text">' + esc(it.label) + '</span>' +
@@ -388,19 +399,23 @@ if (employee) {
           '<div class="card">' +
             '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
               '<h3 style="margin:0;">' + esc(selected.name) + ' <span class="muted" style="font-weight:normal;font-size:13px;">— ' + esc(selected.role) + '</span></h3>' +
-              '<span style="display:flex;align-items:center;gap:6px;">' +
-                '<label class="muted" style="font-size:12px;">Position</label>' +
-                '<select data-position-for="' + selected.id + '" style="padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' + positionOptions(selected.position) + '</select>' +
-              '</span>' +
+              (canEdit
+                ? '<span style="display:flex;align-items:center;gap:6px;">' +
+                    '<label class="muted" style="font-size:12px;">Position</label>' +
+                    '<select data-position-for="' + selected.id + '" style="padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' + positionOptions(selected.position) + '</select>' +
+                  '</span>'
+                : '<span class="muted" style="font-size:12px;">' + esc(selected.position || '— None —') + '</span>') +
             '</div>' +
-            '<p class="muted" style="margin-bottom:0;">Changing Position here takes effect immediately — several tasks below (and pages like Branches, Transactions, Branch Capital) key off it directly.</p>' +
+            (canEdit ? '<p class="muted" style="margin-bottom:0;">Changing Position here takes effect immediately — several tasks below (and pages like Branches, Transactions, Branch Capital) key off it directly.</p>' : '') +
           '</div>' +
           taskCardsHtml;
       }
 
       root.innerHTML =
         '<h2>Access Verification Checklist</h2>' +
-        '<p class="muted">Pick an employee on the left. Each task starts from what their role/position actually grants — click No access, View only, Encode (can add an entry but not edit/delete), Edit, or Approver to correct it if what you see on their real account is different. More than one can be active on the same task (e.g. Edit + Approver) — that\'s entirely your call.</p>' +
+        '<p class="muted">' + (canEdit
+          ? 'Pick an employee on the left. Each task starts from what their role/position actually grants — click No access, View only, Encode (can add an entry but not edit/delete), Edit, or Approver to correct it if what you see on their real account is different. More than one can be active on the same task (e.g. Edit + Approver) — that\'s entirely your call.'
+          : 'Pick an employee on the left to see their current access levels. This view is read-only.') + '</p>' +
         '<div class="card">' +
           '<h3 style="margin:0 0 2px;">Scrap Encoding Activity</h3>' +
           '<p class="muted" style="margin-top:-2px;">Who\'s actually encoding Scrap entries, ranked by how many — the top row is your busiest encoder for this range.</p>' +
@@ -432,6 +447,8 @@ if (employee) {
         selectedId = btn.dataset.selectEmp;
         render();
       }));
+
+      if (!canEdit) return; // Personal Assistant: no position select or pill listeners to wire up below
 
       root.querySelectorAll('[data-position-for]').forEach((sel) => sel.addEventListener('change', async (ev) => {
         const employeeId = ev.target.dataset.positionFor;
