@@ -104,16 +104,26 @@ if (employee) {
     const canActOnTo = employee.role === 'Admin' || employee.role === 'Manager' ||
       (employee.role === 'Branch Supervisor' && employee.branch_id === t.to_branch_id);
     const isAdminManager = employee.role === 'Admin' || employee.role === 'Manager';
-    const canApprove = isAdminManager ||
-      (employee.role === 'Branch Supervisor' && (employee.branch_id === t.from_branch_id || employee.branch_id === t.to_branch_id));
+    // Maker-checker: whoever requested this transfer can't also approve or ship it --
+    // a different Admin/Manager (or eligible Branch Supervisor) has to (see
+    // approve_transfer()/mark_in_transit()'s own server-side check, which this UI
+    // gate just mirrors so the button isn't shown only to fail).
+    const isRequester = t.requested_by === employee.id;
+    const canApprove = !isRequester && (isAdminManager ||
+      (employee.role === 'Branch Supervisor' && (employee.branch_id === t.from_branch_id || employee.branch_id === t.to_branch_id)));
+    const canShip = !isRequester && canActOnFrom;
 
     let actions = '';
     if (t.status === 'Requested') {
       if (canApprove) actions += btn('Approve', 'approve', t.id);
+      else if (isRequester) actions += '<span class="muted" style="font-size:11px;">Awaiting approval from someone else</span> ';
       if (isAdminManager) actions += btn('Reject', 'reject', t.id, true);
     }
     if (t.status === 'Approved' && canActOnFrom) actions += btn('Start Preparing', 'prepare', t.id);
-    if ((t.status === 'Approved' || t.status === 'Preparing') && canActOnFrom) actions += btn('Ship', 'ship', t.id);
+    if ((t.status === 'Approved' || t.status === 'Preparing')) {
+      if (canShip) actions += btn('Ship', 'ship', t.id);
+      else if (isRequester) actions += '<span class="muted" style="font-size:11px;">Awaiting shipping from someone else</span> ';
+    }
     if (t.status === 'In Transit' && canActOnTo) actions += btn('Receive', 'receive', t.id);
     if (['Draft', 'Requested', 'Approved', 'Preparing'].includes(t.status) && isAdminManager) actions += btn('Cancel', 'cancel', t.id, true);
 
