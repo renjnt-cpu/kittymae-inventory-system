@@ -960,7 +960,10 @@ export async function listAllEmployee201Files() {
   // desired constraint didn't clear it either (schema-cache lag or hint syntax
   // mismatch) -- not worth fighting given how small this roster is.
   const [{ data: employees, error: empErr }, { data: files, error: fileErr }] = await Promise.all([
-    supabase.from('employees').select('id, employee_code, full_name, role, position, status, hire_date, contact_number, branches(name)').order('full_name'),
+    // Ascending by employee_code -- oldest-onboarded first (Ren: "MK23 start are the
+    // first one on top") -- not hire_date, since employee_code already encodes
+    // onboarding order and is what he actually wants this sorted by.
+    supabase.from('employees').select('id, employee_code, full_name, role, position, status, hire_date, contact_number, branches(name)').order('employee_code', { ascending: true }),
     supabase.from('employee_201_files').select('*'),
   ]);
   if (empErr) throw new Error(empErr.message);
@@ -984,9 +987,8 @@ export async function upsertEmployee201File(employeeId, fields) {
     department: fields.department || null,
     job_title: fields.jobTitle || null,
     gender: fields.gender || null,
-    group_code: fields.groupCode || null,
+    company: fields.company || null,
     employment_status: fields.employmentStatus || null,
-    region: fields.region || null,
     tax_status_code: fields.taxStatusCode || null,
     payment_mode: fields.paymentMode || null,
     minimum_wage_earner: fields.minimumWageEarner || null,

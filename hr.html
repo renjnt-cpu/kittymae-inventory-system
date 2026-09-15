@@ -43,24 +43,15 @@ const JOB_TITLES_BY_DEPT = {
 };
 const CIVIL_STATUSES = ['Single', 'Married', 'Widowed', 'Separated'];
 const GENDERS = ['Male', 'Female'];
-// The rest of these mirror the reference sheet's CODES tab exactly (Group Code,
-// Employment Status, Region, Tax Status Code, Payment Mode, Minimum Wage Earner,
-// Educational Attainment, Store Category) -- generic administrative/government-
-// compliance codes that apply company-wide, unlike the department/position lists
-// above (those genuinely don't apply outside a much bigger multi-department company).
-const GROUP_CODES = ['HQ', 'BSL', 'SELU', 'NELU', 'CDO', 'NWLU', 'SWLU', 'DVO', 'WVA', 'CC', 'DC', 'MNL', 'CNL', 'MND'];
+// Which of Ren's two businesses this employee's 201-File belongs to -- Miss Kittymae
+// Jewels and Layover Coffee are separate businesses sharing this one system.
+const COMPANIES = ['Miss Kittymae', 'Layover'];
+// The rest of these mirror the reference sheet's CODES tab exactly (Employment Status,
+// Tax Status Code, Payment Mode, Minimum Wage Earner, Educational Attainment, Store
+// Category) -- generic administrative/government-compliance codes that apply
+// company-wide, unlike the department/position lists above (those genuinely don't
+// apply outside a much bigger multi-department company).
 const EMPLOYMENT_STATUSES = ['REG', 'PB', 'RES', 'TER', 'AWOL', 'DECEASED'];
-// MWE Salary/Daily is the reference sheet's own per-region minimum-wage lookup
-// (its Region column sits directly beside this rate in CODES) -- replicated here as
-// a computed display next to the Region field rather than a separately-edited value,
-// same relationship as the sheet's own VLOOKUP-style pairing.
-const REGION_MWE = {
-  'NCR': 537, 'REGION 1': 340, 'REGION 2': 360, 'REGION 3': 400, 'REGION 4A': 400,
-  'REGION 5': 310, 'REGION 6': 365, 'REGION 7': 386, 'REGION 8': 305, 'REGION 9': 316,
-  'REGION 10': 365, 'REGION 11': 396, 'REGION 12': 311, 'REGION 13': 320,
-  'REGION 15 - CAR': 320, 'REGION 16 - BARMM': 280, 'REGION 17 - MIMAROPA': 320,
-};
-const REGIONS = Object.keys(REGION_MWE);
 const TAX_STATUS_CODES = ['S', 'S1', 'S2', 'S3', 'S4', 'M', 'M1', 'M2', 'M3', 'M4'];
 const PAYMENT_MODES = ['CASH', 'CHEQUE'];
 const YES_NO = ['YES', 'NO'];
@@ -173,13 +164,14 @@ if (employee) {
       if (!rows.length) { box.innerHTML = '<p class="muted">No employees match.</p>'; return; }
 
       box.innerHTML = '<div class="table-scroll"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
-        '<colgroup><col style="width:7%"><col style="width:13%"><col style="width:10%"><col style="width:11%"><col style="width:7%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:6%"><col style="width:7%"><col style="width:11%"><col style="width:6%"></colgroup>' +
-        '<thead><tr><th>Employee #</th><th>Complete Name</th><th>Department</th><th>Job Title</th><th>Status</th><th>Date Hired</th><th>End of Employment</th><th>Civil Status</th><th>Gender</th><th>Group Code</th><th>Region</th><th></th></tr></thead><tbody>' +
+        '<colgroup><col style="width:7%"><col style="width:14%"><col style="width:10%"><col style="width:11%"><col style="width:9%"><col style="width:7%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:7%"><col style="width:6%"></colgroup>' +
+        '<thead><tr><th>Employee #</th><th>Complete Name</th><th>Company</th><th>Department</th><th>Job Title</th><th>Status</th><th>Date Hired</th><th>End of Employment</th><th>Civil Status</th><th>Gender</th><th></th></tr></thead><tbody>' +
         rows.map((r) => {
           const f = r.file201 || {};
           return '<tr>' +
             '<td data-label="Employee #">' + esc(r.employee_code || '—') + '</td>' +
             '<td data-label="Complete Name">' + esc(completeName(r)) + '</td>' +
+            '<td data-label="Company">' + esc(f.company || '—') + '</td>' +
             '<td data-label="Department">' + esc(f.department || '—') + '</td>' +
             '<td data-label="Job Title">' + esc(f.job_title || '—') + '</td>' +
             '<td data-label="Status"><span class="badge ' + (r.status === 'Active' ? 'ok' : 'low') + '">' + esc(r.status) + '</span></td>' +
@@ -187,11 +179,9 @@ if (employee) {
             '<td data-label="End of Employment">' + fmtDate(f.end_of_employment_date) + '</td>' +
             '<td data-label="Civil Status">' + esc(f.civil_status || '—') + '</td>' +
             '<td data-label="Gender">' + esc(f.gender || '—') + '</td>' +
-            '<td data-label="Group Code">' + esc(f.group_code || '—') + '</td>' +
-            '<td data-label="Region">' + esc(f.region || '—') + '</td>' +
             '<td><button class="btn small secondary" data-act="edit" data-id="' + r.id + '">Edit</button></td>' +
           '</tr>' +
-          '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="12"></td></tr>';
+          '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="11"></td></tr>';
         }).join('') +
         '</tbody></table></div>';
 
@@ -219,15 +209,6 @@ if (employee) {
       deptSelect.addEventListener('change', refreshTitleOptions);
       refreshTitleOptions();
 
-      const regionSelect = f.querySelector('[name=region]');
-      const mweDisplay = f.querySelector('#hr-mwe-' + id);
-      function refreshMwe() {
-        const rate = REGION_MWE[regionSelect.value];
-        mweDisplay.textContent = rate != null ? '₱' + rate + ' / day' : '—';
-      }
-      regionSelect.addEventListener('change', refreshMwe);
-      refreshMwe();
-
       f.addEventListener('submit', async (ev) => {
         ev.preventDefault();
         const ff = ev.target;
@@ -236,8 +217,9 @@ if (employee) {
             firstName: ff.firstName.value.trim(), middleName: ff.middleName.value.trim(),
             lastName: ff.lastName.value.trim(), suffix: ff.suffix.value.trim(),
             department: ff.department.value, jobTitle: ff.jobTitle.value.trim(), gender: ff.gender.value,
+            company: ff.company.value,
             endOfEmploymentDate: ff.endOfEmploymentDate.value, civilStatus: ff.civilStatus.value,
-            groupCode: ff.groupCode.value, employmentStatus: ff.employmentStatus.value, region: ff.region.value,
+            employmentStatus: ff.employmentStatus.value,
             taxStatusCode: ff.taxStatusCode.value, paymentMode: ff.paymentMode.value,
             minimumWageEarner: ff.minimumWageEarner.value, educationalAttainment: ff.educationalAttainment.value,
             storeCategory: ff.storeCategory.value,
@@ -301,13 +283,10 @@ if (employee) {
           '<div class="field"><label>Department</label><select name="department"><option value="">—</option>' +
             DEPARTMENTS.map((d) => '<option' + (d === f.department ? ' selected' : '') + '>' + d + '</option>').join('') + '</select></div>' +
           '<div class="field"><label>Job Title</label><input type="text" name="jobTitle" list="hr-title-list-' + id + '" value="' + esc(f.job_title || '') + '"><datalist id="hr-title-list-' + id + '"></datalist></div>' +
-          '<div class="field"><label>Group Code</label><select name="groupCode"><option value="">—</option>' +
-            GROUP_CODES.map((c) => '<option' + (c === f.group_code ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
+          '<div class="field"><label>Company</label><select name="company"><option value="">—</option>' +
+            COMPANIES.map((c) => '<option' + (c === f.company ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
           '<div class="field"><label>Employment Status</label><select name="employmentStatus"><option value="">—</option>' +
             EMPLOYMENT_STATUSES.map((s) => '<option' + (s === f.employment_status ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
-          '<div class="field"><label>Region</label><select name="region"><option value="">—</option>' +
-            REGIONS.map((r) => '<option' + (r === f.region ? ' selected' : '') + '>' + r + '</option>').join('') + '</select></div>' +
-          '<div class="field"><label>MWE Salary / Daily</label><span id="hr-mwe-' + id + '" class="muted" style="display:block;padding:7px 0;">—</span></div>' +
           '<div class="field"><label>Tax Status Code</label><select name="taxStatusCode"><option value="">—</option>' +
             TAX_STATUS_CODES.map((c) => '<option' + (c === f.tax_status_code ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
           '<div class="field"><label>Payment Mode</label><select name="paymentMode"><option value="">—</option>' +
