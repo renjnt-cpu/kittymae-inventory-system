@@ -27,7 +27,7 @@
 import { initShell, toast, esc } from './js/shell.js';
 import {
   getBranches, listTransfers, createTransferRequest, approveTransfer, startPreparingTransfer,
-  shipTransfer, receiveTransfer, rejectTransfer, cancelTransfer, subscribeToChanges,
+  shipTransfer, receiveTransfer, rejectTransfer, cancelTransfer, subscribeToChanges, searchProducts,
 } from './js/api.js';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js';
 
@@ -58,11 +58,63 @@ if (employee) {
   function addLine() {
     const div = document.createElement('div');
     div.className = 'line-row';
-    div.style.cssText = 'display:flex;gap:8px;';
-    div.innerHTML = '<div class="field" style="width:120px;"><label>SKU</label><input type="text" class="line-sku" required></div>' +
+    div.style.cssText = 'display:flex;gap:8px;align-items:flex-end;';
+    div.innerHTML = '<div class="field" style="width:200px;position:relative;">' +
+        '<label>SKU</label>' +
+        '<input type="text" class="line-sku" autocomplete="off" placeholder="Type a SKU or item name…" required>' +
+        '<div class="line-sku-name muted" style="font-size:11px;"></div>' +
+        '<div class="line-sku-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>' +
+      '</div>' +
       '<div class="field" style="width:80px;"><label>Qty</label><input type="number" class="line-qty" min="1" required></div>' +
       '<button type="button" class="btn small secondary" onclick="this.closest(\'.line-row\').remove()">Remove</button>';
     document.getElementById('req-lines').appendChild(div);
+    attachSkuAutocomplete(div);
+  }
+
+  // Same SKU autocomplete pattern as Layaway/POS Walk-In's item rows (movement.html's
+  // original) -- lets whoever's requesting pick a real SKU instead of typing one that
+  // might not match anything, without changing what actually gets submitted (still
+  // just the .line-sku input's value).
+  function attachSkuAutocomplete(row) {
+    const skuInput = row.querySelector('.line-sku');
+    const skuSuggest = row.querySelector('.line-sku-suggest');
+    const skuNamePreview = row.querySelector('.line-sku-name');
+    let searchToken = 0, searchTimer = null;
+    function hide() { skuSuggest.style.display = 'none'; skuSuggest.innerHTML = ''; }
+    function pick(p) {
+      skuInput.value = p.sku;
+      skuNamePreview.textContent = p.item_name + (p.category || p.product_line ? ' · ' + (p.category || p.product_line) : '');
+      hide();
+    }
+    function renderSuggestions(matches) {
+      if (!matches.length) { hide(); return; }
+      skuSuggest.innerHTML = matches.map((p) =>
+        '<div data-sku="' + esc(p.sku) + '" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;">' +
+          '<strong>' + esc(p.sku) + '</strong> — ' + esc(p.item_name) +
+          (p.category || p.product_line ? '<div class="muted" style="font-size:11px;">' + esc(p.category || p.product_line) + '</div>' : '') +
+        '</div>'
+      ).join('');
+      skuSuggest.style.display = '';
+      skuSuggest.querySelectorAll('[data-sku]').forEach((el, i) => {
+        el.addEventListener('mousedown', (ev) => { ev.preventDefault(); pick(matches[i]); });
+      });
+    }
+    skuInput.addEventListener('input', () => {
+      skuNamePreview.textContent = '';
+      const q = skuInput.value.trim();
+      clearTimeout(searchTimer);
+      if (!q) { hide(); return; }
+      searchTimer = setTimeout(async () => {
+        const token = ++searchToken;
+        try {
+          const results = await searchProducts(q);
+          if (token !== searchToken) return;
+          renderSuggestions(results);
+          const exact = results.find((p) => p.sku.toLowerCase() === q.toLowerCase());
+          if (exact) skuNamePreview.textContent = exact.item_name + (exact.category || exact.product_line ? ' · ' + (exact.category || exact.product_line) : '');
+        } catch (err) { /* a failed lookup shouldn't block typing a SKU by hand */ }
+      }, 200);
+    });
   }
 
   document.getElementById('req-form').addEventListener('submit', async (ev) => {
