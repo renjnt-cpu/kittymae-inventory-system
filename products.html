@@ -14,15 +14,11 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { listProducts, updateProduct, createProduct, getBranches, listAllInventoryQty, subscribeToChanges } from './js/api.js';
+import { listProducts, updateProduct, getBranches, listAllInventoryQty, subscribeToChanges } from './js/api.js';
 import { branchColor } from './js/branchColors.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g';
-
-const PRODUCT_LINES = ['18K Saudi Gold', '18K Coated', 'Moissanite', 'Silver 925/999', 'Stainless/Fashion'];
-const METAL_PURITIES = ['24K', '21K', '18K', '925', '999', 'N/A'];
-const VALUE_TIERS = ['A', 'B', 'C'];
 
 const employee = await initShell('products');
 if (employee) {
@@ -34,29 +30,10 @@ if (employee) {
   // this at the RLS level too (a single UPDATE policy, so it can't be split
   // column-by-column the way this UI split is).
   const canEdit = canManage || employee.role === 'Branch Supervisor';
-  // Add Item: Admin/Manager (already had insert via is_manager_or_admin()), plus
-  // Branch Supervisor and the Admin Assistant position specifically, per Ren's
-  // request -- 95_products_add_item.sql grants this same set at the RLS level.
-  const canAddItem = canManage || employee.role === 'Branch Supervisor' || employee.position === 'Admin Assistant';
   const branches = await getBranches();
 
   root.innerHTML =
-    (canAddItem ? '<div class="card">' +
-      '<h3>Add Item</h3>' +
-      '<p class="muted" style="margin-top:-4px;">New SKUs otherwise come from the "SKU 2026" Google Sheet -- use this only when a new SKU needs to exist here right away.</p>' +
-      '<form id="add-form">' +
-        '<div class="field"><label>SKU *</label><input type="text" name="sku" required></div>' +
-        '<div class="field" style="min-width:180px;"><label>Product Name *</label><input type="text" name="itemName" required></div>' +
-        '<div class="field"><label>Category</label><input type="text" name="category" placeholder="e.g. MK RING"></div>' +
-        '<div class="field"><label>Sub SKU</label><input type="text" name="subSku"></div>' +
-        '<div class="field"><label>Product Line</label><select name="productLine"><option value="">—</option>' + PRODUCT_LINES.map((l) => '<option>' + l + '</option>').join('') + '</select></div>' +
-        '<div class="field"><label>Metal Purity</label><select name="metalPurity"><option value="">—</option>' + METAL_PURITIES.map((m) => '<option>' + m + '</option>').join('') + '</select></div>' +
-        '<div class="field"><label>Value Tier</label><select name="valueTier"><option value="">—</option>' + VALUE_TIERS.map((t) => '<option>' + t + '</option>').join('') + '</select></div>' +
-        '<div class="field"><label>Price (PHP)</label><input type="number" name="price" step="0.01" min="0"></div>' +
-        '<div class="field"><label>Est. Gram</label><input type="number" name="grossWeightG" step="0.001" min="0"></div>' +
-        '<button class="btn" type="submit">Add Item</button>' +
-      '</form>' +
-    '</div>' : '') +
+    '<p class="muted">New SKUs and stock now come in through <a href="item-monitoring.html">Item Monitoring → Record Factory Purchase</a> instead of here.</p>' +
     '<div class="card">' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
         '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="SKU, Sub SKU, or product name…"></div>' +
@@ -71,29 +48,6 @@ if (employee) {
     '</div>' +
     '<div class="tiles" id="prod-tiles"></div>' +
     '<div id="prod-list"><div class="muted">Loading…</div></div>';
-
-  if (canAddItem) {
-    document.getElementById('add-form').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const f = ev.target;
-      const btn = f.querySelector('button[type=submit]');
-      btn.disabled = true;
-      try {
-        await createProduct({
-          sku: f.sku.value, itemName: f.itemName.value, category: f.category.value,
-          subSku: f.subSku.value, price: f.price.value, grossWeightG: f.grossWeightG.value,
-          productLine: f.productLine.value, metalPurity: f.metalPurity.value, valueTier: f.valueTier.value,
-        });
-        toast('prod-msg', 'SKU added.', false);
-        f.reset();
-        await load();
-      } catch (err) {
-        toast('prod-msg', String(err.message || err), true);
-      } finally {
-        btn.disabled = false;
-      }
-    });
-  }
 
   // With 7,392 SKUs, search/status filters query the server directly (listProducts
   // pages through everything that matches instead of stopping at PostgREST's 1000-row

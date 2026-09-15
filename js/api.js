@@ -152,26 +152,6 @@ export async function listAllInventoryQty() {
   return all;
 }
 
-/** Adds a brand-new SKU (products.html's "Add Item" form) -- previously every SKU
- * only ever arrived externally via the "SKU 2026" Google Sheet; this is the first
- * in-app way to create one. Admin/Manager/Branch Supervisor/Admin Assistant only
- * (95_products_add_item.sql). Every field but sku/itemName is optional -- the table
- * itself only requires those two (see products' NOT NULL columns). The insert is
- * itself picked up by trg_log_product_change (96_product_change_log.sql), so no
- * separate logging call is needed here. */
-export async function createProduct({ sku, itemName, category, subSku, price, grossWeightG, productLine, metalPurity, valueTier }) {
-  const row = {
-    sku: sku.trim(), item_name: itemName.trim(),
-    category: category?.trim() || null, sub_sku: subSku?.trim() || null,
-    system_selling_price: price ? Number(price) : null,
-    gross_weight_g: grossWeightG ? Number(grossWeightG) : null,
-    product_line: productLine || null, metal_purity: metalPurity || null,
-    value_tier: valueTier || null,
-  };
-  const { error } = await supabase.from('products').insert(row);
-  if (error) throw new Error(error.message);
-}
-
 /** SKU Catalog audit trail for Item Monitoring's "Product Changes" section -- every
  * Add/Edit/Discontinue/Reactivate on `products`, written by trg_log_product_change
  * (96_product_change_log.sql) regardless of which page/path made the change. */
@@ -182,9 +162,38 @@ export async function listProductChangeLog(limit = 100) {
   return attachEmployeeNames(data, { changer: 'changed_by' });
 }
 
-/** Patches a detail on an existing row (createProduct() above is the only other
- * write path). Keys are all optional camelCase — only the ones present are patched.
- * productStatus ('Active'/'Discontinued') also goes through this. */
+// ---- Factory Purchases (99_factory_purchases.sql) -- the one place new stock (and,
+// when needed, a brand-new SKU) enters the system now, replacing SKU Catalog's old
+// "Add Item". Every write goes through record_factory_purchase(), which creates the
+// product if it's new and posts a real Stock In ledger transaction.
+
+export async function listFactoryPurchases(limit = 200) {
+  const { data, error } = await supabase.from('factory_purchases')
+    .select('*, branches(name)').order('date_delivered', { ascending: false }).order('created_at', { ascending: false }).limit(limit);
+  if (error) throw new Error(error.message);
+  return attachEmployeeNames(data, { creator: 'created_by' });
+}
+
+export async function recordFactoryPurchase({
+  sku, branchId, qty, dateDelivered, itemName, category, supPrice, pancakePrice, grams,
+  availedFactoryGram, currentPerGram, estSales, purchasedAmount, profit, tagNote,
+}) {
+  const { data, error } = await supabase.rpc('record_factory_purchase', {
+    p_sku: sku, p_branch_id: branchId, p_qty: qty, p_date_delivered: dateDelivered,
+    p_item_name: itemName || null, p_category: category || null,
+    p_sup_price: supPrice || null, p_pancake_price: pancakePrice || null, p_grams: grams || null,
+    p_availed_factory_gram: availedFactoryGram || null, p_current_per_gram: currentPerGram || null,
+    p_est_sales: estSales || null, p_purchased_amount: purchasedAmount || null, p_profit: profit || null,
+    p_tag_note: tagNote || null,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Patches a detail on an existing row (record_factory_purchase() above is the only
+ * other write path, and only ever creates a row, never edits one). Keys are all
+ * optional camelCase — only the ones present are patched. productStatus
+ * ('Active'/'Discontinued') also goes through this. */
 export async function updateProduct(sku, fields) {
   const patch = { updated_at: new Date().toISOString() };
   const map = {

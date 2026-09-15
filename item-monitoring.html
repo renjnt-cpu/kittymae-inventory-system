@@ -16,10 +16,12 @@
 import { initShell, toast, esc } from './js/shell.js';
 import {
   getBranches, listStockByBranch, searchProducts, logCycleCount, listRecentCycleCounts,
-  markCycleCountInvestigated, listLatestCycleCountBySkuBranch, listProductChangeLog, subscribeToChanges,
+  markCycleCountInvestigated, listLatestCycleCountBySkuBranch, listProductChangeLog,
+  listFactoryPurchases, recordFactoryPurchase, subscribeToChanges,
 } from './js/api.js';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js';
 
+const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g';
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString('en-PH', { dateStyle: 'medium' }) : '—';
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
@@ -55,7 +57,45 @@ if (employee) {
     ? '<div class="field"><label>Branch</label>' + (branchById[employee.branch_id] ? branchBadge(esc, branchById[employee.branch_id], employee.branch_id, branches) : '<input type="text" value="None assigned" disabled>') + '</div>'
     : '<div class="field"><label>Branch *</label><select name="branchId" required>' + branches.map((b) => '<option value="' + b.id + '" style="' + branchOptionStyle(b.id, branches) + '">' + esc(b.name) + '</option>').join('') + '</select></div>';
 
+  // Record Factory Purchase -- replaces SKU Catalog's old "Add Item" (95_products_add_item.sql's
+  // group), now also scoping a Branch Supervisor to their own branch since this moves
+  // real stock instead of just editing catalog text (record_factory_purchase() enforces
+  // this same rule server-side).
+  const canRecordPurchase = ['Admin', 'Manager'].includes(employee.role) || employee.role === 'Branch Supervisor' || employee.position === 'Admin Assistant';
+  const fpIsBranchLocked = employee.role === 'Branch Supervisor';
+  const fpBranchFieldHtml = fpIsBranchLocked
+    ? '<div class="field"><label>Branch</label>' + (branchById[employee.branch_id] ? branchBadge(esc, branchById[employee.branch_id], employee.branch_id, branches) : '<input type="text" value="None assigned" disabled>') + '</div>'
+    : '<div class="field"><label>Branch *</label><select name="branchId" required>' + branches.map((b) => '<option value="' + b.id + '" style="' + branchOptionStyle(b.id, branches) + '">' + esc(b.name) + '</option>').join('') + '</select></div>';
+
   root.innerHTML =
+    (canRecordPurchase ? '<div class="card">' +
+      '<h3>Record Factory Purchase</h3>' +
+      '<p class="muted" style="margin-top:-4px;">This is now the one place new stock (and, when needed, a brand-new SKU) enters the system -- it posts a real Stock In and shows up in the SKU Catalog right away. Product Name/Category are only used the first time a SKU is purchased; an existing SKU\'s catalog details are never overwritten.</p>' +
+      '<form id="fp-form" style="align-items:flex-end;">' +
+        '<div class="field" style="position:relative;min-width:180px;">' +
+          '<label>SKU *</label>' +
+          '<input type="text" name="sku" id="fp-sku" required autocomplete="off" placeholder="Type a SKU or item name…">' +
+          '<div id="fp-sku-name" class="muted" style="font-size:11px;"></div>' +
+          '<div id="fp-sku-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>' +
+        '</div>' +
+        '<div class="field" style="min-width:160px;"><label>Product Name</label><input type="text" name="itemName" placeholder="only if new SKU"></div>' +
+        '<div class="field"><label>Category</label><input type="text" name="category" placeholder="only if new SKU"></div>' +
+        fpBranchFieldHtml +
+        '<div class="field"><label>Total Pcs *</label><input type="number" name="qty" min="1" required></div>' +
+        '<div class="field"><label>Date Delivered *</label><input type="date" name="dateDelivered" required></div>' +
+        '<div class="field"><label>Sup. Price</label><input type="number" name="supPrice" step="0.01" min="0" placeholder="PHP/pc"></div>' +
+        '<div class="field"><label>Pancake Price</label><input type="number" name="pancakePrice" step="0.01" min="0" placeholder="PHP/pc"></div>' +
+        '<div class="field"><label>Grams</label><input type="number" name="grams" step="0.001" min="0" placeholder="per pc"></div>' +
+        '<div class="field"><label>Total Grams</label><span id="fp-total-grams" class="muted" style="display:block;padding:7px 0;">—</span></div>' +
+        '<div class="field"><label>Availed Factory Gram</label><input type="number" name="availedFactoryGram" step="0.01" min="0" placeholder="PHP/g"></div>' +
+        '<div class="field"><label>Current Per Gram</label><input type="number" name="currentPerGram" step="0.01" min="0" placeholder="PHP/g"></div>' +
+        '<div class="field"><label>Est. Sales</label><input type="number" name="estSales" step="0.01"></div>' +
+        '<div class="field"><label>Purchased Amount</label><input type="number" name="purchasedAmount" step="0.01"></div>' +
+        '<div class="field"><label>Profit</label><input type="number" name="profit" step="0.01"></div>' +
+        '<div class="field" style="min-width:160px;"><label>Tag/Note</label><input type="text" name="tagNote"></div>' +
+        '<button class="btn" type="submit">Record Purchase</button>' +
+      '</form>' +
+    '</div>' : '') +
     '<div class="card">' +
       '<h3>Log a Physical Count</h3>' +
       '<p class="muted" style="margin-top:-4px;">Counting a SKU only records what you found and how it compares to the system — it never changes stock by itself. If the variance is real, investigate first, then log the correction as an Adjustment in Record Movement (Kittymae POS).</p>' +
@@ -90,6 +130,10 @@ if (employee) {
 
     '<h2 style="margin-top:30px;">Recent Counts</h2>' +
     '<div id="cc-list"><div class="muted">Loading…</div></div>' +
+
+    '<h2 style="margin-top:30px;">Factory Purchases</h2>' +
+    '<p class="muted" style="margin-top:-4px;">Every purchase recorded above, newest delivery date first.</p>' +
+    '<div id="fp-list"><div class="muted">Loading…</div></div>' +
 
     '<h2 style="margin-top:30px;">Product Changes</h2>' +
     '<p class="muted" style="margin-top:-4px;">Every Add/Edit/Discontinue/Reactivate made in the SKU Catalog, with who and when.</p>' +
@@ -161,13 +205,118 @@ if (employee) {
     }
   });
 
+  // ---- Record Factory Purchase: its own SKU autocomplete (same pattern as above,
+  // but also pre-fills Product Name/Category from an existing match so those fields
+  // stay correct even though they're only actually used server-side for a brand-new
+  // SKU) plus live Total Grams / Est. Sales / Purchased Amount / Profit suggestions --
+  // all three stay freely editable, this just saves typing the obvious case. ----
+  if (canRecordPurchase) {
+    const fpForm = document.getElementById('fp-form');
+    fpForm.dateDelivered.value = new Date().toISOString().slice(0, 10);
+
+    const fpSkuInput = document.getElementById('fp-sku');
+    const fpSkuSuggest = document.getElementById('fp-sku-suggest');
+    const fpSkuNamePreview = document.getElementById('fp-sku-name');
+    let fpSearchToken = 0, fpSearchTimer = null;
+    function hideFpSuggestions() { fpSkuSuggest.style.display = 'none'; fpSkuSuggest.innerHTML = ''; }
+    function pickFpSku(p) {
+      fpSkuInput.value = p.sku;
+      fpForm.itemName.value = p.item_name || '';
+      fpForm.category.value = p.category || '';
+      fpSkuNamePreview.textContent = 'Existing SKU: ' + p.item_name + (p.category || p.product_line ? ' · ' + (p.category || p.product_line) : '');
+      hideFpSuggestions();
+    }
+    function renderFpSuggestions(matches) {
+      if (!matches.length) { hideFpSuggestions(); return; }
+      fpSkuSuggest.innerHTML = matches.map((p) =>
+        '<div data-sku="' + esc(p.sku) + '" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;">' +
+          '<strong>' + esc(p.sku) + '</strong> — ' + esc(p.item_name) +
+        '</div>'
+      ).join('');
+      fpSkuSuggest.style.display = '';
+      fpSkuSuggest.querySelectorAll('[data-sku]').forEach((row, i) => {
+        row.addEventListener('mousedown', (ev) => { ev.preventDefault(); pickFpSku(matches[i]); });
+      });
+    }
+    fpSkuInput.addEventListener('input', () => {
+      fpSkuNamePreview.textContent = '';
+      const q = fpSkuInput.value.trim();
+      clearTimeout(fpSearchTimer);
+      if (!q) { hideFpSuggestions(); return; }
+      fpSearchTimer = setTimeout(async () => {
+        const token = ++fpSearchToken;
+        try {
+          const results = await searchProducts(q);
+          if (token !== fpSearchToken) return;
+          renderFpSuggestions(results);
+          const exact = results.find((p) => p.sku.toLowerCase() === q.toLowerCase());
+          if (exact) fpSkuNamePreview.textContent = 'Existing SKU: ' + exact.item_name;
+        } catch (err) { /* a failed lookup shouldn't block typing a SKU by hand */ }
+      }, 200);
+    });
+    fpSkuInput.addEventListener('blur', () => setTimeout(hideFpSuggestions, 150));
+    fpSkuInput.addEventListener('focus', () => { if (fpSkuSuggest.innerHTML) fpSkuSuggest.style.display = ''; });
+
+    function recalcFp() {
+      const qty = Number(fpForm.qty.value || 0);
+      const grams = Number(fpForm.grams.value || 0);
+      const totalGrams = qty * grams;
+      document.getElementById('fp-total-grams').textContent = totalGrams ? totalGrams.toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g' : '—';
+
+      const supPrice = Number(fpForm.supPrice.value || 0);
+      const pancakePrice = Number(fpForm.pancakePrice.value || 0);
+      const estSales = qty * pancakePrice;
+      const purchasedAmount = qty * supPrice;
+      fpForm.estSales.value = estSales ? estSales.toFixed(2) : '';
+      fpForm.purchasedAmount.value = purchasedAmount ? purchasedAmount.toFixed(2) : '';
+      fpForm.profit.value = (estSales || purchasedAmount) ? (estSales - purchasedAmount).toFixed(2) : '';
+    }
+    ['qty', 'grams', 'supPrice', 'pancakePrice'].forEach((name) => fpForm[name].addEventListener('input', recalcFp));
+
+    fpForm.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      const branchId = fpIsBranchLocked ? employee.branch_id : Number(f.branchId.value);
+      const btn = f.querySelector('button[type=submit]');
+      btn.disabled = true;
+      try {
+        await recordFactoryPurchase({
+          sku: f.sku.value.trim(), branchId, qty: Number(f.qty.value), dateDelivered: f.dateDelivered.value,
+          itemName: f.itemName.value.trim(), category: f.category.value.trim(),
+          supPrice: f.supPrice.value ? Number(f.supPrice.value) : null,
+          pancakePrice: f.pancakePrice.value ? Number(f.pancakePrice.value) : null,
+          grams: f.grams.value ? Number(f.grams.value) : null,
+          availedFactoryGram: f.availedFactoryGram.value ? Number(f.availedFactoryGram.value) : null,
+          currentPerGram: f.currentPerGram.value ? Number(f.currentPerGram.value) : null,
+          estSales: f.estSales.value ? Number(f.estSales.value) : null,
+          purchasedAmount: f.purchasedAmount.value ? Number(f.purchasedAmount.value) : null,
+          profit: f.profit.value ? Number(f.profit.value) : null,
+          tagNote: f.tagNote.value.trim(),
+        });
+        notify('Purchase recorded — stock and SKU Catalog updated.', false);
+        f.reset();
+        f.dateDelivered.value = new Date().toISOString().slice(0, 10);
+        document.getElementById('fp-total-grams').textContent = '—';
+        fpSkuNamePreview.textContent = '';
+        hideFpSuggestions();
+        await load();
+      } catch (err) {
+        notify(String(err.message || err), true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
   let stockRows = [];
   let cycleCounts = [];
   let latestCounts = {};
   let productChanges = [];
+  let factoryPurchases = [];
   await load();
   subscribeToChanges(['inventory', 'cycle_counts'], load);
   subscribeToChanges('product_change_log', async () => { productChanges = await listProductChangeLog(100); renderProductChanges(); });
+  subscribeToChanges('factory_purchases', async () => { factoryPurchases = await listFactoryPurchases(); renderFactoryPurchases(); });
 
   document.getElementById('f-search').addEventListener('input', renderStockByBranch);
   document.getElementById('f-branch').addEventListener('change', renderStockByBranch);
@@ -181,13 +330,14 @@ if (employee) {
 
   async function load() {
     try {
-      [stockRows, cycleCounts, latestCounts, productChanges] = await Promise.all([
-        listStockByBranch(), listRecentCycleCounts(100), listLatestCycleCountBySkuBranch(), listProductChangeLog(100),
+      [stockRows, cycleCounts, latestCounts, productChanges, factoryPurchases] = await Promise.all([
+        listStockByBranch(), listRecentCycleCounts(100), listLatestCycleCountBySkuBranch(), listProductChangeLog(100), listFactoryPurchases(),
       ]);
       renderTiles();
       renderStockByBranch();
       renderRecentCounts();
       renderProductChanges();
+      renderFactoryPurchases();
     } catch (err) {
       document.getElementById('sbb-list').innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
     }
@@ -311,6 +461,34 @@ if (employee) {
         '<td data-label="Action"><span class="badge ' + (PRODUCT_CHANGE_BADGE[c.action] || 'pending') + '">' + esc(c.action) + '</span></td>' +
         '<td data-label="Details" class="full-row">' + esc(c.details || '—') + '</td>' +
         '<td data-label="Changed By" class="full-row">' + (c.changer ? esc(c.changer.full_name) : '—') + '</td>' +
+      '</tr>').join('') + '</tbody></table></div>';
+  }
+
+  // ---- Factory Purchases: every purchase recorded via the form above, newest
+  // delivery first -- monitoring only, nothing here is editable. ----
+  function renderFactoryPurchases() {
+    const box = document.getElementById('fp-list');
+    if (!factoryPurchases.length) { box.innerHTML = '<p class="muted">No factory purchases recorded yet.</p>'; return; }
+
+    box.innerHTML = '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
+      '<thead><tr><th>Delivered</th><th>SKU</th><th>Branch</th><th>Pcs</th><th>Sup. Price</th><th>Pancake Price</th>' +
+      '<th>Grams</th><th>Total Grams</th><th>Availed Factory Gram</th><th>Current/Gram</th><th>Est. Sales</th><th>Purchased</th><th>Profit</th><th>Note</th><th>By</th></tr></thead><tbody>' +
+      factoryPurchases.map((p) => '<tr>' +
+        '<td data-label="Delivered">' + fmtDate(p.date_delivered) + '</td>' +
+        '<td data-label="SKU"><b>' + esc(p.sku) + '</b></td>' +
+        '<td data-label="Branch">' + (p.branches ? esc(p.branches.name) : '—') + '</td>' +
+        '<td data-label="Pcs">' + p.qty + '</td>' +
+        '<td data-label="Sup. Price">' + money(p.sup_price) + '</td>' +
+        '<td data-label="Pancake Price">' + money(p.pancake_price) + '</td>' +
+        '<td data-label="Grams">' + weight(p.grams) + '</td>' +
+        '<td data-label="Total Grams">' + weight(p.total_grams) + '</td>' +
+        '<td data-label="Availed Factory Gram">' + money(p.availed_factory_gram) + '</td>' +
+        '<td data-label="Current/Gram">' + money(p.current_per_gram) + '</td>' +
+        '<td data-label="Est. Sales">' + money(p.est_sales) + '</td>' +
+        '<td data-label="Purchased">' + money(p.purchased_amount) + '</td>' +
+        '<td data-label="Profit">' + money(p.profit) + '</td>' +
+        '<td data-label="Note" class="full-row">' + esc(p.tag_note || '—') + '</td>' +
+        '<td data-label="By" class="full-row">' + (p.creator ? esc(p.creator.full_name) : '—') + '</td>' +
       '</tr>').join('') + '</tbody></table></div>';
   }
 }
