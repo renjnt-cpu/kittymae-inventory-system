@@ -95,27 +95,68 @@ export async function initShell(activePage) {
     if (unlock > new Date()) { nameEditLocked = true; nameEditUnlockDate = unlock; }
   }
 
-  const header = document.createElement('header');
-  header.innerHTML = '<h1>💎 Kittymae Jewels System</h1>' +
-    '<div class="who">' +
-      '<a class="btn small secondary" href="https://renjnt-cpu.github.io/kittymae-pos/index.html">Switch to POS ↗</a> ' +
-      '<span id="who-display">' + esc(employee.full_name) + ' · ' + esc(employee.role) +
-        (employee.branch_id ? ' · Branch #' + employee.branch_id : ' · All Branches') +
-      '</span>' +
-      (nameEditLocked
-        ? ' <span class="muted" style="font-size:11px;">(can rename ' + nameEditUnlockDate.toISOString().slice(0, 10) + ')</span>'
-        : ' <button class="btn small secondary" id="edit-name-btn">Edit Name</button>') +
-      ' <button class="btn small secondary" id="signout-btn">Sign out</button>' +
+  // Grouped sidebar (App Shell, P0) -- same pages/gating built above, just
+  // rendered as sections instead of a flat pill row. A page id not listed in any
+  // group here would simply never appear in the sidebar, so every id pushed above
+  // must have a home in exactly one group.
+  const NAV_GROUPS = [
+    { label: 'Overview', ids: ['dashboard'] },
+    { label: 'Sales', ids: ['branches', 'refunds'] },
+    { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers'] },
+    { label: 'Operations', ids: ['lbc', 'assets'] },
+    { label: 'Finance', ids: ['bills', 'transactions'] },
+    { label: 'People', ids: ['hr', 'access-checklist'] },
+  ];
+  const pageById = Object.fromEntries(pages.map((p) => [p.id, p]));
+  const navHtml = NAV_GROUPS.map((g) => {
+    const items = g.ids.map((id) => pageById[id]).filter(Boolean);
+    if (!items.length) return '';
+    return '<div class="app-nav-group">' +
+      '<div class="app-nav-group-label">' + esc(g.label) + '</div>' +
+      items.map((p) => '<a href="' + p.href + '"' + (p.id === activePage ? ' class="active"' : '') + '>' + p.label + '</a>').join('') +
+    '</div>';
+  }).join('');
+  const activeLabel = (pageById[activePage] || {}).label || 'Kittymae Jewels System';
+
+  const shell = document.createElement('div');
+  shell.className = 'app-shell';
+  shell.innerHTML =
+    '<div class="app-backdrop" id="app-backdrop"></div>' +
+    '<aside class="app-sidebar" id="app-sidebar">' +
+      '<div class="app-sidebar-brand">💎 Kittymae Jewels</div>' +
+      '<nav class="app-nav">' + navHtml + '</nav>' +
+    '</aside>' +
+    '<div class="app-main-col">' +
+      '<header class="app-header">' +
+        '<button type="button" class="app-menu-btn" id="app-menu-btn" aria-label="Open menu">☰</button>' +
+        '<h1 class="app-page-title">' + esc(activeLabel) + '</h1>' +
+        '<div class="who" id="app-header-who"></div>' +
+      '</header>' +
     '</div>';
 
-  const nav = document.createElement('nav');
-  nav.innerHTML = pages.map((p) =>
-    '<a href="' + p.href + '"' + (p.id === activePage ? ' class="active"' : '') + '>' + p.label + '</a>'
-  ).join('');
+  const existingMain = document.querySelector('main');
+  shell.querySelector('.app-main-col').appendChild(existingMain);
+  document.body.prepend(shell);
 
-  document.body.prepend(nav);
-  document.body.prepend(header);
+  const header = shell.querySelector('.app-header');
+  document.getElementById('app-header-who').innerHTML =
+    '<a class="btn small secondary" href="https://renjnt-cpu.github.io/kittymae-pos/index.html">Switch to POS ↗</a> ' +
+    '<span id="who-display">' + esc(employee.full_name) + ' · ' + esc(employee.role) +
+      (employee.branch_id ? ' · Branch #' + employee.branch_id : ' · All Branches') +
+    '</span>' +
+    (nameEditLocked
+      ? ' <span class="muted" style="font-size:11px;">(can rename ' + nameEditUnlockDate.toISOString().slice(0, 10) + ')</span>'
+      : ' <button class="btn small secondary" id="edit-name-btn">Edit Name</button>') +
+    ' <button class="btn small secondary" id="signout-btn">Sign out</button>';
   header.querySelector('#signout-btn').addEventListener('click', signOut);
+
+  // Mobile/tablet off-canvas drawer (<1024px) -- the sidebar is always visible
+  // above that, so the toggle/backdrop are only ever reachable via the hamburger
+  // that itself only renders visibly below the breakpoint (CSS-only visibility).
+  const closeDrawer = () => shell.classList.remove('sidebar-open');
+  shell.querySelector('#app-menu-btn').addEventListener('click', () => shell.classList.toggle('sidebar-open'));
+  shell.querySelector('#app-backdrop').addEventListener('click', closeDrawer);
+  shell.querySelectorAll('.app-nav a').forEach((a) => a.addEventListener('click', closeDrawer));
 
   const whoEl = header.querySelector('.who');
   if (header.querySelector('#edit-name-btn')) header.querySelector('#edit-name-btn').addEventListener('click', () => {
