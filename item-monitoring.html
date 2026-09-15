@@ -83,7 +83,12 @@ if (employee) {
         '<button class="btn" type="submit" style="align-self:flex-start;">Record Purchase</button>' +
       '</form>' +
     '</div>' : '') +
-    '<div class="card">' +
+
+    '<h2 style="margin-top:24px;">Factory Purchases</h2>' +
+    '<p class="muted" style="margin-top:-4px;">Every purchase recorded above, newest delivery date first.</p>' +
+    '<div id="fp-list"><div class="muted">Loading…</div></div>' +
+
+    '<div class="card" style="margin-top:24px;">' +
       '<h3>Log a Physical Count</h3>' +
       '<p class="muted" style="margin-top:-4px;">Counting a SKU only records what you found and how it compares to the system — it never changes stock by itself. If the variance is real, investigate first, then log the correction as an Adjustment in Record Movement (Kittymae POS).</p>' +
       '<form id="cc-form" style="align-items:flex-end;">' +
@@ -117,10 +122,6 @@ if (employee) {
 
     '<h2 style="margin-top:30px;">Recent Counts</h2>' +
     '<div id="cc-list"><div class="muted">Loading…</div></div>' +
-
-    '<h2 style="margin-top:30px;">Factory Purchases</h2>' +
-    '<p class="muted" style="margin-top:-4px;">Every purchase recorded above, newest delivery date first.</p>' +
-    '<div id="fp-list"><div class="muted">Loading…</div></div>' +
 
     '<h2 style="margin-top:30px;">Product Changes</h2>' +
     '<p class="muted" style="margin-top:-4px;">Every Add/Edit/Discontinue/Reactivate made in the SKU Catalog, with who and when.</p>' +
