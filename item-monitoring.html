@@ -70,30 +70,17 @@ if (employee) {
   root.innerHTML =
     (canRecordPurchase ? '<div class="card">' +
       '<h3>Record Factory Purchase</h3>' +
-      '<p class="muted" style="margin-top:-4px;">This is now the one place new stock (and, when needed, a brand-new SKU) enters the system -- it posts a real Stock In and shows up in the SKU Catalog right away. Product Name/Category are only used the first time a SKU is purchased; an existing SKU\'s catalog details are never overwritten.</p>' +
-      '<form id="fp-form" style="align-items:flex-end;">' +
-        '<div class="field" style="position:relative;min-width:180px;">' +
-          '<label>SKU *</label>' +
-          '<input type="text" name="sku" id="fp-sku" required autocomplete="off" placeholder="Type a SKU or item name…">' +
-          '<div id="fp-sku-name" class="muted" style="font-size:11px;"></div>' +
-          '<div id="fp-sku-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>' +
+      '<p class="muted" style="margin-top:-4px;">This is now the one place new stock (and, when needed, a brand-new SKU) enters the system -- it posts a real Stock In and shows up in the SKU Catalog right away. Product Name/Category are only used the first time a SKU is purchased; an existing SKU\'s catalog details are never overwritten. Add more than one item to log a whole delivery at once -- Branch, Date Delivered, and Current Per Gram are shared across every item below since a delivery normally arrives together.</p>' +
+      '<form id="fp-form" style="flex-direction:column;align-items:stretch;flex-wrap:nowrap;">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+          fpBranchFieldHtml +
+          '<div class="field"><label>Date Delivered *</label><input type="date" name="dateDelivered" required></div>' +
+          '<div class="field"><label>Current Per Gram</label><input type="number" name="currentPerGram" step="0.01" min="0" placeholder="PHP/g, today\'s rate"></div>' +
         '</div>' +
-        '<div class="field" style="min-width:160px;"><label>Product Name</label><input type="text" name="itemName" placeholder="only if new SKU"></div>' +
-        '<div class="field"><label>Category</label><input type="text" name="category" placeholder="only if new SKU"></div>' +
-        fpBranchFieldHtml +
-        '<div class="field"><label>Total Pcs *</label><input type="number" name="qty" min="1" required></div>' +
-        '<div class="field"><label>Date Delivered *</label><input type="date" name="dateDelivered" required></div>' +
-        '<div class="field"><label>Sup. Price</label><input type="number" name="supPrice" step="0.01" min="0" placeholder="PHP/pc"></div>' +
-        '<div class="field"><label>Pancake Price</label><input type="number" name="pancakePrice" step="0.01" min="0" placeholder="PHP/pc"></div>' +
-        '<div class="field"><label>Grams</label><input type="number" name="grams" step="0.001" min="0" placeholder="per pc"></div>' +
-        '<div class="field"><label>Total Grams</label><span id="fp-total-grams" class="muted" style="display:block;padding:7px 0;">—</span></div>' +
-        '<div class="field"><label>Availed Factory Gram</label><input type="number" name="availedFactoryGram" step="0.01" min="0" placeholder="PHP/g"></div>' +
-        '<div class="field"><label>Current Per Gram</label><input type="number" name="currentPerGram" step="0.01" min="0" placeholder="PHP/g"></div>' +
-        '<div class="field"><label>Est. Sales</label><input type="number" name="estSales" step="0.01"></div>' +
-        '<div class="field"><label>Purchased Amount</label><input type="number" name="purchasedAmount" step="0.01"></div>' +
-        '<div class="field"><label>Profit</label><input type="number" name="profit" step="0.01"></div>' +
-        '<div class="field" style="min-width:160px;"><label>Tag/Note</label><input type="text" name="tagNote"></div>' +
-        '<button class="btn" type="submit">Record Purchase</button>' +
+        '<label style="font-size:13px;font-weight:600;margin-top:10px;">Items *</label>' +
+        '<div id="fp-items"></div>' +
+        '<button type="button" class="btn small secondary" id="fp-add-item" style="align-self:flex-start;margin:-4px 0 10px;">+ Add another item</button>' +
+        '<button class="btn" type="submit" style="align-self:flex-start;">Record Purchase</button>' +
       '</form>' +
     '</div>' : '') +
     '<div class="card">' +
@@ -205,121 +192,200 @@ if (employee) {
     }
   });
 
-  // ---- Record Factory Purchase: its own SKU autocomplete (same pattern as above,
-  // but also pre-fills Product Name/Category from an existing match so those fields
-  // stay correct even though they're only actually used server-side for a brand-new
-  // SKU) plus live Total Grams / Est. Sales / Purchased Amount / Profit suggestions --
-  // all three stay freely editable, this just saves typing the obvious case. ----
+  // ---- Record Factory Purchase: a repeatable item list (same +Add another item
+  // pattern as POS/Layaway) since a real delivery is usually many SKUs at once --
+  // Branch, Date Delivered, and Current Per Gram are entered once and shared across
+  // every row. Each row gets its own SKU autocomplete that also pre-fills Pancake
+  // Price/Grams from an existing match (every field stays editable -- a real change
+  // this time just types over it) plus a live Total Grams/Est. Sales/Purchased
+  // Amount/Profit suggestion. Rows are submitted independently (not all-or-nothing):
+  // if one SKU in a big batch has a typo, the rest still go through and only the bad
+  // one is reported back. ----
   if (canRecordPurchase) {
     const fpForm = document.getElementById('fp-form');
     fpForm.dateDelivered.value = new Date().toISOString().slice(0, 10);
+    const fpItemsContainer = document.getElementById('fp-items');
 
-    const fpSkuInput = document.getElementById('fp-sku');
-    const fpSkuSuggest = document.getElementById('fp-sku-suggest');
-    const fpSkuNamePreview = document.getElementById('fp-sku-name');
-    let fpSearchToken = 0, fpSearchTimer = null;
-    function hideFpSuggestions() { fpSkuSuggest.style.display = 'none'; fpSkuSuggest.innerHTML = ''; }
-    // Filling in Pancake Price/Grams from an existing SKU is a starting point, not a
-    // lock -- every one of these fields stays a plain editable input, so a real change
-    // this time (a price bump, a re-weigh) is just typed over it before saving.
-    function fillFromExistingProduct(p) {
-      fpForm.itemName.value = p.item_name || '';
-      fpForm.category.value = p.category || '';
-      if (p.system_selling_price != null) fpForm.pancakePrice.value = p.system_selling_price;
-      if (p.gross_weight_g != null) fpForm.grams.value = p.gross_weight_g;
-      recalcFp();
+    function fpItemRowHtml() {
+      return '<div class="fp-item-row" style="border:1px solid #e5e5e5;border-radius:8px;padding:8px;margin-bottom:6px;">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+          '<div class="field" style="position:relative;min-width:150px;">' +
+            '<label>SKU *</label>' +
+            '<input type="text" class="fp-item-sku" autocomplete="off" placeholder="Type a SKU or item name…">' +
+            '<div class="fp-item-sku-name muted" style="font-size:11px;"></div>' +
+            '<div class="fp-item-sku-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>' +
+          '</div>' +
+          '<div class="field" style="min-width:130px;"><label>Product Name</label><input type="text" class="fp-item-name" placeholder="only if new SKU"></div>' +
+          '<div class="field" style="width:100px;"><label>Category</label><input type="text" class="fp-item-category" placeholder="only if new"></div>' +
+          '<div class="field" style="width:60px;"><label>Pcs *</label><input type="number" class="fp-item-qty" min="1"></div>' +
+          '<div class="field" style="width:90px;"><label>Sup. Price</label><input type="number" class="fp-item-sup-price" step="0.01" min="0"></div>' +
+          '<div class="field" style="width:90px;"><label>Pancake Price</label><input type="number" class="fp-item-pancake-price" step="0.01" min="0"></div>' +
+          '<div class="field" style="width:75px;"><label>Grams</label><input type="number" class="fp-item-grams" step="0.001" min="0"></div>' +
+          '<div class="field" style="width:75px;"><label>Total g</label><span class="fp-item-total-grams muted" style="display:block;padding:7px 0;">—</span></div>' +
+          '<div class="field" style="width:95px;"><label>Avail. Factory/g</label><input type="number" class="fp-item-availed" step="0.01" min="0"></div>' +
+          '<div class="field" style="width:90px;"><label>Est. Sales</label><input type="number" class="fp-item-est-sales" step="0.01"></div>' +
+          '<div class="field" style="width:95px;"><label>Purchased</label><input type="number" class="fp-item-purchased" step="0.01"></div>' +
+          '<div class="field" style="width:85px;"><label>Profit</label><input type="number" class="fp-item-profit" step="0.01"></div>' +
+          '<div class="field" style="min-width:100px;"><label>Tag/Note</label><input type="text" class="fp-item-tag"></div>' +
+          '<button type="button" class="btn small secondary fp-item-remove" title="Remove this item">✕</button>' +
+        '</div>' +
+      '</div>';
     }
-    function pickFpSku(p) {
-      fpSkuInput.value = p.sku;
-      fillFromExistingProduct(p);
-      fpSkuNamePreview.textContent = 'Existing SKU — details filled in below, edit anything that changed: ' + p.item_name + (p.category || p.product_line ? ' · ' + (p.category || p.product_line) : '');
-      hideFpSuggestions();
-    }
-    function renderFpSuggestions(matches) {
-      if (!matches.length) { hideFpSuggestions(); return; }
-      fpSkuSuggest.innerHTML = matches.map((p) =>
-        '<div data-sku="' + esc(p.sku) + '" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;">' +
-          '<strong>' + esc(p.sku) + '</strong> — ' + esc(p.item_name) +
-        '</div>'
-      ).join('');
-      fpSkuSuggest.style.display = '';
-      fpSkuSuggest.querySelectorAll('[data-sku]').forEach((row, i) => {
-        row.addEventListener('mousedown', (ev) => { ev.preventDefault(); pickFpSku(matches[i]); });
-      });
-    }
-    fpSkuInput.addEventListener('input', () => {
-      fpSkuNamePreview.textContent = '';
-      const q = fpSkuInput.value.trim();
-      clearTimeout(fpSearchTimer);
-      if (!q) { hideFpSuggestions(); return; }
-      fpSearchTimer = setTimeout(async () => {
-        const token = ++fpSearchToken;
-        try {
-          const results = await searchProducts(q);
-          if (token !== fpSearchToken) return;
-          renderFpSuggestions(results);
-          // An exact SKU typed by hand (not clicked from the dropdown) still counts
-          // as picking that product -- fill in its details the same way, without
-          // stealing focus by closing the still-open suggestion list.
-          const exact = results.find((p) => p.sku.toLowerCase() === q.toLowerCase());
-          if (exact) {
-            fillFromExistingProduct(exact);
-            fpSkuNamePreview.textContent = 'Existing SKU — details filled in below, edit anything that changed: ' + exact.item_name;
-          }
-        } catch (err) { /* a failed lookup shouldn't block typing a SKU by hand */ }
-      }, 200);
-    });
-    fpSkuInput.addEventListener('blur', () => setTimeout(hideFpSuggestions, 150));
-    fpSkuInput.addEventListener('focus', () => { if (fpSkuSuggest.innerHTML) fpSkuSuggest.style.display = ''; });
 
-    function recalcFp() {
-      const qty = Number(fpForm.qty.value || 0);
-      const grams = Number(fpForm.grams.value || 0);
+    function fpRecalcRow(row) {
+      const qty = Number(row.querySelector('.fp-item-qty').value || 0);
+      const grams = Number(row.querySelector('.fp-item-grams').value || 0);
       const totalGrams = qty * grams;
-      document.getElementById('fp-total-grams').textContent = totalGrams ? totalGrams.toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g' : '—';
+      row.querySelector('.fp-item-total-grams').textContent = totalGrams ? totalGrams.toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g' : '—';
 
-      const supPrice = Number(fpForm.supPrice.value || 0);
-      const pancakePrice = Number(fpForm.pancakePrice.value || 0);
+      const supPrice = Number(row.querySelector('.fp-item-sup-price').value || 0);
+      const pancakePrice = Number(row.querySelector('.fp-item-pancake-price').value || 0);
       const estSales = qty * pancakePrice;
       const purchasedAmount = qty * supPrice;
-      fpForm.estSales.value = estSales ? estSales.toFixed(2) : '';
-      fpForm.purchasedAmount.value = purchasedAmount ? purchasedAmount.toFixed(2) : '';
-      fpForm.profit.value = (estSales || purchasedAmount) ? (estSales - purchasedAmount).toFixed(2) : '';
+      row.querySelector('.fp-item-est-sales').value = estSales ? estSales.toFixed(2) : '';
+      row.querySelector('.fp-item-purchased').value = purchasedAmount ? purchasedAmount.toFixed(2) : '';
+      row.querySelector('.fp-item-profit').value = (estSales || purchasedAmount) ? (estSales - purchasedAmount).toFixed(2) : '';
     }
-    ['qty', 'grams', 'supPrice', 'pancakePrice'].forEach((name) => fpForm[name].addEventListener('input', recalcFp));
+
+    function fillRowFromExistingProduct(row, p) {
+      row.querySelector('.fp-item-name').value = p.item_name || '';
+      row.querySelector('.fp-item-category').value = p.category || '';
+      if (p.system_selling_price != null) row.querySelector('.fp-item-pancake-price').value = p.system_selling_price;
+      if (p.gross_weight_g != null) row.querySelector('.fp-item-grams').value = p.gross_weight_g;
+      fpRecalcRow(row);
+    }
+
+    function attachFpRowAutocomplete(row) {
+      const skuInput = row.querySelector('.fp-item-sku');
+      const skuSuggest = row.querySelector('.fp-item-sku-suggest');
+      const skuNamePreview = row.querySelector('.fp-item-sku-name');
+      let searchToken = 0, searchTimer = null;
+      function hide() { skuSuggest.style.display = 'none'; skuSuggest.innerHTML = ''; }
+      function pick(p) {
+        skuInput.value = p.sku;
+        fillRowFromExistingProduct(row, p);
+        skuNamePreview.textContent = 'Existing — edit anything that changed: ' + p.item_name;
+        hide();
+      }
+      function renderSuggestions(matches) {
+        if (!matches.length) { hide(); return; }
+        skuSuggest.innerHTML = matches.map((p) =>
+          '<div data-sku="' + esc(p.sku) + '" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;">' +
+            '<strong>' + esc(p.sku) + '</strong> — ' + esc(p.item_name) +
+          '</div>'
+        ).join('');
+        skuSuggest.style.display = '';
+        skuSuggest.querySelectorAll('[data-sku]').forEach((el, i) => {
+          el.addEventListener('mousedown', (ev) => { ev.preventDefault(); pick(matches[i]); });
+        });
+      }
+      skuInput.addEventListener('input', () => {
+        skuNamePreview.textContent = '';
+        const q = skuInput.value.trim();
+        clearTimeout(searchTimer);
+        if (!q) { hide(); return; }
+        searchTimer = setTimeout(async () => {
+          const token = ++searchToken;
+          try {
+            const results = await searchProducts(q);
+            if (token !== searchToken) return;
+            renderSuggestions(results);
+            // An exact SKU typed by hand (not clicked from the dropdown) still counts
+            // as picking that product -- fill in its details the same way, without
+            // stealing focus by closing the still-open suggestion list.
+            const exact = results.find((p) => p.sku.toLowerCase() === q.toLowerCase());
+            if (exact) {
+              fillRowFromExistingProduct(row, exact);
+              skuNamePreview.textContent = 'Existing — edit anything that changed: ' + exact.item_name;
+            }
+          } catch (err) { /* a failed lookup shouldn't block typing a SKU by hand */ }
+        }, 200);
+      });
+      skuInput.addEventListener('blur', () => setTimeout(hide, 150));
+      skuInput.addEventListener('focus', () => { if (skuSuggest.innerHTML) skuSuggest.style.display = ''; });
+      ['fp-item-qty', 'fp-item-grams', 'fp-item-sup-price', 'fp-item-pancake-price'].forEach((cls) => {
+        row.querySelector('.' + cls).addEventListener('input', () => fpRecalcRow(row));
+      });
+    }
+
+    function updateFpRemoveButtons() {
+      const rows = fpItemsContainer.querySelectorAll('.fp-item-row');
+      rows.forEach((row) => { row.querySelector('.fp-item-remove').style.display = rows.length > 1 ? '' : 'none'; });
+    }
+    function addFpItemRow() {
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = fpItemRowHtml();
+      const row = wrapper.firstElementChild;
+      fpItemsContainer.appendChild(row);
+      attachFpRowAutocomplete(row);
+      row.querySelector('.fp-item-remove').addEventListener('click', () => {
+        if (fpItemsContainer.querySelectorAll('.fp-item-row').length <= 1) return;
+        row.remove();
+        updateFpRemoveButtons();
+      });
+      updateFpRemoveButtons();
+    }
+    function resetFpItemRows() { fpItemsContainer.innerHTML = ''; addFpItemRow(); }
+    addFpItemRow();
+    document.getElementById('fp-add-item').addEventListener('click', addFpItemRow);
+
+    function readFpItemRows() {
+      const items = [];
+      fpItemsContainer.querySelectorAll('.fp-item-row').forEach((row) => {
+        const sku = row.querySelector('.fp-item-sku').value.trim();
+        if (!sku) return;
+        const get = (cls) => row.querySelector('.' + cls).value;
+        items.push({
+          sku, itemName: get('fp-item-name').trim(), category: get('fp-item-category').trim(),
+          qty: Number(get('fp-item-qty') || 0),
+          supPrice: get('fp-item-sup-price') ? Number(get('fp-item-sup-price')) : null,
+          pancakePrice: get('fp-item-pancake-price') ? Number(get('fp-item-pancake-price')) : null,
+          grams: get('fp-item-grams') ? Number(get('fp-item-grams')) : null,
+          availedFactoryGram: get('fp-item-availed') ? Number(get('fp-item-availed')) : null,
+          estSales: get('fp-item-est-sales') ? Number(get('fp-item-est-sales')) : null,
+          purchasedAmount: get('fp-item-purchased') ? Number(get('fp-item-purchased')) : null,
+          profit: get('fp-item-profit') ? Number(get('fp-item-profit')) : null,
+          tagNote: get('fp-item-tag').trim(),
+        });
+      });
+      return items;
+    }
 
     fpForm.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const f = ev.target;
       const branchId = fpIsBranchLocked ? employee.branch_id : Number(f.branchId.value);
+      const dateDelivered = f.dateDelivered.value;
+      const currentPerGram = f.currentPerGram.value ? Number(f.currentPerGram.value) : null;
+      const items = readFpItemRows();
+      if (!items.length) { notify('Add at least one item (SKU) to record.', true); return; }
+      const badQty = items.find((it) => !it.qty || it.qty <= 0);
+      if (badQty) { notify('Pcs must be a positive number for ' + badQty.sku + '.', true); return; }
+
       const btn = f.querySelector('button[type=submit]');
       btn.disabled = true;
-      try {
-        await recordFactoryPurchase({
-          sku: f.sku.value.trim(), branchId, qty: Number(f.qty.value), dateDelivered: f.dateDelivered.value,
-          itemName: f.itemName.value.trim(), category: f.category.value.trim(),
-          supPrice: f.supPrice.value ? Number(f.supPrice.value) : null,
-          pancakePrice: f.pancakePrice.value ? Number(f.pancakePrice.value) : null,
-          grams: f.grams.value ? Number(f.grams.value) : null,
-          availedFactoryGram: f.availedFactoryGram.value ? Number(f.availedFactoryGram.value) : null,
-          currentPerGram: f.currentPerGram.value ? Number(f.currentPerGram.value) : null,
-          estSales: f.estSales.value ? Number(f.estSales.value) : null,
-          purchasedAmount: f.purchasedAmount.value ? Number(f.purchasedAmount.value) : null,
-          profit: f.profit.value ? Number(f.profit.value) : null,
-          tagNote: f.tagNote.value.trim(),
-        });
-        notify('Purchase recorded — stock and SKU Catalog updated.', false);
+      let succeeded = 0;
+      const failures = [];
+      for (const it of items) {
+        try {
+          await recordFactoryPurchase({ ...it, branchId, dateDelivered, currentPerGram });
+          succeeded++;
+        } catch (err) {
+          failures.push(it.sku + ': ' + (err.message || err));
+        }
+      }
+      if (failures.length) {
+        notify(succeeded + ' of ' + items.length + ' item(s) recorded. Failed — ' + failures.join('; '), true);
+      } else {
+        notify(items.length + ' item(s) recorded — stock and SKU Catalog updated.', false);
+      }
+      if (succeeded) {
         f.reset();
         f.dateDelivered.value = new Date().toISOString().slice(0, 10);
-        document.getElementById('fp-total-grams').textContent = '—';
-        fpSkuNamePreview.textContent = '';
-        hideFpSuggestions();
-        await load();
-      } catch (err) {
-        notify(String(err.message || err), true);
-      } finally {
-        btn.disabled = false;
+        resetFpItemRows();
       }
+      await load();
+      btn.disabled = false;
     });
   }
 
