@@ -35,11 +35,15 @@ const KNOWN_POSITIONS = ['HR Supervisor', 'Operations Supervisor', 'Inventory Su
 // Warehouse Logistics...) that doesn't apply here at all. Job Title uses a <datalist>
 // rather than a strict <select> so an existing value outside this list never gets
 // silently reset just because it isn't one of the guesses below.
-const DEPARTMENTS = ['EXECUTIVE', 'SALES & MARKETING', 'HUMAN CAPITAL MANAGEMENT'];
+const DEPARTMENTS = ['EXECUTIVE', 'SALES & MARKETING', 'HUMAN CAPITAL MANAGEMENT', 'CORPORATE SERVICES', 'ADMINISTRATIVE', 'F&B', 'OPERATIONS'];
 const JOB_TITLES_BY_DEPT = {
   'EXECUTIVE': ['CEO', 'COO'],
   'SALES & MARKETING': ['Senior Sales Admin Associate', 'Sales Admin Associate', 'Sales Associate'],
   'HUMAN CAPITAL MANAGEMENT': ['Admin Associate', 'Sales Clerk'],
+  'CORPORATE SERVICES': ['Inventory Staff', 'Admin Associate', 'Audit', 'Data Entry'],
+  'ADMINISTRATIVE': ['Company Driver', 'Personal Assistant', 'Helper'],
+  'F&B': ['Service Crew', 'Senior Crew'],
+  'OPERATIONS': ['Sales Admin Associate', 'Branch Team Leader', 'Branch Supervisor'],
 };
 const CIVIL_STATUSES = ['Single', 'Married', 'Widowed', 'Separated'];
 const GENDERS = ['Male', 'Female'];
@@ -53,7 +57,7 @@ const COMPANIES = ['Miss Kittymae', 'Layover'];
 // apply outside a much bigger multi-department company).
 const EMPLOYMENT_STATUSES = ['REG', 'PB', 'RES', 'TER', 'AWOL', 'DECEASED'];
 const TAX_STATUS_CODES = ['S', 'S1', 'S2', 'S3', 'S4', 'M', 'M1', 'M2', 'M3', 'M4'];
-const PAYMENT_MODES = ['CASH', 'CHEQUE'];
+const PAYMENT_MODES = ['CASH', 'CHEQUE', 'BANK'];
 const YES_NO = ['YES', 'NO'];
 const EDUCATIONAL_ATTAINMENTS = ['HIGH SCHOOL', 'DIPLOMA', 'BACHELOR', 'MASTERAL', 'DOCTORAL'];
 // Only what was directly visible in the reference sheet's Store Category column --
