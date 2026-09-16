@@ -20,7 +20,15 @@
     </form>
   </div>
   <h2>Transfers</h2>
-  <div id="transfer-list"><div class="muted">Loading…</div></div>
+  <div id="transfer-active"><div class="muted">Loading…</div></div>
+
+  <details class="card" style="margin-top:16px;">
+    <summary style="cursor:pointer;font-weight:bold;">Cancelled / Rejected <span class="muted" id="tr-cancelled-count" style="font-weight:normal;"></span></summary>
+    <div id="transfer-cancelled" style="margin-top:10px;"></div>
+  </details>
+
+  <h3 style="margin-top:20px;">Received — by Branch</h3>
+  <div id="transfer-received-by-branch"></div>
 </main>
 
 <script type="module">
@@ -40,6 +48,7 @@ const employee = await initShell('transfers');
 if (employee) {
   const branches = await getBranches();
   const byId = Object.fromEntries(branches.map((b) => [b.id, b.name]));
+  let allTransfers = []; // so handleAction's 'edit' case can look up a transfer's own from/to/items by id
   // Requesting is now open to any branch staff again (Ren, 2026-09-16: "since
   // everyone can access now ERP they can also request in transfers") -- reversing the
   // earlier same-day tightening. create_transfer_request() enforces the actual rule
@@ -140,16 +149,44 @@ if (employee) {
   await loadTransfers();
   subscribeToChanges(['inventory_transfers', 'inventory_transfer_items'], loadTransfers);
 
-  let allTransfers = []; // so handleAction's 'edit' case can look up a transfer's own from/to/items by id
+  // Three buckets instead of one flat list (Ren, 2026-09-16: "make a folder to those
+  // cancel request. other folder per branch for received") -- Active covers every
+  // in-progress status, Cancelled/Rejected is one collapsed folder, and Received gets
+  // its own folder per receiving branch so "what has branch X gotten over time" is a
+  // one-click answer instead of scrolling a mixed list. The 3 buckets are a full,
+  // non-overlapping partition of every status in the CHECK constraint.
   async function loadTransfers() {
-    const box = document.getElementById('transfer-list');
-    box.innerHTML = '<div class="muted">Loading…</div>';
+    const activeBox = document.getElementById('transfer-active');
+    activeBox.innerHTML = '<div class="muted">Loading…</div>';
     try {
       allTransfers = await listTransfers();
-      box.innerHTML = allTransfers.length ? allTransfers.map(renderTransfer).join('') : '<p class="muted">No transfers yet.</p>';
+      const active = allTransfers.filter((t) => !['Received', 'Rejected', 'Cancelled'].includes(t.status));
+      const cancelled = allTransfers.filter((t) => ['Rejected', 'Cancelled'].includes(t.status));
+      const received = allTransfers.filter((t) => t.status === 'Received');
+
+      activeBox.innerHTML = active.length ? active.map(renderTransfer).join('') : '<p class="muted">No active transfers.</p>';
+
+      document.getElementById('tr-cancelled-count').textContent = '(' + cancelled.length + ')';
+      document.getElementById('transfer-cancelled').innerHTML = cancelled.length
+        ? cancelled.map(renderTransfer).join('')
+        : '<p class="muted">None.</p>';
+
+      const byBranch = {};
+      received.forEach((t) => { (byBranch[t.to_branch_id] = byBranch[t.to_branch_id] || []).push(t); });
+      const branchIds = Object.keys(byBranch).map(Number).sort((a, b) => (byId[a] || '').localeCompare(byId[b] || ''));
+      const branchBox = document.getElementById('transfer-received-by-branch');
+      branchBox.innerHTML = branchIds.length
+        ? branchIds.map((bid) =>
+            '<details class="card" style="margin-top:10px;">' +
+              '<summary style="cursor:pointer;font-weight:bold;">' + esc(byId[bid] || 'Unknown Branch') + ' <span class="muted" style="font-weight:normal;">(' + byBranch[bid].length + ')</span></summary>' +
+              '<div style="margin-top:10px;">' + byBranch[bid].map(renderTransfer).join('') + '</div>' +
+            '</details>'
+          ).join('')
+        : '<p class="muted">No received transfers yet.</p>';
+
       wireActions();
     } catch (err) {
-      box.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+      activeBox.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
     }
   }
 
