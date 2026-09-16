@@ -159,22 +159,22 @@ if (employee) {
         const paidSoFar = photos.reduce((s, a) => s + Number(a.amount || 0), 0);
         const remaining = Number(r.refund_amount || 0) - paidSoFar;
         return '<tr>' +
-          '<td>' + orderIdLabel(r, dupKeys) + ' — ' + customerLabel(r, dupKeys) + '</td>' +
-          '<td><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
-          '<td>' + (r.date_requested || '—') + '<div class="muted" style="font-size:10px;">Purchased: ' + (r.purchase_date || '—') + '</div></td>' +
-          '<td style="font-size:11px;">' + esc(r.item_description || '—') + (r.reason ? '<div class="muted">' + esc(r.reason) + '</div>' : '') + requestPhotoBtn(r) + '</td>' +
-          '<td>' + money(r.refund_amount) +
+          '<td data-label="Order ID / Customer">' + orderIdLabel(r, dupKeys) + ' — ' + customerLabel(r, dupKeys) + '</td>' +
+          '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
+          '<td data-label="Dates">' + (r.date_requested || '—') + '<div class="muted" style="font-size:10px;">Purchased: ' + (r.purchase_date || '—') + '</div></td>' +
+          '<td data-label="Item / Reason" style="font-size:11px;">' + esc(r.item_description || '—') + (r.reason ? '<div class="muted">' + esc(r.reason) + '</div>' : '') + requestPhotoBtn(r) + '</td>' +
+          '<td data-label="Amount">' + money(r.refund_amount) +
             (photos.length ? '<div class="muted" style="font-size:10px;">' + money(paidSoFar) + (remaining > 0 ? ' paid · ' + money(remaining) + ' left' : ' paid · fully covered') + '</div>' : '') +
           '</td>' +
-          '<td style="font-size:11px;">' + esc(r.refund_method) +
+          '<td data-label="Method / Account" style="font-size:11px;">' + esc(r.refund_method) +
             (r.account_name || r.account_number ? '<div class="muted">' + esc(r.account_name || '') + (r.account_number ? ' · ' + esc(r.account_number) : '') + '</div>' : '') +
           '</td>' +
-          '<td style="font-size:11px;">' +
+          '<td data-label="Proof of Payment" style="font-size:11px;">' +
             (photos.length
               ? photos.map((a) => '<div>' + money(a.amount) + (a.reference_number ? ' · ' + esc(a.reference_number) : '') + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View Photo</button>' : ' <span class="muted">(no photo)</span>') + '</div>').join('')
               : '<span class="muted">None yet</span>') +
           '</td>' +
-          '<td style="font-size:11px;">' + esc(r.notes || '') + '<div class="muted" style="font-size:10px;">Approved by: ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div></td>' +
+          '<td data-label="Notes / Approved by" style="font-size:11px;">' + esc(r.notes || '') + '<div class="muted" style="font-size:10px;">Approved by: ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div></td>' +
         '</tr>';
       }).join('');
       list.innerHTML = '<div class="table-scroll"><table style="min-width:900px;">' +
@@ -357,19 +357,19 @@ if (employee) {
         const canAttach = r.status !== 'Pending Approval';
         const canComplete = r.status === 'Approved' && remaining <= 0;
         return '<tr' + (r.status === 'Pending Approval' ? ' style="background:#fff8e8;"' : '') + '>' +
-          '<td>' + orderIdLabel(r, dupKeys) + requestPhotoBtn(r) + '</td>' +
-          '<td>' + customerLabel(r, dupKeys) +
+          '<td data-label="Order ID">' + orderIdLabel(r, dupKeys) + requestPhotoBtn(r) + '</td>' +
+          '<td data-label="Customer">' + customerLabel(r, dupKeys) +
             '<div class="muted" style="font-size:10px;">' + esc(r.item_description || '') + (r.reason ? ' · ' + esc(r.reason) : '') + '</div>' +
           '</td>' +
-          '<td><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
-          '<td>' + (r.date_requested || '—') + '<div class="muted" style="font-size:10px;">Purchased: ' + (r.purchase_date || '—') + '</div></td>' +
-          '<td>' + money(r.refund_amount) +
+          '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
+          '<td data-label="Dates">' + (r.date_requested || '—') + '<div class="muted" style="font-size:10px;">Purchased: ' + (r.purchase_date || '—') + '</div></td>' +
+          '<td data-label="Amount">' + money(r.refund_amount) +
             (photos.length ? '<div class="muted" style="font-size:10px;">' + money(paidSoFar) + (remaining > 0 ? ' paid · ' + money(remaining) + ' left' : ' paid · fully covered') + '</div>' : '') +
           '</td>' +
-          '<td style="font-size:11px;">' + esc(r.refund_method) +
+          '<td data-label="Method / Account" style="font-size:11px;">' + esc(r.refund_method) +
             (r.account_name || r.account_number ? '<div class="muted">' + esc(r.account_name || '') + (r.account_number ? ' · ' + esc(r.account_number) : '') + '</div>' : '') +
           '</td>' +
-          '<td style="font-size:11px;">' +
+          '<td data-label="Proof of Payment" style="font-size:11px;">' +
             (photos.length
               ? photos.map((a) => '<div style="margin-bottom:2px;">' + money(a.amount) + (a.reference_number ? ' · ' + esc(a.reference_number) : '') + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View Photo</button>' : ' <span class="muted">(no photo)</span>') + (canEditRefund(employee) ? ' <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path || '') + '">✕</button>' : '') + '</div>').join('')
               : '<span class="muted">None yet</span>') +
@@ -382,7 +382,7 @@ if (employee) {
                 '</form>'
               : '<div class="muted" style="font-size:11px;">Approve first</div>') +
           '</td>' +
-          '<td style="font-size:11px;">' + esc(r.notes || '') +
+          '<td data-label="Notes / By" style="font-size:11px;">' + esc(r.notes || '') +
             '<div class="muted" style="font-size:10px;">Req by: ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div>' +
             '<div class="muted" style="font-size:10px;">App by: ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
           '</td>' +

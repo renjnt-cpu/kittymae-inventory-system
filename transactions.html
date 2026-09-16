@@ -619,15 +619,15 @@ if (employee) {
           ? '<span style="color:var(--ok);">+' + money(t.credit) + '</span>'
           : (t.debit != null ? '<span class="muted">-' + money(t.debit) + '</span>' : '—');
         return '<tr data-id="' + t.id + '"' + (missing ? ' style="background:#fdecea;"' : '') + '>' +
-          '<td>' + when + '</td>' +
-          '<td>' + esc(t.description || '—') +
+          '<td data-label="Date &amp; Time">' + when + '</td>' +
+          '<td data-label="Description">' + esc(t.description || '—') +
             (t.notes || t.creator ? '<div class="muted" style="font-size:10px;">' + esc(t.source) + (t.creator ? ' · ' + esc(t.creator.full_name) : '') + (t.notes ? ' · ' + esc(t.notes) : '') + '</div>' : '') +
           '</td>' +
-          '<td>' + esc(t.reference_number || '—') + '</td>' +
-          '<td style="text-align:right;">' + amountLbl + '</td>' +
-          '<td><input type="text" name="fbName" value="' + esc(t.fb_name || '') + '" placeholder="FB Name" style="' + inputStyle + '"></td>' +
-          '<td><input type="text" name="customerName" value="' + esc(t.customer_name || '') + '" placeholder="Customer Name" style="' + inputStyle + '"></td>' +
-          '<td><input type="text" name="orderId" value="' + esc(t.order_id || '') + '" placeholder="Order ID" style="' + inputStyle + '">' +
+          '<td data-label="Ref No.">' + esc(t.reference_number || '—') + '</td>' +
+          '<td data-label="Amount" style="text-align:right;">' + amountLbl + '</td>' +
+          '<td data-label="FB Name"><input type="text" name="fbName" value="' + esc(t.fb_name || '') + '" placeholder="FB Name" style="' + inputStyle + '"></td>' +
+          '<td data-label="Customer Name"><input type="text" name="customerName" value="' + esc(t.customer_name || '') + '" placeholder="Customer Name" style="' + inputStyle + '"></td>' +
+          '<td data-label="Order ID"><input type="text" name="orderId" value="' + esc(t.order_id || '') + '" placeholder="Order ID" style="' + inputStyle + '">' +
             (missing ? '<div class="badge low" style="margin-top:2px;">No Order ID</div>' : '') +
           '</td>' +
           '<td>' +

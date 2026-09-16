@@ -156,16 +156,16 @@ if (employee) {
         if (r.remitted) totalRemitted += Number(r.cod_amount || 0);
         const nextStatus = { Shipped: 'In Transit', 'In Transit': 'Delivered' }[r.status];
         return '<tr' + (r.status === 'Returned to Sender' ? ' style="background:#fdecea;"' : '') + '>' +
-          '<td>' + esc(r.order_id) + '<div class="muted" style="font-size:10px;">' + esc(r.customer_name) + '</div></td>' +
-          '<td style="font-size:11px;">' + esc(r.tracking_number || '—') + '<div class="muted">' + (r.branches ? branchBadge(esc, r.branches.name, r.branch_id, branches) : '') + '</div></td>' +
-          '<td>' + (r.ship_date || '—') + '</td>' +
-          '<td>' + money(r.cod_amount) + '</td>' +
-          '<td><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
-          '<td>' + (r.status === 'Delivered'
+          '<td data-label="Order ID / Customer">' + esc(r.order_id) + '<div class="muted" style="font-size:10px;">' + esc(r.customer_name) + '</div></td>' +
+          '<td data-label="Tracking # / Branch" style="font-size:11px;">' + esc(r.tracking_number || '—') + '<div class="muted">' + (r.branches ? branchBadge(esc, r.branches.name, r.branch_id, branches) : '') + '</div></td>' +
+          '<td data-label="Ship Date">' + (r.ship_date || '—') + '</td>' +
+          '<td data-label="COD Amount">' + money(r.cod_amount) + '</td>' +
+          '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
+          '<td data-label="Remitted">' + (r.status === 'Delivered'
               ? '<span class="badge ' + (r.remitted ? 'ok' : 'low') + '">' + (r.remitted ? 'Remitted' : 'Not yet') + '</span>' + (r.remitted_date ? '<div class="muted" style="font-size:10px;">' + r.remitted_date + '</div>' : '')
               : '<span class="muted">—</span>') +
           '</td>' +
-          '<td style="font-size:11px;">' + esc(r.notes || '') + '<div class="muted" style="font-size:10px;">Added by ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div></td>' +
+          '<td data-label="Notes / By" style="font-size:11px;">' + esc(r.notes || '') + '<div class="muted" style="font-size:10px;">Added by ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div></td>' +
           '<td style="white-space:nowrap;">' +
             (nextStatus ? '<button class="btn small" data-id="' + r.id + '" data-act="advance" data-next="' + nextStatus + '">Mark ' + nextStatus + '</button> ' : '') +
             (r.status !== 'Returned to Sender' && r.status !== 'Delivered' ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="rts">RTS</button> ' : '') +
