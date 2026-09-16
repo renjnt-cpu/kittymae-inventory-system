@@ -40,18 +40,16 @@ const employee = await initShell('transfers');
 if (employee) {
   const branches = await getBranches();
   const byId = Object.fromEntries(branches.map((b) => [b.id, b.name]));
-  // Transfers move real gold-value stock between branches, so only Admin/Manager can
-  // touch either end of it now -- Branch Supervisor and Sales Executive lost request
-  // access, matching create_transfer_request()/approve_transfer()'s own server-side
-  // check (Ren: "only 2 admin can process... the one preparing and the one approved").
-  const isAdminManager = ['Admin', 'Manager'].includes(employee.role);
+  // Requesting is now open to any branch staff again (Ren, 2026-09-16: "since
+  // everyone can access now ERP they can also request in transfers") -- reversing the
+  // earlier same-day tightening. create_transfer_request() enforces the actual rule
+  // server-side: non-Admin/Manager/unscoped-position staff must have their own branch
+  // as either end of the transfer. Approve/Reject/Cancel-of-someone-else's-request
+  // stay Admin/Manager only, unchanged.
 
   ['from-branch', 'to-branch'].forEach((id) => {
     document.getElementById(id).innerHTML = branches.map((b) => '<option value="' + b.id + '" style="' + branchOptionStyle(b.id, branches) + '">' + esc(b.name) + '</option>').join('');
   });
-  if (!isAdminManager) {
-    document.getElementById('req-form').style.display = 'none'; // enforced server-side too
-  }
 
   addLine();
   document.getElementById('add-line').addEventListener('click', addLine);

@@ -4,11 +4,15 @@
 import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js';
 
 // ERP access is now also gated by 201-File Job Title, on top of role/position --
-// "Sales Admin Associate" specifically lost ERP access per Ren's request (the
-// "Senior Sales Admin Associate" tier keeps it). ERP-only: kittymae-pos has no
-// equivalent check, so this list never affects POS access. Extend this array if
-// another job title needs the same treatment later.
-const ERP_BLOCKED_JOB_TITLES = ['Sales Admin Associate'];
+// ERP-only: kittymae-pos has no equivalent check, so these lists never affect POS
+// access. Extend either array if another job title needs the same treatment later.
+const ERP_BLOCKED_JOB_TITLES = [];
+// "Sales Admin Associate" briefly lost ERP access entirely, then was given scoped
+// access back (Ren, 2026-09-16: "sales admin associate can now access ERP only for
+// transfers and item monitoring") -- full access to just these two pages, nothing
+// else in the sidebar, regardless of what role/position/extra_page_access would
+// otherwise grant.
+const ERP_SCOPED_JOB_TITLES = { 'Sales Admin Associate': ['item-monitoring', 'transfers'] };
 
 export async function initShell(activePage) {
   const session = await requireSession();
@@ -27,8 +31,9 @@ export async function initShell(activePage) {
     return null;
   }
 
+  let jobTitle = null;
   try {
-    const jobTitle = await getMyJobTitle();
+    jobTitle = await getMyJobTitle();
     if (jobTitle && ERP_BLOCKED_JOB_TITLES.includes(jobTitle)) {
       document.body.innerHTML = '<div class="center-screen"><div><h2>No ERP access</h2><p>Your position (' + jobTitle + ') no longer has access to this system.</p><p class="muted">You can still use the POS app. Contact an Admin if you think this is wrong.</p></div></div>';
       return null;
@@ -39,50 +44,71 @@ export async function initShell(activePage) {
     // lookup handling elsewhere in this app.
   }
 
-  const pages = [
-    { id: 'dashboard', label: 'Dashboard', href: 'dashboard.html' },
-  ];
-  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Sales Executive', 'Admin Assistant', 'Personal Assistant'].includes(employee.position)) {
-    // Personal Assistant is view-only here -- branches.html has no add/edit RLS grant
-    // for this position (no branch_id, not in POSITION_MANAGERS), so canAddHere()/
-    // canWriteHere() already resolve to false for her; this just lets her find the page.
-    pages.push({ id: 'branches', label: 'Branches', href: 'branches.html' });
-  }
-  pages.push(
-    { id: 'products', label: 'SKU Catalog', href: 'products.html' },
-    { id: 'item-monitoring', label: 'Item Monitoring', href: 'item-monitoring.html' },
-    { id: 'transfers', label: 'Transfers', href: 'transfers.html' },
-    { id: 'bills', label: 'Bills', href: 'bills.html' },
-  );
-  // Refunds: anyone can request one, so it's not role-gated like the rest of this
-  // block — refunds.html itself shows a simple request form to most people, and the
-  // full approve/manage view only to has_refund_approval_access() accounts.
-  pages.push({ id: 'refunds', label: 'Refunds', href: 'refunds.html' });
-  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Admin Assistant' || (employee.extra_page_access || []).includes('transactions')) {
-    // Transactions doesn't fit the per-branch model (a different process, per Ren) —
-    // flat company-wide log. Admin/Manager run CSV imports and manage everything;
-    // Branch Supervisor, Admin Assistant, and anyone with extra_page_access
-    // 'transactions' (e.g. Jessica) get in too, but transactions.html only lets them
-    // fill in FB Name/Customer/Order ID, not import or delete.
-    pages.push({ id: 'transactions', label: 'Transactions', href: 'transactions.html' });
-  }
-  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Personal Assistant', 'Admin Assistant'].includes(employee.position) || (employee.extra_page_access || []).includes('assets')) {
-    pages.push({ id: 'assets', label: 'Asset & Supplies Custodian', href: 'assets.html' });
-  }
-  if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Admin Assistant' || (employee.extra_page_access || []).includes('lbc')) {
-    // COD parcels shipped via LBC for online orders -- company-wide, not per-branch.
-    pages.push({ id: 'lbc', label: 'LBC Monitoring', href: 'lbc.html' });
-  }
-  // 201-File: strictly HR Supervisor + Admin -- matches is_hr_or_admin() in
-  // 83_hr_201_file.sql exactly, so this link is never shown to someone who'd just
-  // hit "No access" on it.
-  if ((employee.role === 'Admin' || employee.position === 'HR Supervisor') && !employee.hr_201_file_blocked) {
-    pages.push({ id: 'hr', label: 'HR — 201 File', href: 'hr.html' });
-  }
-  // Personal Assistant gets a read-only view (see access-checklist.html's own
-  // canEdit gate) -- Admin remains the only one who can actually change anything.
-  if (employee.role === 'Admin' || employee.position === 'Personal Assistant') {
-    pages.push({ id: 'access-checklist', label: 'Access Checklist', href: 'access-checklist.html' });
+  const ALL_PAGE_DEFS = {
+    dashboard: { label: 'Dashboard', href: 'dashboard.html' },
+    branches: { label: 'Branches', href: 'branches.html' },
+    products: { label: 'SKU Catalog', href: 'products.html' },
+    'item-monitoring': { label: 'Item Monitoring', href: 'item-monitoring.html' },
+    transfers: { label: 'Transfers', href: 'transfers.html' },
+    bills: { label: 'Bills', href: 'bills.html' },
+    refunds: { label: 'Refunds', href: 'refunds.html' },
+    transactions: { label: 'Transactions', href: 'transactions.html' },
+    assets: { label: 'Asset & Supplies Custodian', href: 'assets.html' },
+    lbc: { label: 'LBC Monitoring', href: 'lbc.html' },
+    hr: { label: 'HR — 201 File', href: 'hr.html' },
+    'access-checklist': { label: 'Access Checklist', href: 'access-checklist.html' },
+  };
+  const pages = [];
+  const scopedIds = jobTitle && ERP_SCOPED_JOB_TITLES[jobTitle];
+  if (scopedIds) {
+    // A scoped job title (e.g. Sales Admin Associate) gets exactly these pages and
+    // nothing else -- skip every role/position/extra_page_access check below entirely,
+    // regardless of what those would otherwise grant.
+    scopedIds.forEach((id) => pages.push({ id, ...ALL_PAGE_DEFS[id] }));
+  } else {
+    pages.push({ id: 'dashboard', ...ALL_PAGE_DEFS.dashboard });
+    if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Sales Executive', 'Admin Assistant', 'Personal Assistant'].includes(employee.position)) {
+      // Personal Assistant is view-only here -- branches.html has no add/edit RLS grant
+      // for this position (no branch_id, not in POSITION_MANAGERS), so canAddHere()/
+      // canWriteHere() already resolve to false for her; this just lets her find the page.
+      pages.push({ id: 'branches', ...ALL_PAGE_DEFS.branches });
+    }
+    pages.push(
+      { id: 'products', ...ALL_PAGE_DEFS.products },
+      { id: 'item-monitoring', ...ALL_PAGE_DEFS['item-monitoring'] },
+      { id: 'transfers', ...ALL_PAGE_DEFS.transfers },
+      { id: 'bills', ...ALL_PAGE_DEFS.bills },
+    );
+    // Refunds: anyone can request one, so it's not role-gated like the rest of this
+    // block — refunds.html itself shows a simple request form to most people, and the
+    // full approve/manage view only to has_refund_approval_access() accounts.
+    pages.push({ id: 'refunds', ...ALL_PAGE_DEFS.refunds });
+    if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Admin Assistant' || (employee.extra_page_access || []).includes('transactions')) {
+      // Transactions doesn't fit the per-branch model (a different process, per Ren) —
+      // flat company-wide log. Admin/Manager run CSV imports and manage everything;
+      // Branch Supervisor, Admin Assistant, and anyone with extra_page_access
+      // 'transactions' (e.g. Jessica) get in too, but transactions.html only lets them
+      // fill in FB Name/Customer/Order ID, not import or delete.
+      pages.push({ id: 'transactions', ...ALL_PAGE_DEFS.transactions });
+    }
+    if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Personal Assistant', 'Admin Assistant'].includes(employee.position) || (employee.extra_page_access || []).includes('assets')) {
+      pages.push({ id: 'assets', ...ALL_PAGE_DEFS.assets });
+    }
+    if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Admin Assistant' || (employee.extra_page_access || []).includes('lbc')) {
+      // COD parcels shipped via LBC for online orders -- company-wide, not per-branch.
+      pages.push({ id: 'lbc', ...ALL_PAGE_DEFS.lbc });
+    }
+    // 201-File: strictly HR Supervisor + Admin -- matches is_hr_or_admin() in
+    // 83_hr_201_file.sql exactly, so this link is never shown to someone who'd just
+    // hit "No access" on it.
+    if ((employee.role === 'Admin' || employee.position === 'HR Supervisor') && !employee.hr_201_file_blocked) {
+      pages.push({ id: 'hr', ...ALL_PAGE_DEFS.hr });
+    }
+    // Personal Assistant gets a read-only view (see access-checklist.html's own
+    // canEdit gate) -- Admin remains the only one who can actually change anything.
+    if (employee.role === 'Admin' || employee.position === 'Personal Assistant') {
+      pages.push({ id: 'access-checklist', ...ALL_PAGE_DEFS['access-checklist'] });
+    }
   }
 
   // 2-month cooldown between name changes (mirrors update_my_name()'s own server-side
