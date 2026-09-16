@@ -26,7 +26,7 @@
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
 import {
-  getBranches, listTransfers, createTransferRequest, approveTransfer, startPreparingTransfer,
+  getBranches, listTransfers, createTransferRequest, editTransferRequest, approveTransfer, startPreparingTransfer,
   shipTransfer, receiveTransfer, rejectTransfer, cancelTransfer, subscribeToChanges, searchProducts,
 } from './js/api.js';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js';
@@ -51,21 +51,24 @@ if (employee) {
     document.getElementById(id).innerHTML = branches.map((b) => '<option value="' + b.id + '" style="' + branchOptionStyle(b.id, branches) + '">' + esc(b.name) + '</option>').join('');
   });
 
-  addLine();
-  document.getElementById('add-line').addEventListener('click', addLine);
-  function addLine() {
+  addLine(document.getElementById('req-lines'));
+  document.getElementById('add-line').addEventListener('click', () => addLine(document.getElementById('req-lines')));
+  // container param lets the Edit-transfer inline form (Admin only, see handleAction's
+  // 'edit' case below) reuse the exact same row markup/autocomplete for its own item
+  // list instead of duplicating it.
+  function addLine(container, prefill) {
     const div = document.createElement('div');
     div.className = 'line-row';
     div.style.cssText = 'display:flex;gap:8px;align-items:flex-end;';
     div.innerHTML = '<div class="field" style="width:200px;position:relative;">' +
         '<label>SKU</label>' +
-        '<input type="text" class="line-sku" autocomplete="off" placeholder="Type a SKU or item name…" required>' +
+        '<input type="text" class="line-sku" autocomplete="off" placeholder="Type a SKU or item name…" required value="' + esc(prefill ? prefill.sku : '') + '">' +
         '<div class="line-sku-name muted" style="font-size:11px;"></div>' +
         '<div class="line-sku-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>' +
       '</div>' +
-      '<div class="field" style="width:80px;"><label>Qty</label><input type="number" class="line-qty" min="1" required></div>' +
+      '<div class="field" style="width:80px;"><label>Qty</label><input type="number" class="line-qty" min="1" required value="' + (prefill ? prefill.qty : '') + '"></div>' +
       '<button type="button" class="btn small secondary" onclick="this.closest(\'.line-row\').remove()">Remove</button>';
-    document.getElementById('req-lines').appendChild(div);
+    container.appendChild(div);
     attachSkuAutocomplete(div);
   }
 
@@ -127,7 +130,7 @@ if (employee) {
       toast('tr-msg', 'Transfer requested.', false);
       f.reset();
       document.getElementById('req-lines').innerHTML = '';
-      addLine();
+      addLine(document.getElementById('req-lines'));
       await loadTransfers();
     } catch (err) {
       toast('tr-msg', String(err.message || err), true);
@@ -137,12 +140,13 @@ if (employee) {
   await loadTransfers();
   subscribeToChanges(['inventory_transfers', 'inventory_transfer_items'], loadTransfers);
 
+  let allTransfers = []; // so handleAction's 'edit' case can look up a transfer's own from/to/items by id
   async function loadTransfers() {
     const box = document.getElementById('transfer-list');
     box.innerHTML = '<div class="muted">Loading…</div>';
     try {
-      const transfers = await listTransfers();
-      box.innerHTML = transfers.length ? transfers.map(renderTransfer).join('') : '<p class="muted">No transfers yet.</p>';
+      allTransfers = await listTransfers();
+      box.innerHTML = allTransfers.length ? allTransfers.map(renderTransfer).join('') : '<p class="muted">No transfers yet.</p>';
       wireActions();
     } catch (err) {
       box.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
@@ -168,6 +172,11 @@ if (employee) {
     if (t.status === 'Requested') {
       if (canApprove) actions += btn('Approve', 'approve', t.id);
       else if (isRequester) actions += '<span class="muted" style="font-size:11px;">Awaiting approval from someone else</span> ';
+      // Edit is deliberately narrower than everything else here -- Admin only (Ren,
+      // 2026-09-16: "add edit transfer only me can edit"), matching
+      // edit_transfer_request's own server-side gate, and only while still
+      // Requested -- once approved/prepared/shipped, cancel and re-request instead.
+      if (employee.role === 'Admin') actions += btn('Edit', 'edit', t.id, true);
       if (isAdminManager) actions += btn('Reject', 'reject', t.id, true);
     }
     if (t.status === 'Approved' && canActOnFrom) actions += btn('Start Preparing', 'prepare', t.id);
@@ -210,6 +219,49 @@ if (employee) {
       if (action === 'prepare') { await startPreparingTransfer(transferId); return refresh(); }
       if (action === 'reject') { await rejectTransfer(transferId, prompt('Reason for rejecting?') || ''); return refresh(); }
       if (action === 'cancel') { await cancelTransfer(transferId, prompt('Reason for cancelling?') || ''); return refresh(); }
+      if (action === 'edit') {
+        const t = allTransfers.find((x) => x.id === transferId);
+        if (!t) return;
+        inline.innerHTML = '';
+        const form = document.createElement('form');
+        form.id = 'edit-transfer-form';
+        form.innerHTML =
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<div class="field"><label>From Branch *</label><select name="fromBranchId" required>' +
+              branches.map((b) => '<option value="' + b.id + '" style="' + branchOptionStyle(b.id, branches) + '"' + (b.id === t.from_branch_id ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('') +
+            '</select></div>' +
+            '<div class="field"><label>To Branch *</label><select name="toBranchId" required>' +
+              branches.map((b) => '<option value="' + b.id + '" style="' + branchOptionStyle(b.id, branches) + '"' + (b.id === t.to_branch_id ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('') +
+            '</select></div>' +
+          '</div>' +
+          '<div class="edit-transfer-lines" style="margin-top:8px;"></div>';
+        inline.appendChild(form);
+        const linesBox = form.querySelector('.edit-transfer-lines');
+        t.inventory_transfer_items.forEach((i) => addLine(linesBox, { sku: i.sku, qty: i.requested_qty }));
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;gap:6px;margin-top:8px;';
+        btnRow.innerHTML =
+          '<button type="button" class="btn small secondary" id="edit-add-line">+ Add Item</button>' +
+          '<button class="btn small" type="submit">Save Changes</button>' +
+          '<button type="button" class="btn small secondary" id="edit-cancel">Cancel</button>';
+        form.appendChild(btnRow);
+        form.querySelector('#edit-add-line').addEventListener('click', () => addLine(linesBox));
+        form.querySelector('#edit-cancel').addEventListener('click', () => { inline.innerHTML = ''; });
+        form.addEventListener('submit', async (ev) => {
+          ev.preventDefault();
+          const items = Array.from(linesBox.querySelectorAll('.line-row')).map((row) => ({
+            sku: row.querySelector('.line-sku').value.trim(),
+            qty: Number(row.querySelector('.line-qty').value),
+          }));
+          try {
+            await editTransferRequest(transferId, Number(form.fromBranchId.value), Number(form.toBranchId.value), items);
+            inline.innerHTML = '';
+            refresh();
+          } catch (err) {
+            toast('tr-msg', String(err.message || err), true);
+          }
+        });
+      }
       if (action === 'ship' || action === 'receive') {
         const rows = Array.from(card.querySelectorAll('tbody tr, table tr')).slice(1); // skip header row
         const skus = Array.from(card.querySelectorAll('table td:first-child')).map((td) => td.textContent);

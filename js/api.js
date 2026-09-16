@@ -365,6 +365,18 @@ export async function createTransferRequest(fromBranchId, toBranchId, items) {
   return data;
 }
 
+/** Correct a mistake on a transfer request (wrong branch/SKU/qty) without cancelling
+ * and re-creating it -- Admin only (edit_transfer_request enforces this server-side
+ * too), and only while still Requested; once approved/preparing/shipped, cancel and
+ * re-request instead. */
+export async function editTransferRequest(transferId, fromBranchId, toBranchId, items) {
+  const { error } = await supabase.rpc('edit_transfer_request', {
+    p_transfer_id: transferId, p_from_branch_id: fromBranchId, p_to_branch_id: toBranchId,
+    p_items: items.map((i) => ({ sku: i.sku, qty: i.qty })),
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function approveTransfer(transferId) {
   const { error } = await supabase.rpc('approve_transfer', { p_transfer_id: transferId });
   if (error) throw new Error(error.message);
