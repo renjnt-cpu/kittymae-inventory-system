@@ -42,7 +42,11 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, listScrapEntries, subscribeToChanges } from './js/api.js';
+import {
+  getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, listScrapEntries,
+  subscribeToChanges, getBranches, listProducts, listAllInventoryQty,
+} from './js/api.js';
+import { branchColor } from './js/branchColors.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g';
@@ -205,6 +209,15 @@ if (employee) {
     // differs from the computed default.
     let overrides = {};
 
+    // Inventory Value by Branch -- total pcs and total retail value (system selling
+    // price x pcs on hand) per branch, same numbers SKU Catalog's own tiles show, just
+    // surfaced here too (Ren, 2026-09-17: "give me total pcs and total amount in sku
+    // catalog per branch show it in access checklist"). Active SKUs only, matching SKU
+    // Catalog's own default filter.
+    let branches = [];
+    let invByBranch = {}; // { branchId: { pcs, amount } }
+    let invGrandTotal = { pcs: 0, amount: 0 };
+
     // Scrap Encoding Activity leaderboard -- who's actually encoding Scrap entries,
     // ranked, with a time range. Kept as JS state (not read from the DOM at render
     // time) because render() below rebuilds the whole page's innerHTML on every
@@ -219,6 +232,55 @@ if (employee) {
     // it's just as easy to find who's lowest as who's highest.
     let scrapSort = 'count';
     let scrapSortDir = 'desc';
+
+    async function loadInventoryValue() {
+      const box = document.getElementById('ac-inventory-value-tiles');
+      try {
+        if (!branches.length) branches = await getBranches();
+        const [products, qtyRows] = await Promise.all([listProducts({ status: 'Active' }), listAllInventoryQty()]);
+        const priceBySku = {};
+        products.forEach((p) => { priceBySku[p.sku] = p.system_selling_price; });
+
+        invByBranch = {};
+        branches.forEach((b) => { invByBranch[b.id] = { pcs: 0, amount: 0 }; });
+        invGrandTotal = { pcs: 0, amount: 0 };
+        qtyRows.forEach((r) => {
+          // A row for a Discontinued or otherwise-missing SKU shouldn't count toward
+          // an "Active SKUs only" total -- priceBySku only has Active SKUs in it, so a
+          // lookup miss means this row isn't one of them.
+          if (!(r.sku in priceBySku)) return;
+          const bucket = invByBranch[r.branch_id];
+          if (!bucket) return; // a branch not in getBranches() (shouldn't happen, but don't crash on it)
+          const qty = Number(r.qty_available || 0);
+          const amount = qty * Number(priceBySku[r.sku] || 0);
+          bucket.pcs += qty;
+          bucket.amount += amount;
+          invGrandTotal.pcs += qty;
+          invGrandTotal.amount += amount;
+        });
+      } catch (err) {
+        if (box) box.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+        return;
+      }
+      renderInventoryValue();
+    }
+
+    function renderInventoryValue() {
+      const box = document.getElementById('ac-inventory-value-tiles');
+      if (!box) return;
+      const totalTile = '<div class="tile"><div class="num">' + invGrandTotal.pcs.toLocaleString('en-PH') + '</div><div class="lbl">Total Pcs (All Branches)</div>' +
+        '<div style="font-size:12px;font-weight:600;margin-top:4px;">' + money(invGrandTotal.amount) + '</div></div>';
+      const branchTiles = branches.map((b) => {
+        const v = invByBranch[b.id] || { pcs: 0, amount: 0 };
+        const c = branchColor(b.id, branches);
+        return '<div class="tile" style="background:' + c.bg + ';">' +
+          '<div class="num" style="color:' + c.text + ';">' + v.pcs.toLocaleString('en-PH') + '</div>' +
+          '<div class="lbl" style="color:' + c.text + ';">' + esc(b.name) + '</div>' +
+          '<div style="font-size:12px;font-weight:600;margin-top:4px;color:' + c.text + ';">' + money(v.amount) + '</div>' +
+        '</div>';
+      }).join('');
+      box.innerHTML = totalTile + branchTiles;
+    }
 
     async function loadScrapEntries() {
       try { scrapEntries = await listScrapEntries(); } catch (err) { scrapEntries = []; }
@@ -332,9 +394,10 @@ if (employee) {
       render();
     }
 
-    await Promise.all([load(), loadScrapEntries()]);
+    await Promise.all([load(), loadScrapEntries(), loadInventoryValue()]);
     subscribeToChanges('access_checklist_verifications', load);
     subscribeToChanges('scrap_entries', loadScrapEntries);
+    subscribeToChanges(['products', 'inventory'], loadInventoryValue);
 
     // Effective levels for a row: an array, any combination of view/encode/edit/
     // approver, empty means No access -- the override if Ren has set one, otherwise
@@ -420,6 +483,11 @@ if (employee) {
           ? 'Pick an employee on the left. Each task starts from what their role/position actually grants — click No access, View only, Encode (can add an entry but not edit/delete), Edit, or Approver to correct it if what you see on their real account is different. More than one can be active on the same task (e.g. Edit + Approver) — that\'s entirely your call.'
           : 'Pick an employee on the left to see their current access levels. This view is read-only.') + '</p>' +
         '<div class="card">' +
+          '<h3 style="margin:0 0 2px;">Inventory Value by Branch</h3>' +
+          '<p class="muted" style="margin-top:-2px;">Total pieces and total retail value (system selling price × pcs on hand) per branch, Active SKUs only — same numbers as SKU Catalog\'s own tiles.</p>' +
+          '<div class="tiles" id="ac-inventory-value-tiles"><div class="muted">Loading…</div></div>' +
+        '</div>' +
+        '<div class="card">' +
           '<h3 style="margin:0 0 2px;">Scrap Encoding Activity</h3>' +
           '<p class="muted" style="margin-top:-2px;">Who\'s actually encoding Scrap entries, ranked by how many — the top row is your busiest encoder for this range.</p>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">' +
@@ -436,6 +504,7 @@ if (employee) {
           '<div class="ac-emp-main">' + mainHtml + '</div>' +
         '</div>';
 
+      renderInventoryValue();
       renderScrapLeaderboard();
       document.getElementById('scrap-lb-from').addEventListener('change', (ev) => { scrapFrom = ev.target.value; renderScrapLeaderboard(); });
       document.getElementById('scrap-lb-to').addEventListener('change', (ev) => { scrapTo = ev.target.value; renderScrapLeaderboard(); });
