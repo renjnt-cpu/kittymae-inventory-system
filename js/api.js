@@ -459,6 +459,15 @@ export async function cancelTransfer(transferId, reason) {
   if (error) throw new Error(error.message);
 }
 
+/** Distinct from cancelTransfer() -- for a Received transfer (a real duplicate, say)
+ * or a dead Rejected/Cancelled one, not something still in progress. Reverses every
+ * inventory movement the transfer posted, blocked server-side if that would take any
+ * SKU/branch negative. Admin-only. */
+export async function deleteTransfer(transferId) {
+  const { error } = await supabase.rpc('delete_transfer', { p_transfer_id: transferId });
+  if (error) throw new Error(error.message);
+}
+
 // ---- Bills (monthly business + personal expense monitoring — unrelated to inventory,
 // Admin-only, plain CRUD since there's no concurrency to protect against here) ----
 

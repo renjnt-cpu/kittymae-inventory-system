@@ -35,7 +35,7 @@
 import { initShell, toast, esc } from './js/shell.js';
 import {
   getBranches, listTransfers, createTransferRequest, editTransferRequest, approveTransfer, startPreparingTransfer,
-  shipTransfer, receiveTransfer, rejectTransfer, cancelTransfer, subscribeToChanges, searchProducts,
+  shipTransfer, receiveTransfer, rejectTransfer, cancelTransfer, deleteTransfer, subscribeToChanges, searchProducts,
 } from './js/api.js';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js';
 
@@ -224,6 +224,12 @@ if (employee) {
     }
     if (t.status === 'In Transit' && canActOnTo) actions += btn('Receive', 'receive', t.id);
     if (['Draft', 'Requested', 'Approved', 'Preparing'].includes(t.status) && isAdminManager) actions += btn('Cancel', 'cancel', t.id, true);
+    // Distinct from Cancel -- for a transfer that's already Received (a real
+    // duplicate, say) or a dead Rejected/Cancelled one, not something still in
+    // progress. Reverses the transfer's own inventory movements server-side, blocked
+    // if that would take any SKU/branch negative -- Admin-only (Ren, 2026-09-17:
+    // "delete this its duplicate already").
+    if (['Received', 'Rejected', 'Cancelled'].includes(t.status) && employee.role === 'Admin') actions += btn('Delete', 'delete', t.id, true);
 
     const items = t.inventory_transfer_items.map((i) =>
       '<tr><td data-label="SKU">' + esc(i.sku) + '</td><td data-label="Requested">' + i.requested_qty + '</td><td data-label="Sent">' + (i.sent_qty ?? '—') + '</td><td data-label="Received">' + (i.received_qty ?? '—') +
@@ -258,6 +264,11 @@ if (employee) {
       if (action === 'prepare') { await startPreparingTransfer(transferId); return refresh(); }
       if (action === 'reject') { await rejectTransfer(transferId, prompt('Reason for rejecting?') || ''); return refresh(); }
       if (action === 'cancel') { await cancelTransfer(transferId, prompt('Reason for cancelling?') || ''); return refresh(); }
+      if (action === 'delete') {
+        if (!confirm('Permanently delete this transfer? This reverses the stock it moved and cannot be undone (blocked automatically if that would take any SKU negative).')) return;
+        await deleteTransfer(transferId);
+        return refresh();
+      }
       if (action === 'edit') {
         const t = allTransfers.find((x) => x.id === transferId);
         if (!t) return;
