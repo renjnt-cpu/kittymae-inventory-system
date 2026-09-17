@@ -236,6 +236,41 @@ export async function updateProduct(sku, fields) {
   if (error) throw new Error(error.message);
 }
 
+// ---- Product Edit Requests (Ren, 2026-09-17: "supervisor can edit the item anything
+// but give me the final approver") -- a Branch Supervisor's SKU Catalog edit no longer
+// applies immediately (updateProduct() above is now Admin/Manager only at the RLS
+// level); it goes through this queue instead, and only takes effect once Admin
+// approves it. ----
+
+export async function requestProductEdit({ sku, itemName, category, subSku, price, grossWeightG }) {
+  const { data, error } = await supabase.rpc('request_product_edit', {
+    p_sku: sku, p_item_name: itemName, p_category: category || null, p_sub_sku: subSku || null,
+    p_price: price === '' || price === null || price === undefined ? null : Number(price),
+    p_gross_weight_g: grossWeightG === '' || grossWeightG === null || grossWeightG === undefined ? null : Number(grossWeightG),
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** RLS scopes this to every request for Admin/Manager, or just the caller's own for
+ * anyone else (a Branch Supervisor checking their own submissions' status). */
+export async function listProductEditRequests() {
+  const { data, error } = await supabase.from('product_edit_requests')
+    .select('*').order('requested_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return attachEmployeeNames(data, { requester: 'requested_by', reviewer: 'reviewed_by' });
+}
+
+export async function approveProductEdit(requestId) {
+  const { error } = await supabase.rpc('approve_product_edit', { p_request_id: requestId });
+  if (error) throw new Error(error.message);
+}
+
+export async function rejectProductEdit(requestId, reason) {
+  const { error } = await supabase.rpc('reject_product_edit', { p_request_id: requestId, p_reason: reason || null });
+  if (error) throw new Error(error.message);
+}
+
 /**
  * The one Record-a-Movement entry point for Phase 1's frontend — covers Stock In /
  * Stock Out / Damage / Missing / Adjustment / Correction. Sale and the two Transfer

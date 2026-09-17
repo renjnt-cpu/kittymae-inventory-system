@@ -14,7 +14,10 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
-import { listProducts, updateProduct, getBranches, listAllInventoryQty, subscribeToChanges } from './js/api.js';
+import {
+  listProducts, updateProduct, getBranches, listAllInventoryQty, subscribeToChanges,
+  requestProductEdit, listProductEditRequests, approveProductEdit, rejectProductEdit,
+} from './js/api.js';
 import { branchColor } from './js/branchColors.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
@@ -30,10 +33,15 @@ if (employee) {
   const canManage = ['Admin', 'Manager'].includes(employee.role);
   // Branch Supervisor gets just the Edit button (correcting name/sub-sku/price/
   // weight) -- Discontinue/Reactivate stays canManage-only since it's a more
-  // consequential, catalog-wide action. 94_products_supervisor_update.sql grants
-  // this at the RLS level too (a single UPDATE policy, so it can't be split
-  // column-by-column the way this UI split is).
+  // consequential, catalog-wide action.
   const canEdit = canManage || employee.role === 'Branch Supervisor';
+  // A Supervisor's edit no longer applies immediately (Ren, 2026-09-17: "give me the
+  // final approver because it edit directly") -- it's submitted as a pending request
+  // instead (request_product_edit(), Admin-only to approve/reject) via the exact same
+  // edit form; products_update_manager_only now blocks a direct UPDATE at the RLS
+  // level too, so this isn't just a UI nicety.
+  const isSupervisorOnly = employee.role === 'Branch Supervisor';
+  const isAdmin = employee.role === 'Admin';
   const branches = await getBranches();
 
   root.innerHTML =
@@ -60,13 +68,23 @@ if (employee) {
     '<details class="card" id="prod-discontinued-folder" style="margin-top:14px;">' +
       '<summary style="cursor:pointer;font-weight:600;">Discontinued <span class="muted" id="prod-discontinued-count" style="font-weight:normal;"></span></summary>' +
       '<div id="prod-discontinued-list" style="margin-top:10px;"><div class="muted">Loading…</div></div>' +
-    '</details>';
+    '</details>' +
+    // Admin-only review queue for a Branch Supervisor's edit requests (Ren,
+    // 2026-09-17: "give me the final approver") -- open by default (unlike
+    // Discontinued) since a pending request is something to act on, not just browse.
+    (isAdmin
+      ? '<details class="card" id="prod-pending-edits-folder" style="margin-top:10px;" open>' +
+          '<summary style="cursor:pointer;font-weight:600;">Pending Edit Requests <span class="muted" id="prod-pending-edits-count" style="font-weight:normal;"></span></summary>' +
+          '<div id="prod-pending-edits-list" style="margin-top:10px;"><div class="muted">Loading…</div></div>' +
+        '</details>'
+      : '');
 
   // With 7,392 SKUs, search/status filters query the server directly (listProducts
   // pages through everything that matches instead of stopping at PostgREST's 1000-row
   // per-request cap) rather than fetching everything and filtering client-side.
   let allProducts = [];
   let discontinuedProducts = [];
+  let pendingEditRequests = []; // every Pending row this employee can see (RLS: all for Admin/Manager, own for a Supervisor)
   let qtyBySku = {}; // { sku: { branchId: qty_available } }, from listAllInventoryQty()
   let filterBranchId = null; // set by clicking a branch column header -- only SKUs with pcs > 0 there
   let searchTimer = null;
@@ -78,15 +96,18 @@ if (employee) {
   // nothing to do with (typing a search term doesn't change anyone's stock). That was
   // most of the "SKU Catalog is lagging" feel while searching.
   await loadQty();
-  await Promise.all([loadProducts(), loadDiscontinued()]);
+  await Promise.all([loadProducts(), loadDiscontinued(), loadPendingEditRequests()]);
   document.getElementById('f-category').addEventListener('change', render);
   // Split by table so a search keystroke's debounce isn't sharing a timer with
   // inventory's -- a sale/stock-in elsewhere shouldn't cancel/delay a pending search,
   // and vice versa.
-  subscribeToChanges(['products', 'inventory'], (payload) => {
+  subscribeToChanges(['products', 'inventory', 'product_edit_requests'], (payload) => {
     if (payload.table === 'inventory') {
       clearTimeout(qtyRealtimeTimer);
       qtyRealtimeTimer = setTimeout(async () => { await loadQty(); render(); }, 500);
+    } else if (payload.table === 'product_edit_requests') {
+      clearTimeout(productsRealtimeTimer);
+      productsRealtimeTimer = setTimeout(async () => { await loadPendingEditRequests(); render(); }, 500);
     } else {
       clearTimeout(productsRealtimeTimer);
       productsRealtimeTimer = setTimeout(async () => { await Promise.all([loadProducts(), loadDiscontinued()]); }, 500);
@@ -143,6 +164,74 @@ if (employee) {
     } catch (err) {
       box.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
     }
+  }
+
+  /** Only fetched for someone who can actually edit -- a plain viewer never sees the
+   * Edit button in the first place, so the "Pending" badge below has nothing to
+   * inform them of. RLS scopes the rows this comes back with (see listProductEditRequests). */
+  async function loadPendingEditRequests() {
+    if (!canEdit) return;
+    try {
+      pendingEditRequests = (await listProductEditRequests()).filter((r) => r.status === 'Pending');
+    } catch (err) {
+      pendingEditRequests = [];
+    }
+    if (isAdmin) renderPendingEditRequests();
+  }
+
+  function renderPendingEditRequests() {
+    document.getElementById('prod-pending-edits-count').textContent = '(' + pendingEditRequests.length + ')';
+    const box = document.getElementById('prod-pending-edits-list');
+    if (!pendingEditRequests.length) { box.innerHTML = '<p class="muted">No pending edit requests.</p>'; return; }
+
+    // Only the fields that actually changed show a before -> after line -- an
+    // unchanged field (Sub SKU left blank, say) would just be noise here.
+    const diffLine = (label, before, after, fmt) => {
+      const b = fmt ? fmt(before) : (before || '—');
+      const a = fmt ? fmt(after) : (after || '—');
+      if (String(before ?? '') === String(after ?? '')) return '';
+      return '<div>' + label + ': <span class="muted" style="text-decoration:line-through;">' + esc(String(b)) + '</span> → <strong>' + esc(String(a)) + '</strong></div>';
+    };
+    box.innerHTML = pendingEditRequests.map((r) =>
+      '<div class="card" style="margin-bottom:8px;background:#fffaf0;">' +
+        '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;">' +
+          '<div><b>' + esc(r.sku) + '</b> <span class="muted" style="font-size:11px;">requested by ' + (r.requester ? esc(r.requester.full_name) : '—') + '</span></div>' +
+          '<div class="muted" style="font-size:11px;">' + new Date(r.requested_at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) + '</div>' +
+        '</div>' +
+        '<div style="font-size:12px;margin-top:6px;">' +
+          diffLine('Product Name', r.previous_item_name, r.item_name) +
+          diffLine('Category', r.previous_category, r.category) +
+          diffLine('Sub SKU', r.previous_sub_sku, r.sub_sku) +
+          diffLine('Price', r.previous_price, r.price, money) +
+          diffLine('Est. Gram', r.previous_gross_weight_g, r.gross_weight_g, weight) +
+        '</div>' +
+        '<div style="margin-top:8px;display:flex;gap:6px;">' +
+          '<button class="btn small" data-act="approve-edit" data-id="' + r.id + '">Approve</button>' +
+          '<button class="btn small secondary" data-act="reject-edit" data-id="' + r.id + '">Reject</button>' +
+        '</div>' +
+      '</div>'
+    ).join('');
+
+    box.querySelectorAll('[data-act="approve-edit"]').forEach((btn) => btn.addEventListener('click', async () => {
+      try {
+        await approveProductEdit(Number(btn.dataset.id));
+        toast('prod-msg', 'Edit approved.', false);
+        await Promise.all([loadProducts(), loadPendingEditRequests()]);
+      } catch (err) {
+        toast('prod-msg', String(err.message || err), true);
+      }
+    }));
+    box.querySelectorAll('[data-act="reject-edit"]').forEach((btn) => btn.addEventListener('click', async () => {
+      const reason = prompt('Reason for rejecting (optional)?') || null;
+      try {
+        await rejectProductEdit(Number(btn.dataset.id), reason);
+        toast('prod-msg', 'Edit rejected.', false);
+        await loadPendingEditRequests();
+        render();
+      } catch (err) {
+        toast('prod-msg', String(err.message || err), true);
+      }
+    }));
   }
 
   function renderDiscontinuedFolder() {
@@ -235,12 +324,15 @@ if (employee) {
       (truncated ? ' — showing the first ' + CATALOG_RENDER_CAP + '; search, pick a category, or click a branch column to narrow further' : '') + '</p>';
 
     const colCount = 9 + branches.length;
+    const pendingSkus = new Set(pendingEditRequests.map((r) => r.sku));
 
     function rowHtml(p) {
       const qtyForSku = qtyBySku[p.sku] || {};
       const totalPcs = Object.values(qtyForSku).reduce((s, q) => s + Number(q || 0), 0);
       return '<tr data-row-id="' + esc(p.sku) + '">' +
-          '<td data-label="SKU"><b>' + esc(p.sku) + '</b></td>' +
+          '<td data-label="SKU"><b>' + esc(p.sku) + '</b>' +
+            (pendingSkus.has(p.sku) ? ' <span class="badge pending" title="An edit request for this SKU is awaiting Admin approval">Pending Edit</span>' : '') +
+          '</td>' +
           '<td data-label="Product Name">' + esc(p.item_name) + '</td>' +
           '<td data-label="Category">' + esc(p.category || '—') + '</td>' +
           '<td data-label="Sub SKU">' + esc(p.sub_sku || '—') + '</td>' +
@@ -309,12 +401,13 @@ if (employee) {
     cell.style.display = '';
     cell.querySelector('td').innerHTML =
       '<form class="edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+        (isSupervisorOnly ? '<p class="muted" style="width:100%;margin:0 0 4px;">Submitted for Admin approval -- won\'t apply until reviewed.</p>' : '') +
         '<div class="field"><label>Product Name</label><input type="text" name="itemName" value="' + esc(p.item_name) + '" required></div>' +
         '<div class="field"><label>Category</label><input type="text" name="category" value="' + esc(p.category || '') + '"></div>' +
         '<div class="field"><label>Sub SKU</label><input type="text" name="subSku" value="' + esc(p.sub_sku || '') + '"></div>' +
         '<div class="field"><label>Price (PHP)</label><input type="number" name="price" step="0.01" min="0" value="' + (p.system_selling_price ?? '') + '"></div>' +
         '<div class="field"><label>Est. Gram</label><input type="number" name="grossWeightG" step="0.001" min="0" value="' + (p.gross_weight_g ?? '') + '"></div>' +
-        '<button class="btn small" type="submit">Save</button> ' +
+        '<button class="btn small" type="submit">' + (isSupervisorOnly ? 'Submit for Approval' : 'Save') + '</button> ' +
         '<button class="btn small secondary" type="button" data-cancel="1">Cancel</button>' +
       '</form>';
     const form = cell.querySelector('.edit-form');
@@ -322,13 +415,21 @@ if (employee) {
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const f = ev.target;
+      const fields = {
+        itemName: f.itemName.value.trim(), category: f.category.value.trim(), subSku: f.subSku.value.trim(),
+        price: f.price.value, grossWeightG: f.grossWeightG.value,
+      };
       try {
-        await updateProduct(sku, {
-          itemName: f.itemName.value.trim(), category: f.category.value.trim(), subSku: f.subSku.value.trim(),
-          price: f.price.value, grossWeightG: f.grossWeightG.value,
-        });
-        toast('prod-msg', 'SKU updated.', false);
-        await loadProducts();
+        if (isSupervisorOnly) {
+          await requestProductEdit({ sku, ...fields });
+          toast('prod-msg', 'Edit request submitted -- awaiting Admin approval.', false);
+          await loadPendingEditRequests();
+          render();
+        } else {
+          await updateProduct(sku, fields);
+          toast('prod-msg', 'SKU updated.', false);
+          await loadProducts();
+        }
       } catch (err) {
         toast('prod-msg', String(err.message || err), true);
       }

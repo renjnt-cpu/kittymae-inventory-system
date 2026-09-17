@@ -400,13 +400,16 @@ if (employee) {
             '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
               '<h3 style="margin:0;">' + esc(selected.name) + ' <span class="muted" style="font-weight:normal;font-size:13px;">— ' + esc(selected.role) + '</span></h3>' +
               (canEdit
-                ? '<span style="display:flex;align-items:center;gap:6px;">' +
-                    '<label class="muted" style="font-size:12px;">Position</label>' +
-                    '<select data-position-for="' + selected.id + '" style="padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' + positionOptions(selected.position) + '</select>' +
+                ? '<span style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+                    '<span style="display:flex;align-items:center;gap:6px;">' +
+                      '<label class="muted" style="font-size:12px;">Position</label>' +
+                      '<select data-position-for="' + selected.id + '" style="padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' + positionOptions(selected.position) + '</select>' +
+                    '</span>' +
+                    '<button type="button" class="btn small" id="ac-save-all" title="Confirm every task below as verified, using whatever levels are currently shown (defaults or your own overrides)">Save All</button>' +
                   '</span>'
                 : '<span class="muted" style="font-size:12px;">' + esc(selected.position || '— None —') + '</span>') +
             '</div>' +
-            (canEdit ? '<p class="muted" style="margin-bottom:0;">Changing Position here takes effect immediately — several tasks below (and pages like Branches, Transactions, Branch Capital) key off it directly.</p>' : '') +
+            (canEdit ? '<p class="muted" style="margin-bottom:0;">Changing Position here takes effect immediately — several tasks below (and pages like Branches, Transactions, Branch Capital) key off it directly. "Save All" locks in whatever\'s currently shown for every task below as verified, in one click, instead of clicking each pill.</p>' : '') +
           '</div>' +
           taskCardsHtml;
       }
@@ -449,6 +452,32 @@ if (employee) {
       }));
 
       if (!canEdit) return; // Personal Assistant: no position select or pill listeners to wire up below
+
+      // "Save All" (Ren, 2026-09-17: "add a clickable save ... to approve automatic
+      // the task they are in") -- locks in whatever's CURRENTLY shown for every task
+      // (the computed default, or an existing override) as an explicit confirmed
+      // override in one click, instead of needing to click each pill individually just
+      // to record "yes, this one's correct."
+      const saveAllBtn = document.getElementById('ac-save-all');
+      if (saveAllBtn) saveAllBtn.addEventListener('click', async () => {
+        const person = people.find((p) => p.id === selectedId);
+        if (!person) return;
+        saveAllBtn.disabled = true;
+        try {
+          await Promise.all(person.items.map((item) => {
+            const levels = effectiveLevels(person.id, item);
+            overrides[person.id + ':' + item.id] = { checked: levels.length > 0, levels };
+            return setAccessChecklistItem(person.id, item.id, levels.length > 0, levels);
+          }));
+          toast('ac-msg', 'All ' + person.items.length + ' tasks confirmed for ' + person.name + '.', false);
+          render();
+        } catch (err) {
+          toast('ac-msg', String(err.message || err), true);
+          await load();
+        } finally {
+          saveAllBtn.disabled = false;
+        }
+      });
 
       root.querySelectorAll('[data-position-for]').forEach((sel) => sel.addEventListener('change', async (ev) => {
         const employeeId = ev.target.dataset.positionFor;
