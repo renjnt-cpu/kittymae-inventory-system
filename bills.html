@@ -320,13 +320,31 @@ if (employee) {
         return '<th><button type="button" class="btn small' + (active ? '' : ' secondary') + '" data-bill-sort="' + key + '" style="padding:2px 8px;">' + label + arrow + '</button></th>';
       };
 
-      function sectionHtml(sectionRows) {
-        if (!sectionRows.length) return '<p class="muted">None.</p>';
+      function tableHtml(sectionRows) {
         return '<div class="table-scroll"><table><thead><tr>' +
           sortTh('name', 'Name') + sortTh('account_name', 'Account Name') + '<th>Account Number</th>' + sortTh('category', 'Category') +
           sortTh('amount', 'Amount') + sortTh('due_date', 'Due Date') + sortTh('status', 'Status') + '<th>Recurring</th><th>Notes</th><th>Photo</th><th></th>' +
           '</tr></thead><tbody>' +
           sectionRows.map(rowHtml).join('') + '</tbody></table></div>';
+      }
+
+      // One collapsible folder per category (Ren, 2026-09-17: "make a folder by
+      // category to easy find the details") -- CATEGORIES order, not alphabetical or
+      // insertion order, so it reads the same every time; a category with nothing in
+      // this section just doesn't get a folder. Collapsed by default, same convention
+      // as every other status folder in this app (Transfers/Layaway/SKU Catalog) --
+      // the point is finding one category fast, not browsing everything at once.
+      function categoryFoldersHtml(sectionRows, keyPrefix) {
+        if (!sectionRows.length) return '<p class="muted">None.</p>';
+        const groups = CATEGORIES
+          .map((cat) => ({ cat, bills: sectionRows.filter((b) => b.category === cat) }))
+          .filter((g) => g.bills.length);
+        return groups.map((g) =>
+          '<details class="card" id="' + keyPrefix + '-' + g.cat.replace(/[^A-Za-z0-9]/g, '') + '" style="margin-bottom:8px;">' +
+            '<summary style="cursor:pointer;font-weight:600;">' + esc(g.cat) + ' <span class="muted" style="font-weight:normal;">(' + g.bills.length + ')</span></summary>' +
+            '<div style="margin-top:8px;">' + tableHtml(g.bills) + '</div>' +
+          '</details>'
+        ).join('');
       }
 
       // Split into two clearly separate sections so unpaid bills never get lost among
@@ -335,9 +353,9 @@ if (employee) {
       const paidRows = rows.filter((b) => b.status === 'Paid' || b.status === 'Auto-debited');
       list.innerHTML =
         '<h3 style="color:var(--warn);">Unpaid / Overdue (' + unpaidRows.length + ')</h3>' +
-        sectionHtml(unpaidRows) +
+        categoryFoldersHtml(unpaidRows, 'bill-cat-unpaid') +
         '<h3 style="color:var(--ok);margin-top:22px;">Paid / Auto-debited (' + paidRows.length + ')</h3>' +
-        sectionHtml(paidRows);
+        categoryFoldersHtml(paidRows, 'bill-cat-paid');
 
       list.querySelectorAll('[data-bill-sort]').forEach((btn) => btn.addEventListener('click', () => {
         const key = btn.dataset.billSort;
