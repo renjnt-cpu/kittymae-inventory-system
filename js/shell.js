@@ -9,10 +9,12 @@ import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } fr
 const ERP_BLOCKED_JOB_TITLES = [];
 // "Sales Admin Associate" briefly lost ERP access entirely, then was given scoped
 // access back (Ren, 2026-09-16: "sales admin associate can now access ERP only for
-// transfers and item monitoring") -- full access to just these two pages, nothing
-// else in the sidebar, regardless of what role/position/extra_page_access would
-// otherwise grant.
-const ERP_SCOPED_JOB_TITLES = { 'Sales Admin Associate': ['item-monitoring', 'transfers'] };
+// transfers and item monitoring"; 2026-09-17: added Refunds too, "only there request
+// can see in the refunds" -- refunds.html's own canApprove() check already renders the
+// request-only view, showing just the caller's own rows, for anyone without
+// has_refund_approval_access()) -- full access to just these pages, nothing else in
+// the sidebar, regardless of what role/position/extra_page_access would otherwise grant.
+const ERP_SCOPED_JOB_TITLES = { 'Sales Admin Associate': ['item-monitoring', 'transfers', 'refunds'] };
 
 export async function initShell(activePage) {
   const session = await requireSession();

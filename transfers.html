@@ -43,6 +43,7 @@ const STATUS_BADGE = {
   Draft: 'pending', Requested: 'pending', Approved: 'pending', Preparing: 'pending',
   'In Transit': 'transit', Received: 'ok', Rejected: 'low', Cancelled: 'low',
 };
+const fmtDateTime = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
 const employee = await initShell('transfers');
 if (employee) {
@@ -233,8 +234,9 @@ if (employee) {
       '<h3>' + branchBadge(esc, byId[t.from_branch_id], t.from_branch_id, branches) + ' → ' + branchBadge(esc, byId[t.to_branch_id], t.to_branch_id, branches) +
       ' &nbsp; <span class="badge ' + (STATUS_BADGE[t.status] || 'pending') + '">' + esc(t.status) + '</span>' +
       (t.has_discrepancy ? ' <span class="badge low">DISCREPANCY</span>' : '') + '</h3>' +
-      '<p class="muted" style="margin:-6px 0 8px;font-size:12px;">Prepared by ' + esc(t.requester ? t.requester.full_name : '—') +
-        (t.approver ? ' · Approved by ' + esc(t.approver.full_name) : '') + '</p>' +
+      '<p class="muted" style="margin:-6px 0 8px;font-size:12px;">Requested by ' + esc(t.requester ? t.requester.full_name : '—') +
+        ' on ' + fmtDateTime(t.requested_at) +
+        (t.approver ? ' · Approved by ' + esc(t.approver.full_name) + ' on ' + fmtDateTime(t.approved_at) : '') + '</p>' +
       '<div class="table-scroll"><table><tr><th>SKU</th><th>Requested</th><th>Sent</th><th>Received</th><th>Discrepancy</th></tr>' + items + '</table></div>' +
       '<div class="tr-actions" style="margin-top:8px;">' + actions + '</div>' +
       '<div class="tr-inline" style="margin-top:8px;"></div>' +
