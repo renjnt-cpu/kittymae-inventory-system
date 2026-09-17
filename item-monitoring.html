@@ -17,7 +17,7 @@ import { initShell, toast, esc } from './js/shell.js';
 import {
   getBranches, listStockByBranch, searchProducts, logCycleCount, listRecentCycleCounts,
   markCycleCountInvestigated, listLatestCycleCountBySkuBranch, listProductChangeLog,
-  listFactoryPurchases, recordFactoryPurchase, subscribeToChanges,
+  listFactoryPurchases, recordFactoryPurchase, deleteFactoryPurchase, subscribeToChanges,
 } from './js/api.js';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js';
 
@@ -547,14 +547,23 @@ if (employee) {
   }
 
   // ---- Factory Purchases: every purchase recorded via the form above, newest
-  // delivery first -- monitoring only, nothing here is editable. ----
+  // delivery first -- monitoring only, except Delete (Ren, 2026-09-17: a genuine
+  // duplicate MK01 delivery to Pacific Mall needed removing, and there was no way to
+  // do that at all). Same authorization group as recording one in the first place;
+  // deleteFactoryPurchase() reverses the exact quantity and is blocked server-side if
+  // any of it has already been sold or moved. ----
+  function canDeletePurchase(p) {
+    return ['Admin', 'Manager'].includes(employee.role) ||
+      (employee.role === 'Branch Supervisor' && employee.branch_id === p.branch_id) ||
+      employee.position === 'Admin Assistant';
+  }
   function renderFactoryPurchases() {
     const box = document.getElementById('fp-list');
     if (!factoryPurchases.length) { box.innerHTML = '<p class="muted">No factory purchases recorded yet.</p>'; return; }
 
     box.innerHTML = '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
       '<thead><tr><th>Delivered</th><th>SKU</th><th>Branch</th><th>Pcs</th><th>Sup. Price</th><th>Pancake Price</th>' +
-      '<th>Grams</th><th>Total Grams</th><th>Availed Factory Gram</th><th>Current/Gram</th><th>Est. Sales</th><th>Purchased</th><th>Profit</th><th>Note</th><th>By</th></tr></thead><tbody>' +
+      '<th>Grams</th><th>Total Grams</th><th>Availed Factory Gram</th><th>Current/Gram</th><th>Est. Sales</th><th>Purchased</th><th>Profit</th><th>Note</th><th>By</th><th></th></tr></thead><tbody>' +
       factoryPurchases.map((p) => '<tr>' +
         '<td data-label="Delivered">' + fmtDate(p.date_delivered) + '</td>' +
         '<td data-label="SKU"><b>' + esc(p.sku) + '</b></td>' +
@@ -571,7 +580,20 @@ if (employee) {
         '<td data-label="Profit">' + money(p.profit) + '</td>' +
         '<td data-label="Note" class="full-row">' + esc(p.tag_note || '—') + '</td>' +
         '<td data-label="By" class="full-row">' + (p.creator ? esc(p.creator.full_name) : '—') + '</td>' +
+        '<td>' + (canDeletePurchase(p) ? '<button type="button" class="btn small secondary" data-act="delete-purchase" data-id="' + p.id + '">Delete</button>' : '') + '</td>' +
       '</tr>').join('') + '</tbody></table></div>';
+
+    box.querySelectorAll('[data-act="delete-purchase"]').forEach((btn) => btn.addEventListener('click', async () => {
+      if (!confirm('Permanently delete this factory purchase? This reverses the stock it added and cannot be undone.')) return;
+      try {
+        await deleteFactoryPurchase(Number(btn.dataset.id));
+        notify('Factory purchase deleted.', false);
+        factoryPurchases = await listFactoryPurchases();
+        renderFactoryPurchases();
+      } catch (err) {
+        notify(String(err.message || err), true);
+      }
+    }));
   }
 }
 </script>

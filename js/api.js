@@ -202,6 +202,15 @@ export async function recordFactoryPurchase({
   return data;
 }
 
+/** Permanently removes a Factory Purchase entry (for a duplicate/mistaken delivery
+ * record) and reverses the exact Stock In quantity it added -- blocked server-side if
+ * that would take the SKU/branch below zero (some of it has already been sold or
+ * moved since). Same authorization group as recording one in the first place. */
+export async function deleteFactoryPurchase(purchaseId) {
+  const { error } = await supabase.rpc('delete_factory_purchase', { p_purchase_id: purchaseId });
+  if (error) throw new Error(error.message);
+}
+
 /** Patches a detail on an existing row (record_factory_purchase() above is the only
  * other write path, and only ever creates a row, never edits one). Keys are all
  * optional camelCase — only the ones present are patched. productStatus
