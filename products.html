@@ -40,17 +40,20 @@ const employee = await initShell('products');
 if (employee) {
   const root = document.getElementById('products-root');
   const canManage = ['Admin', 'Manager'].includes(employee.role);
-  // Branch Supervisor gets just the Edit button (correcting name/sub-sku/price/
-  // weight) -- Discontinue/Reactivate stays canManage-only since it's a more
-  // consequential, catalog-wide action.
+  // Just decides who SEES an Edit button at all (Admin/Manager/Branch Supervisor) --
+  // whether it applies immediately or goes to Admin for approval is isAdmin/
+  // needsApproval below. Discontinue/Reactivate is isAdmin-only, not canManage --
+  // see the note below.
   const canEdit = canManage || employee.role === 'Branch Supervisor';
-  // A Supervisor's edit no longer applies immediately (Ren, 2026-09-17: "give me the
-  // final approver because it edit directly") -- it's submitted as a pending request
-  // instead (request_product_edit(), Admin-only to approve/reject) via the exact same
-  // edit form; products_update_manager_only now blocks a direct UPDATE at the RLS
-  // level too, so this isn't just a UI nicety.
-  const isSupervisorOnly = employee.role === 'Branch Supervisor';
   const isAdmin = employee.role === 'Admin';
+  // Only Admin's edit applies immediately now (Ren, 2026-09-18: "give me editable all
+  // item only me so that if theres an error coming i can edit immediately") -- Manager
+  // and Branch Supervisor both submit a pending request instead (request_product_edit(),
+  // Admin-only to approve/reject) via the exact same edit form; products_update_admin_only
+  // now blocks a direct UPDATE at the RLS level too, so this isn't just a UI nicety. This
+  // also means Manager loses direct Discontinue/Reactivate below -- same RLS policy, no
+  // request-based path built for that yet.
+  const needsApproval = !isAdmin;
   const branches = await getBranches();
 
   root.innerHTML =
@@ -259,10 +262,10 @@ if (employee) {
         '<td data-label="Sub SKU">' + esc(p.sub_sku || '—') + '</td>' +
         '<td data-label="Price">' + priceCellHtml(p) + '</td>' +
         '<td data-label="Est. Gram">' + weight(p.gross_weight_g) + '</td>' +
-        '<td>' + (canManage ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="reactivate-folder">Reactivate</button>' : '') + '</td>' +
+        '<td>' + (isAdmin ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="reactivate-folder">Reactivate</button>' : '') + '</td>' +
       '</tr>').join('') +
       '</tbody></table></div>';
-    if (!canManage) return;
+    if (!isAdmin) return;
     box.querySelectorAll('[data-act="reactivate-folder"]').forEach((btn) => btn.addEventListener('click', async () => {
       try {
         await updateProduct(btn.dataset.sku, { productStatus: 'Active' });
@@ -354,7 +357,7 @@ if (employee) {
           branches.map((b) => '<td data-label="' + esc(b.name) + '" style="text-align:center;">' + (qtyForSku[b.id] ?? '—') + '</td>').join('') +
           '<td data-label="Actions" style="white-space:nowrap;">' +
             (canEdit ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="edit">Edit</button> ' : '') +
-            (canManage
+            (isAdmin
               ? (p.product_status === 'Active'
                   ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="discontinue">Discontinue</button>'
                   : '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="reactivate">Reactivate</button>')
@@ -386,7 +389,7 @@ if (employee) {
 
     list.querySelectorAll('[data-act="edit"]').forEach((btn) => btn.addEventListener('click', () => openEdit(btn.dataset.sku, rows)));
 
-    if (!canManage) return;
+    if (!isAdmin) return;
 
     list.querySelectorAll('[data-act="discontinue"]').forEach((btn) => btn.addEventListener('click', async () => {
       if (!confirm('Mark ' + btn.dataset.sku + ' as Discontinued? It stays visible in history, just hidden from the default Active view -- and moves into the Discontinued folder below.')) return;
@@ -412,7 +415,7 @@ if (employee) {
     cell.style.display = '';
     cell.querySelector('td').innerHTML =
       '<form class="edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
-        (isSupervisorOnly ? '<p class="muted" style="width:100%;margin:0 0 4px;">Submitted for Admin approval -- won\'t apply until reviewed.</p>' : '') +
+        (needsApproval ? '<p class="muted" style="width:100%;margin:0 0 4px;">Submitted for Admin approval -- won\'t apply until reviewed.</p>' : '') +
         '<div class="field"><label>Product Name</label><input type="text" name="itemName" value="' + esc(p.item_name) + '" required></div>' +
         '<div class="field"><label>Category</label><input type="text" name="category" value="' + esc(p.category || '') + '"></div>' +
         '<div class="field"><label>Sub SKU</label><input type="text" name="subSku" value="' + esc(p.sub_sku || '') + '"></div>' +
@@ -420,7 +423,7 @@ if (employee) {
         '<div class="field"><label>Est. Gram</label><input type="number" name="grossWeightG" step="0.001" min="0" value="' + (p.gross_weight_g ?? '') + '"></div>' +
         '<div class="field"><label>Pricing</label><select name="pricingMode"><option value="Per Piece"' + (p.pricing_mode !== 'Per Gram' ? ' selected' : '') + '>Per Piece</option><option value="Per Gram"' + (p.pricing_mode === 'Per Gram' ? ' selected' : '') + '>Per Gram</option></select></div>' +
         '<div class="field"><label>Price per Gram (PHP)</label><input type="number" name="pricePerGram" step="0.01" min="0" value="' + (p.current_gold_rate_per_g ?? '') + '" title="Used when Pricing is Per Gram -- selling price = this x Est. Gram"></div>' +
-        '<button class="btn small" type="submit">' + (isSupervisorOnly ? 'Submit for Approval' : 'Save') + '</button> ' +
+        '<button class="btn small" type="submit">' + (needsApproval ? 'Submit for Approval' : 'Save') + '</button> ' +
         '<button class="btn small secondary" type="button" data-cancel="1">Cancel</button>' +
       '</form>';
     const form = cell.querySelector('.edit-form');
@@ -434,7 +437,7 @@ if (employee) {
         pricingMode: f.pricingMode.value, pricePerGram: f.pricePerGram.value,
       };
       try {
-        if (isSupervisorOnly) {
+        if (needsApproval) {
           await requestProductEdit({ sku, ...fields });
           toast('prod-msg', 'Edit request submitted -- awaiting Admin approval.', false);
           await loadPendingEditRequests();
