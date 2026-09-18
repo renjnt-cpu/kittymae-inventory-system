@@ -22,6 +22,15 @@ import { branchColor } from './js/branchColors.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g';
+// Per Gram jewelry (Ren, 2026-09-18: "since its jewelry per piece i also sell per
+// gram... we will based it per grams") -- a Per Gram SKU's selling price is its rate
+// (current_gold_rate_per_g) x its weight, computed here rather than stored, so editing
+// either the rate or the weight always keeps the price consistent.
+const effectivePrice = (p) => p.pricing_mode === 'Per Gram'
+  ? (p.current_gold_rate_per_g != null && p.gross_weight_g != null ? p.current_gold_rate_per_g * p.gross_weight_g : null)
+  : p.system_selling_price;
+const priceCellHtml = (p) => money(effectivePrice(p)) +
+  (p.pricing_mode === 'Per Gram' ? '<div class="muted" style="font-size:10px;">' + money(p.current_gold_rate_per_g) + '/g</div>' : '');
 // Max rows actually built as <table> DOM rows in one go -- see the comment at its use
 // in render() below for why (Ren, 2026-09-17: "lagging" as the catalog grew past 7,400
 // SKUs was the table itself, not the fetch).
@@ -204,6 +213,8 @@ if (employee) {
           diffLine('Sub SKU', r.previous_sub_sku, r.sub_sku) +
           diffLine('Price', r.previous_price, r.price, money) +
           diffLine('Est. Gram', r.previous_gross_weight_g, r.gross_weight_g, weight) +
+          diffLine('Pricing', r.previous_pricing_mode, r.pricing_mode) +
+          diffLine('Price per Gram', r.previous_price_per_gram, r.price_per_gram, money) +
         '</div>' +
         '<div style="margin-top:8px;display:flex;gap:6px;">' +
           '<button class="btn small" data-act="approve-edit" data-id="' + r.id + '">Approve</button>' +
@@ -246,7 +257,7 @@ if (employee) {
         '<td data-label="Product Name">' + esc(p.item_name) + '</td>' +
         '<td data-label="Category">' + esc(p.category || '—') + '</td>' +
         '<td data-label="Sub SKU">' + esc(p.sub_sku || '—') + '</td>' +
-        '<td data-label="Price">' + money(p.system_selling_price) + '</td>' +
+        '<td data-label="Price">' + priceCellHtml(p) + '</td>' +
         '<td data-label="Est. Gram">' + weight(p.gross_weight_g) + '</td>' +
         '<td>' + (canManage ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="reactivate-folder">Reactivate</button>' : '') + '</td>' +
       '</tr>').join('') +
@@ -336,7 +347,7 @@ if (employee) {
           '<td data-label="Product Name">' + esc(p.item_name) + '</td>' +
           '<td data-label="Category">' + esc(p.category || '—') + '</td>' +
           '<td data-label="Sub SKU">' + esc(p.sub_sku || '—') + '</td>' +
-          '<td data-label="Price">' + money(p.system_selling_price) + '</td>' +
+          '<td data-label="Price">' + priceCellHtml(p) + '</td>' +
           '<td data-label="Est. Gram">' + weight(p.gross_weight_g) + '</td>' +
           '<td data-label="Total Pcs"><b>' + totalPcs.toLocaleString('en-PH') + '</b></td>' +
           '<td data-label="Status"><span class="badge ' + (p.product_status === 'Active' ? 'ok' : 'low') + '">' + esc(p.product_status) + '</span></td>' +
@@ -405,8 +416,10 @@ if (employee) {
         '<div class="field"><label>Product Name</label><input type="text" name="itemName" value="' + esc(p.item_name) + '" required></div>' +
         '<div class="field"><label>Category</label><input type="text" name="category" value="' + esc(p.category || '') + '"></div>' +
         '<div class="field"><label>Sub SKU</label><input type="text" name="subSku" value="' + esc(p.sub_sku || '') + '"></div>' +
-        '<div class="field"><label>Price (PHP)</label><input type="number" name="price" step="0.01" min="0" value="' + (p.system_selling_price ?? '') + '"></div>' +
+        '<div class="field"><label>Price (PHP)</label><input type="number" name="price" step="0.01" min="0" value="' + (p.system_selling_price ?? '') + '" title="Used when Pricing is Per Piece"></div>' +
         '<div class="field"><label>Est. Gram</label><input type="number" name="grossWeightG" step="0.001" min="0" value="' + (p.gross_weight_g ?? '') + '"></div>' +
+        '<div class="field"><label>Pricing</label><select name="pricingMode"><option value="Per Piece"' + (p.pricing_mode !== 'Per Gram' ? ' selected' : '') + '>Per Piece</option><option value="Per Gram"' + (p.pricing_mode === 'Per Gram' ? ' selected' : '') + '>Per Gram</option></select></div>' +
+        '<div class="field"><label>Price per Gram (PHP)</label><input type="number" name="pricePerGram" step="0.01" min="0" value="' + (p.current_gold_rate_per_g ?? '') + '" title="Used when Pricing is Per Gram -- selling price = this x Est. Gram"></div>' +
         '<button class="btn small" type="submit">' + (isSupervisorOnly ? 'Submit for Approval' : 'Save') + '</button> ' +
         '<button class="btn small secondary" type="button" data-cancel="1">Cancel</button>' +
       '</form>';
@@ -418,6 +431,7 @@ if (employee) {
       const fields = {
         itemName: f.itemName.value.trim(), category: f.category.value.trim(), subSku: f.subSku.value.trim(),
         price: f.price.value, grossWeightG: f.grossWeightG.value,
+        pricingMode: f.pricingMode.value, pricePerGram: f.pricePerGram.value,
       };
       try {
         if (isSupervisorOnly) {
