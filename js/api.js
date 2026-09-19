@@ -1235,7 +1235,7 @@ export async function setAccessChecklistItem(employeeId, itemKey, checked, level
 
 export async function listLayaways(branchId) {
   let query = supabase.from('layaway_holds')
-    .select('*, branches(name), layaway_payments(*), layaway_forfeit_date_log(id, old_date, new_date, changed_at, employees(full_name)), layaway_hold_date_log(id, old_date, new_date, changed_at, employees(full_name))')
+    .select('*, branches(name), layaway_payments(*, employees(full_name)), layaway_forfeit_date_log(id, old_date, new_date, changed_at, employees(full_name)), layaway_hold_date_log(id, old_date, new_date, changed_at, employees(full_name))')
     .order('hold_date', { ascending: false })
     .order('id', { ascending: true }); // keeps items held together in one submission adjacent
   if (branchId != null) query = query.eq('branch_id', branchId);
@@ -1259,10 +1259,10 @@ export async function createLayawayHold({ sku, branchId, qty, customerName, cont
   return data;
 }
 
-export async function addLayawayPayment(holdId, amount, paymentMethod, referenceNumber, attachmentPath) {
+export async function addLayawayPayment(holdId, amount, paymentMethod, referenceNumber, attachmentPath, paidAt) {
   const { data, error } = await supabase.rpc('add_layaway_payment', {
     p_hold_id: holdId, p_amount: amount, p_payment_method: paymentMethod, p_reference_number: referenceNumber || null,
-    p_attachment_path: attachmentPath || null,
+    p_attachment_path: attachmentPath || null, p_paid_at: paidAt || new Date().toISOString().slice(0, 10),
   });
   if (error) throw new Error(error.message);
   return data;
