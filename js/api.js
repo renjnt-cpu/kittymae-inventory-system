@@ -181,7 +181,7 @@ export async function listProductChangeLog(limit = 100) {
 
 export async function listFactoryPurchases(limit = 200) {
   const { data, error } = await supabase.from('factory_purchases')
-    .select('*, branches(name)').order('date_delivered', { ascending: false }).order('created_at', { ascending: false }).limit(limit);
+    .select('*, branches(name), products(item_name)').order('date_delivered', { ascending: false }).order('created_at', { ascending: false }).limit(limit);
   if (error) throw new Error(error.message);
   return attachEmployeeNames(data, { creator: 'created_by' });
 }
@@ -397,7 +397,7 @@ export async function getTransactionHistory(sku, branchId) {
 export async function listTransfers() {
   const { data, error } = await supabase
     .from('inventory_transfers')
-    .select('*, inventory_transfer_items(*)')
+    .select('*, inventory_transfer_items(*, products(item_name))')
     .order('created_at', { ascending: false })
     .limit(200);
   if (error) throw new Error(error.message);

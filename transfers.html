@@ -19,6 +19,17 @@
       <button class="btn" type="submit">Request Transfer</button>
     </form>
   </div>
+  <div class="card" style="margin-top:16px;">
+    <h3>Trace a Product</h3>
+    <p class="muted" style="margin-top:-4px;">Search transfers by SKU or product name, optionally narrowed to a date range. Applies to Active, Cancelled/Rejected, and Received below.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="tr-trace-search" placeholder="SKU or product name…"></div>
+      <div class="field"><label>From</label><input type="date" id="tr-trace-from"></div>
+      <div class="field"><label>To</label><input type="date" id="tr-trace-to"></div>
+      <button type="button" class="btn small secondary" id="tr-trace-clear">Clear</button>
+    </div>
+  </div>
+
   <h2>Transfers</h2>
   <div id="transfer-active"><div class="muted">Loading…</div></div>
 
@@ -150,6 +161,33 @@ if (employee) {
   await loadTransfers();
   subscribeToChanges(['inventory_transfers', 'inventory_transfer_items'], loadTransfers);
 
+  document.getElementById('tr-trace-search').addEventListener('input', renderTransfers);
+  document.getElementById('tr-trace-from').addEventListener('change', renderTransfers);
+  document.getElementById('tr-trace-to').addEventListener('change', renderTransfers);
+  document.getElementById('tr-trace-clear').addEventListener('click', () => {
+    document.getElementById('tr-trace-search').value = '';
+    document.getElementById('tr-trace-from').value = '';
+    document.getElementById('tr-trace-to').value = '';
+    renderTransfers();
+  });
+
+  // Trace a Product: SKU or product name (via the products(item_name) join added to
+  // listTransfers) plus an optional date range on requested_at -- entirely client-side
+  // over the already-fetched allTransfers array, same pattern as Item Monitoring's
+  // Trace a Product filter.
+  function filterTransfers(rows) {
+    const q = document.getElementById('tr-trace-search').value.trim().toLowerCase();
+    const from = document.getElementById('tr-trace-from').value;
+    const to = document.getElementById('tr-trace-to').value;
+    let out = rows;
+    if (q) out = out.filter((t) => t.inventory_transfer_items.some((i) =>
+      i.sku.toLowerCase().includes(q) || ((i.products || {}).item_name || '').toLowerCase().includes(q)
+    ));
+    if (from) out = out.filter((t) => t.requested_at && t.requested_at.slice(0, 10) >= from);
+    if (to) out = out.filter((t) => t.requested_at && t.requested_at.slice(0, 10) <= to);
+    return out;
+  }
+
   // Three buckets instead of one flat list (Ren, 2026-09-16: "make a folder to those
   // cancel request. other folder per branch for received") -- Active covers every
   // in-progress status, Cancelled/Rejected is one collapsed folder, and Received gets
@@ -161,34 +199,41 @@ if (employee) {
     activeBox.innerHTML = '<div class="muted">Loading…</div>';
     try {
       allTransfers = await listTransfers();
-      const active = allTransfers.filter((t) => !['Received', 'Rejected', 'Cancelled'].includes(t.status));
-      const cancelled = allTransfers.filter((t) => ['Rejected', 'Cancelled'].includes(t.status));
-      const received = allTransfers.filter((t) => t.status === 'Received');
-
-      activeBox.innerHTML = active.length ? active.map(renderTransfer).join('') : '<p class="muted">No active transfers.</p>';
-
-      document.getElementById('tr-cancelled-count').textContent = '(' + cancelled.length + ')';
-      document.getElementById('transfer-cancelled').innerHTML = cancelled.length
-        ? cancelled.map(renderTransfer).join('')
-        : '<p class="muted">None.</p>';
-
-      const byBranch = {};
-      received.forEach((t) => { (byBranch[t.to_branch_id] = byBranch[t.to_branch_id] || []).push(t); });
-      const branchIds = Object.keys(byBranch).map(Number).sort((a, b) => (byId[a] || '').localeCompare(byId[b] || ''));
-      const branchBox = document.getElementById('transfer-received-by-branch');
-      branchBox.innerHTML = branchIds.length
-        ? branchIds.map((bid) =>
-            '<details class="card" style="margin-top:10px;">' +
-              '<summary style="cursor:pointer;font-weight:bold;">' + esc(byId[bid] || 'Unknown Branch') + ' <span class="muted" style="font-weight:normal;">(' + byBranch[bid].length + ')</span></summary>' +
-              '<div style="margin-top:10px;">' + byBranch[bid].map(renderTransfer).join('') + '</div>' +
-            '</details>'
-          ).join('')
-        : '<p class="muted">No received transfers yet.</p>';
-
-      wireActions();
+      renderTransfers();
     } catch (err) {
       activeBox.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
     }
+  }
+
+  function renderTransfers() {
+    const rows = filterTransfers(allTransfers);
+    const filtered = rows.length !== allTransfers.length;
+    const active = rows.filter((t) => !['Received', 'Rejected', 'Cancelled'].includes(t.status));
+    const cancelled = rows.filter((t) => ['Rejected', 'Cancelled'].includes(t.status));
+    const received = rows.filter((t) => t.status === 'Received');
+
+    document.getElementById('transfer-active').innerHTML = active.length ? active.map(renderTransfer).join('')
+      : '<p class="muted">No active transfers' + (filtered ? ' match this search.' : '.') + '</p>';
+
+    document.getElementById('tr-cancelled-count').textContent = '(' + cancelled.length + ')';
+    document.getElementById('transfer-cancelled').innerHTML = cancelled.length
+      ? cancelled.map(renderTransfer).join('')
+      : '<p class="muted">None' + (filtered ? ' match this search.' : '.') + '</p>';
+
+    const byBranch = {};
+    received.forEach((t) => { (byBranch[t.to_branch_id] = byBranch[t.to_branch_id] || []).push(t); });
+    const branchIds = Object.keys(byBranch).map(Number).sort((a, b) => (byId[a] || '').localeCompare(byId[b] || ''));
+    const branchBox = document.getElementById('transfer-received-by-branch');
+    branchBox.innerHTML = branchIds.length
+      ? branchIds.map((bid) =>
+          '<details class="card" style="margin-top:10px;">' +
+            '<summary style="cursor:pointer;font-weight:bold;">' + esc(byId[bid] || 'Unknown Branch') + ' <span class="muted" style="font-weight:normal;">(' + byBranch[bid].length + ')</span></summary>' +
+            '<div style="margin-top:10px;">' + byBranch[bid].map(renderTransfer).join('') + '</div>' +
+          '</details>'
+        ).join('')
+      : '<p class="muted">No received transfers' + (filtered ? ' match this search.' : ' yet.') + '</p>';
+
+    wireActions();
   }
 
   function renderTransfer(t) {

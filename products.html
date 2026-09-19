@@ -151,12 +151,23 @@ if (employee) {
     });
   }
 
+  // A branch name typed into Search (e.g. "APM Mall") isn't a SKU/Sub SKU/product-name
+  // match -- it drives the branch sort + highlight in render() below instead of the
+  // server-side text search, which would otherwise just return zero rows for it.
+  function matchBranchByName(term) {
+    const t = (term || '').trim().toLowerCase();
+    if (!t) return null;
+    return branches.find((b) => b.name.toLowerCase().includes(t)) || null;
+  }
+
   async function loadProducts() {
     const list = document.getElementById('prod-list');
     list.innerHTML = '<div class="muted">Loading…</div>';
     try {
+      const searchTerm = document.getElementById('f-search').value.trim();
+      const branchMatch = matchBranchByName(searchTerm);
       allProducts = await listProducts({
-        search: document.getElementById('f-search').value.trim(),
+        search: branchMatch ? '' : searchTerm,
         status: document.getElementById('f-status').value,
       });
       render();
@@ -280,6 +291,16 @@ if (employee) {
   function render() {
     let rows = allProducts; // already scoped to the current search + status at the query level
 
+    // Searching a branch name auto-applies "Sort by Branch" for that branch, ascending
+    // (fewest pcs first), and syncs the two dropdowns to show what's driving it -- the
+    // sync is harmless since it only happens while a branch-name search is active, and
+    // reverts to whatever the dropdowns say the moment the search is cleared.
+    const branchMatch = matchBranchByName(document.getElementById('f-search').value.trim());
+    if (branchMatch) {
+      document.getElementById('f-sort-branch').value = String(branchMatch.id);
+      document.getElementById('f-sort-dir').value = 'asc';
+    }
+
     // Category options reflect whatever's currently loaded (search + status), same
     // as every other filter here -- rebuilt on each render so a value that stops
     // matching (e.g. after a search) drops out instead of pointing at nothing.
@@ -354,7 +375,11 @@ if (employee) {
           '<td data-label="Est. Gram">' + weight(p.gross_weight_g) + '</td>' +
           '<td data-label="Total Pcs"><b>' + totalPcs.toLocaleString('en-PH') + '</b></td>' +
           '<td data-label="Status"><span class="badge ' + (p.product_status === 'Active' ? 'ok' : 'low') + '">' + esc(p.product_status) + '</span></td>' +
-          branches.map((b) => '<td data-label="' + esc(b.name) + '" style="text-align:center;">' + (qtyForSku[b.id] ?? '—') + '</td>').join('') +
+          branches.map((b) => {
+            const searched = branchMatch && branchMatch.id === b.id;
+            const c = branchColor(b.id, branches);
+            return '<td data-label="' + esc(b.name) + '" style="text-align:center;' + (searched ? 'background:' + c.bg + ';color:' + c.text + ';font-weight:800;' : '') + '">' + (qtyForSku[b.id] ?? '—') + '</td>';
+          }).join('') +
           '<td data-label="Actions" style="white-space:nowrap;">' +
             (canEdit ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="edit">Edit</button> ' : '') +
             (isAdmin
@@ -370,11 +395,15 @@ if (employee) {
     const branchThs = branches.map((b) => {
       const c = branchColor(b.id, branches);
       const active = filterBranchId === b.id;
+      const searched = branchMatch && branchMatch.id === b.id;
       return '<th data-branch-filter="' + b.id + '" title="Click to show only SKUs stocked at ' + esc(b.name) + '" style="cursor:pointer;background:' + c.bg + ';color:' + c.text + ';' +
-        (active ? 'outline:2px solid ' + c.text + ';outline-offset:-2px;' : '') + '">' + esc(b.name) + (active ? ' ✕' : '') + '</th>';
+        (active ? 'outline:2px solid ' + c.text + ';outline-offset:-2px;' : '') +
+        (searched ? 'outline:3px solid ' + c.text + ';outline-offset:-3px;box-shadow:0 0 8px ' + c.text + ';font-weight:800;' : '') +
+        '">' + (searched ? '🔎 ' : '') + esc(b.name) + (active ? ' ✕' : '') + '</th>';
     }).join('');
 
     list.innerHTML = (filterBranchId != null ? '<p class="muted" style="margin:0 0 8px;">Showing only SKUs stocked at <b>' + esc((branches.find((b) => b.id === filterBranchId) || {}).name) + '</b> — click the column again to clear.</p>' : '') +
+      (branchMatch ? '<p class="muted" style="margin:0 0 8px;">🔎 Sorted by <b>' + esc(branchMatch.name) + '</b>, fewest pcs first — clear the search to sort another way.</p>' : '') +
       countNotice + '<div class="table-scroll table-mini"><table><thead><tr style="white-space:nowrap;">' +
       '<th>SKU</th><th>Product Name</th><th>Category</th><th>Sub SKU</th><th>Price</th><th>Est. Gram</th><th>Total Pcs</th><th>Status</th>' + branchThs + '<th></th>' +
       '</tr></thead><tbody>' + renderRows.map(rowHtml).join('') + '</tbody></table></div>';

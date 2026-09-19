@@ -84,6 +84,17 @@ if (employee) {
       '</form>' +
     '</div>' : '') +
 
+    '<div class="card" style="margin-top:16px;">' +
+      '<h3>Trace a Product</h3>' +
+      '<p class="muted" style="margin-top:-4px;">Search Factory Purchases by SKU or product name, optionally narrowed to a delivery date range.</p>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+        '<div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="fp-trace-search" placeholder="SKU or product name…"></div>' +
+        '<div class="field"><label>From</label><input type="date" id="fp-trace-from"></div>' +
+        '<div class="field"><label>To</label><input type="date" id="fp-trace-to"></div>' +
+        '<button type="button" class="btn small secondary" id="fp-trace-clear">Clear</button>' +
+      '</div>' +
+    '</div>' +
+
     '<h2 style="margin-top:24px;">Factory Purchases</h2>' +
     '<p class="muted" style="margin-top:-4px;">Every purchase recorded above, newest delivery date first.</p>' +
     '<div id="fp-list"><div class="muted">Loading…</div></div>' +
@@ -410,6 +421,16 @@ if (employee) {
     renderStockByBranch();
   });
 
+  document.getElementById('fp-trace-search').addEventListener('input', renderFactoryPurchases);
+  document.getElementById('fp-trace-from').addEventListener('change', renderFactoryPurchases);
+  document.getElementById('fp-trace-to').addEventListener('change', renderFactoryPurchases);
+  document.getElementById('fp-trace-clear').addEventListener('click', () => {
+    document.getElementById('fp-trace-search').value = '';
+    document.getElementById('fp-trace-from').value = '';
+    document.getElementById('fp-trace-to').value = '';
+    renderFactoryPurchases();
+  });
+
   async function load() {
     try {
       [stockRows, cycleCounts, latestCounts, productChanges, factoryPurchases] = await Promise.all([
@@ -557,14 +578,31 @@ if (employee) {
       (employee.role === 'Branch Supervisor' && employee.branch_id === p.branch_id) ||
       employee.position === 'Admin Assistant';
   }
+  // Trace a Product: SKU or product name (via the products(item_name) join added to
+  // listFactoryPurchases) plus an optional delivery-date range -- entirely client-side
+  // over the already-fetched factoryPurchases array, same pattern as Stock by Branch's
+  // filters above.
+  function filterFactoryPurchases(rows) {
+    const q = document.getElementById('fp-trace-search').value.trim().toLowerCase();
+    const from = document.getElementById('fp-trace-from').value;
+    const to = document.getElementById('fp-trace-to').value;
+    let out = rows;
+    if (q) out = out.filter((p) => p.sku.toLowerCase().includes(q) || ((p.products || {}).item_name || '').toLowerCase().includes(q));
+    if (from) out = out.filter((p) => p.date_delivered >= from);
+    if (to) out = out.filter((p) => p.date_delivered <= to);
+    return out;
+  }
+
   function renderFactoryPurchases() {
     const box = document.getElementById('fp-list');
     if (!factoryPurchases.length) { box.innerHTML = '<p class="muted">No factory purchases recorded yet.</p>'; return; }
+    const rows = filterFactoryPurchases(factoryPurchases);
+    if (!rows.length) { box.innerHTML = '<p class="muted">No factory purchases match this search.</p>'; return; }
 
     box.innerHTML = '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
       '<thead><tr><th>Delivered</th><th>SKU</th><th>Branch</th><th>Pcs</th><th>Sup. Price</th><th>Pancake Price</th>' +
       '<th>Grams</th><th>Total Grams</th><th>Availed Factory Gram</th><th>Current/Gram</th><th>Est. Sales</th><th>Purchased</th><th>Profit</th><th>Note</th><th>By</th><th></th></tr></thead><tbody>' +
-      factoryPurchases.map((p) => '<tr>' +
+      rows.map((p) => '<tr>' +
         '<td data-label="Delivered">' + fmtDate(p.date_delivered) + '</td>' +
         '<td data-label="SKU"><b>' + esc(p.sku) + '</b></td>' +
         '<td data-label="Branch">' + (p.branches ? esc(p.branches.name) : '—') + '</td>' +

@@ -21,7 +21,7 @@ import {
   listScrapEntries, getScrapCashBalances, createScrapEntry, deleteScrapEntry, uploadScrapAttachment, getScrapAttachmentUrl, convertScrapToSubasta,
   subscribeToChanges,
 } from './js/api.js';
-import { branchButtonStyle } from './js/branchColors.js';
+import { branchButtonStyle, branchColor } from './js/branchColors.js';
 import { initOnlineOrdersTab } from './js/onlineOrdersTab.js';
 import { initLayawayTab } from './js/layawayTab.js';
 import { PAYMENT_METHODS } from './js/paymentMethods.js';
@@ -351,6 +351,13 @@ if (employee) {
       if (posCatalogPurity) rows = rows.filter((p) => p.metal_purity === posCatalogPurity);
       if (posCatalogInStockOnly) rows = rows.filter((p) => (p.qty_available || 0) > 0);
       if (!rows.length) { grid.innerHTML = '<p class="muted">No matching SKUs for this search/filter.</p>'; return; }
+      // Ascending by pieces at THIS branch -- lowest/out-of-stock surfaces first so a
+      // thin count is never buried below a search's more-stocked results (same "fewest
+      // pcs first" ordering as SKU Catalog's branch sort, applied to the branch this
+      // POS is currently selling from).
+      rows = rows.slice().sort((a, b) => Number(a.qty_available || 0) - Number(b.qty_available || 0));
+      const bc = branchColor(selectedBranch, branches);
+      const branchName = (branches.find((b) => b.id === selectedBranch) || {}).name || '';
       grid.innerHTML = rows.map((p) => {
         const stock = p.qty_available;
         return '<div class="pos-card" data-sku="' + esc(p.sku) + '">' +
@@ -359,7 +366,11 @@ if (employee) {
           '<div class="pos-card-meta">' + esc(p.sku) + (p.product_line ? ' · ' + esc(p.product_line) : '') + (p.metal_purity ? ' · ' + esc(p.metal_purity) : '') + '</div>' +
           (p.gross_weight_g != null ? '<div class="pos-card-meta">' + p.gross_weight_g + 'g</div>' : '') +
           '<div class="pos-card-price">' + money(effectivePrice(p)) + (p.pricing_mode === 'Per Gram' ? ' <span class="muted" style="font-size:10px;">(' + money(p.current_gold_rate_per_g) + '/g)</span>' : '') + '</div>' +
-          (stock != null ? '<div class="pos-card-stock' + (stock <= 0 ? ' low' : '') + '">' + (stock > 0 ? stock + ' in stock' : 'Out of stock') + '</div>' : '') +
+          // Branch highlighted the same way SKU Catalog highlights a searched branch --
+          // named + colored, not just a bare number, since a stock count means nothing
+          // here without knowing which branch it's counting.
+          (stock != null ? '<div class="pos-card-stock' + (stock <= 0 ? ' low' : '') + '" style="' + (stock > 0 ? 'background:' + bc.bg + ';color:' + bc.text + ';font-weight:700;' : '') + '">' +
+            esc(branchName) + ': ' + (stock > 0 ? stock + ' in stock' : 'Out of stock') + '</div>' : '') +
         '</div>';
       }).join('');
       grid.querySelectorAll('.pos-card').forEach((card) => {
