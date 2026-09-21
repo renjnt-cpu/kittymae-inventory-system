@@ -37,7 +37,7 @@ import {
 
 // Same fixed position list access-checklist.html uses (kept in sync there too --
 // this is every position value that currently drives an access rule anywhere).
-const POSITIONS = ['Sales Executive', 'Admin Assistant', 'Branch Team Leader', 'HR Supervisor', 'Inventory Supervisor', 'Operations Supervisor', 'Personal Assistant', 'Auditor'];
+const POSITIONS = ['Sales Executive', 'Admin Assistant', 'Branch Team Leader', 'HR Supervisor', 'Inventory Supervisor', 'Operations Supervisor', 'Personal Assistant', 'Auditor', 'Supervisor', 'Editor', 'Inventory Staff'];
 const ROLES = ['Admin', 'Manager', 'Branch Supervisor', 'Staff'];
 const COLUMN_KEYS = [...ROLES.map((r) => 'ROLE:' + r), ...POSITIONS.map((p) => 'POSITION:' + p)];
 const columnLabel = (key) => key.startsWith('ROLE:') ? key.slice(5) + ' (role)' : key.slice(9);

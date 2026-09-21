@@ -57,7 +57,11 @@ const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocale
 // Auditor added 2026-09-21 (Ren's spec section 121-132) -- the position that, along
 // with any Supervisor-named position or Branch Supervisor role, gates amount editing
 // in POS/Layaway (is_amount_editor() in the DB). Assign it here to grant that.
-const POSITIONS = ['Sales Executive', 'Admin Assistant', 'Branch Team Leader', 'HR Supervisor', 'Inventory Supervisor', 'Operations Supervisor', 'Personal Assistant', 'Auditor'];
+// Supervisor/Editor/Inventory Staff added 2026-09-21 (Ren's spec section 289-302,
+// Pull Out Item access) -- Supervisor and Editor also carry transaction.edit_amount,
+// matching Auditor's own dual grant; see position_permissions in the DB, editable
+// from the Position Access Matrix (access-matrix.html) without a code change.
+const POSITIONS = ['Sales Executive', 'Admin Assistant', 'Branch Team Leader', 'HR Supervisor', 'Inventory Supervisor', 'Operations Supervisor', 'Personal Assistant', 'Auditor', 'Supervisor', 'Editor', 'Inventory Staff'];
 const positionOptions = (selected) => '<option value="">— None —</option>' + POSITIONS.map((p) =>
   '<option' + (p === selected ? ' selected' : '') + '>' + p + '</option>'
 ).join('');
