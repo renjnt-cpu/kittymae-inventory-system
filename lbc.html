@@ -16,7 +16,7 @@
 import { initShell, toast, esc } from './js/shell.js?v=20260922a';
 import { getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, deleteLbcShipment, subscribeToChanges } from './js/api.js?v=20260922a';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260922a';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js?v=20260922a';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260922a';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 14: LBC Monitoring is explicitly
 // named in the spec).
@@ -62,7 +62,7 @@ if (employee) {
               '<div class="field"><label>Customer Name *</label><input type="text" name="customerName" required></div>' +
               '<div class="field"><label>Tracking Number</label><input type="text" name="trackingNumber"></div>' +
               '<div class="field"><label>Branch</label><select name="branchId">' + branchOptions() + '</select></div>' +
-              '<div class="field"><label>Ship Date</label><input type="date" name="shipDate" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
+              '<div class="field"><label>Ship Date</label><input type="date" name="shipDate" value="' + localDateStr() + '"></div>' +
               '<div class="field"><label>COD Amount (PHP)</label><input type="number" name="codAmount" step="0.01" min="0"></div>' +
               '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
               '<button class="btn" type="submit">Add Shipment</button>' +
@@ -98,7 +98,7 @@ if (employee) {
         });
         toast('lbc-msg', 'Shipment added.', false);
         f.reset();
-        f.shipDate.value = new Date().toISOString().slice(0, 10);
+        f.shipDate.value = localDateStr();
         await load();
       } catch (err) {
         toast('lbc-msg', String(err.message || err), true);
@@ -255,7 +255,7 @@ if (employee) {
             trackingNumber: f.trackingNumber.value.trim(), branchId: f.branchId.value ? Number(f.branchId.value) : null,
             shipDate: f.shipDate.value || null, codAmount: f.codAmount.value ? Number(f.codAmount.value) : null,
             status: f.status.value, remitted: !!f.remitted.value,
-            remittedDate: f.remitted.value ? (r.remitted_date || new Date().toISOString().slice(0, 10)) : null,
+            remittedDate: f.remitted.value ? (r.remitted_date || localDateStr()) : null,
             notes: f.notes.value.trim(),
           });
           toast('lbc-msg', 'Shipment updated.', false);

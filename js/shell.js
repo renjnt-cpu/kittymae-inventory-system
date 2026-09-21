@@ -4,6 +4,7 @@
 import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20260922a';
 import { listMyPermissions } from './api.js?v=20260922a';
 import { initActivityFeed } from './activityFeed.js?v=20260922a';
+import { localDateStr } from './uiKit.js?v=20260922a';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -225,7 +226,7 @@ export async function initShell(activePage) {
       (employee.branch_id ? ' · Branch #' + employee.branch_id : ' · All Branches') +
     '</span>' +
     (nameEditLocked
-      ? ' <span class="muted" style="font-size:11px;">(can rename ' + nameEditUnlockDate.toISOString().slice(0, 10) + ')</span>'
+      ? ' <span class="muted" style="font-size:11px;">(can rename ' + localDateStr(nameEditUnlockDate) + ')</span>'
       : ' <button class="btn small secondary" id="edit-name-btn">Edit Name</button>') +
     ' <button class="btn small secondary" id="signout-btn">Sign out</button>';
   header.querySelector('#signout-btn').addEventListener('click', signOut);
@@ -274,7 +275,7 @@ export async function initShell(activePage) {
         const lockedNote = document.createElement('span');
         lockedNote.className = 'muted';
         lockedNote.style.fontSize = '11px';
-        lockedNote.textContent = '(can rename ' + unlock.toISOString().slice(0, 10) + ')';
+        lockedNote.textContent = '(can rename ' + localDateStr(unlock) + ')';
         editBtn.replaceWith(lockedNote);
         form.remove();
         display.style.display = '';

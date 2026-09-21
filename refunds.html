@@ -84,7 +84,7 @@
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js?v=20260922a';
 import { listRefunds, createRefund, uploadRefundRequestPhoto, setRefundStatus, deleteRefund, addRefundAttachment, removeRefundAttachment, getRefundAttachmentUrl, subscribeToChanges } from './js/api.js?v=20260922a';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js?v=20260922a';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260922a';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 16: Payment History) -- one
 // shared Sort control replaces the old per-column header-click sort below, which
@@ -137,7 +137,7 @@ if (employee) {
 
   if (!approver) document.getElementById('ref-list-heading').textContent = 'My Refund Requests';
   const form = document.getElementById('ref-form');
-  form.dateRequested.value = new Date().toISOString().slice(0, 10);
+  form.dateRequested.value = localDateStr();
 
   // ---- form drawer ----
   function openFormDrawer() {
@@ -171,7 +171,7 @@ if (employee) {
       if (f.requestPhoto.files[0]) await uploadRefundRequestPhoto(newId, f.requestPhoto.files[0]);
       toast('ref-msg', 'Refund request added — pending approval.', false);
       f.reset();
-      f.dateRequested.value = new Date().toISOString().slice(0, 10);
+      f.dateRequested.value = localDateStr();
       closeFormDrawer();
       await load();
       // The same drawer system now shows the saved request (spec 273).

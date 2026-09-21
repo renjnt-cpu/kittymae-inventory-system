@@ -20,7 +20,7 @@ import {
   listFactoryPurchases, recordFactoryPurchase, deleteFactoryPurchase, subscribeToChanges,
 } from './js/api.js?v=20260922a';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260922a';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js?v=20260922a';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260922a';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 14: Monitoring) -- one Sort
 // control for the Stock by Branch board.
@@ -230,7 +230,7 @@ if (employee) {
   // one is reported back. ----
   if (canRecordPurchase) {
     const fpForm = document.getElementById('fp-form');
-    fpForm.dateDelivered.value = new Date().toISOString().slice(0, 10);
+    fpForm.dateDelivered.value = localDateStr();
     const fpItemsContainer = document.getElementById('fp-items');
 
     function fpItemRowHtml() {
@@ -408,7 +408,7 @@ if (employee) {
       }
       if (succeeded) {
         f.reset();
-        f.dateDelivered.value = new Date().toISOString().slice(0, 10);
+        f.dateDelivered.value = localDateStr();
         resetFpItemRows();
       }
       await load();

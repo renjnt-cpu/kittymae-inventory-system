@@ -82,7 +82,7 @@
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js?v=20260922a';
 import { getBranches, searchProducts, listPullOuts, createPullOut, returnPullOut, subscribeToChanges } from './js/api.js?v=20260922a';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js?v=20260922a';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260922a';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 17-ish: this list is "Record
 // Movement"-adjacent inventory monitoring) -- one Sort control governs both Currently
@@ -101,7 +101,7 @@ const fmtDate = (s) => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-PH',
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g';
 const tile = (num, label) => '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>';
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => localDateStr();
 const isOverdue = (r) => r.status === 'Out' && r.expected_return_date && r.expected_return_date < todayStr();
 
 const employee = await initShell('pull-out');
