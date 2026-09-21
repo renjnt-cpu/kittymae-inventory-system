@@ -2,6 +2,7 @@
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
 import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js';
+import { listMyPermissions } from './api.js';
 
 // ERP access is now also gated by 201-File Job Title, on top of role/position --
 // ERP-only: kittymae-pos has no equivalent check, so these lists never affect POS
@@ -33,6 +34,12 @@ export async function initShell(activePage) {
     return null;
   }
 
+  try {
+    employee.permissions = await listMyPermissions();
+  } catch (err) {
+    employee.permissions = []; // fail closed -- a failed lookup shouldn't grant anything
+  }
+
   let jobTitle = null;
   try {
     jobTitle = await getMyJobTitle();
@@ -60,6 +67,7 @@ export async function initShell(activePage) {
     lbc: { label: 'LBC Monitoring', href: 'lbc.html' },
     hr: { label: 'HR — 201 File', href: 'hr.html' },
     'access-checklist': { label: 'Access Checklist', href: 'access-checklist.html' },
+    'access-matrix': { label: 'Position Access Matrix', href: 'access-matrix.html' },
   };
   const pages = [];
   const scopedIds = jobTitle && ERP_SCOPED_JOB_TITLES[jobTitle];
@@ -117,6 +125,10 @@ export async function initShell(activePage) {
     // view; that's removed here and at the RLS level).
     if (employee.role === 'Admin') {
       pages.push({ id: 'access-checklist', ...ALL_PAGE_DEFS['access-checklist'] });
+      // HR-Position-based Permission System (Ren's spec sections 252-270) -- lets an
+      // Admin see and edit what each role/position grants, and grant/revoke individual
+      // overrides, instead of that living only in migration files.
+      pages.push({ id: 'access-matrix', ...ALL_PAGE_DEFS['access-matrix'] });
     }
   }
 
@@ -140,7 +152,7 @@ export async function initShell(activePage) {
     { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers', 'pull-out'] },
     { label: 'Operations', ids: ['lbc', 'assets'] },
     { label: 'Finance', ids: ['bills', 'transactions'] },
-    { label: 'People', ids: ['hr', 'access-checklist'] },
+    { label: 'People', ids: ['hr', 'access-checklist', 'access-matrix'] },
   ];
   const pageById = Object.fromEntries(pages.map((p) => [p.id, p]));
   const navHtml = NAV_GROUPS.map((g) => {

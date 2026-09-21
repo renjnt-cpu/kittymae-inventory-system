@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Position Access Matrix — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  .am-matrix-scroll { overflow-x:auto; }
+  .am-matrix { border-collapse:collapse; white-space:nowrap; }
+  .am-matrix th, .am-matrix td { padding:6px 10px; border-bottom:1px solid #f0f0f0; text-align:center; }
+  .am-matrix thead th { position:sticky; top:0; background:#fff; font-size:11px; color:var(--muted); font-weight:600; writing-mode:vertical-rl; transform:rotate(180deg); height:110px; vertical-align:bottom; }
+  .am-matrix td.am-key-cell, .am-matrix th.am-key-cell { text-align:left; white-space:normal; min-width:220px; position:sticky; left:0; background:#fff; }
+  .am-matrix tr.am-cat-row td { background:#f7f5f0; font-weight:600; text-align:left; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+  .am-matrix input[type=checkbox] { width:16px; height:16px; cursor:pointer; }
+  .am-source-pos { color:#46586b; }
+  .am-source-override-grant { color:var(--ok); }
+  .am-source-override-revoke { color:var(--warn); }
+  .am-log-item { padding:8px 0; border-bottom:1px solid #f0f0f0; font-size:13px; }
+  .am-log-item:last-child { border-bottom:none; }
+  .am-log-item .when { color:var(--muted); font-size:11px; }
+</style>
+</head>
+<body>
+<main>
+  <div id="am-msg"></div>
+  <div id="am-root"></div>
+</main>
+
+<script type="module">
+import { initShell, toast, esc } from './js/shell.js';
+import {
+  getPermissionMatrix, setPositionPermission, getEmployeesForChecklist,
+  listEmployeePermissionOverrides, setEmployeePermissionOverride, removeEmployeePermissionOverride,
+  listAccessChangeLog,
+} from './js/api.js';
+
+// Same fixed position list access-checklist.html uses (kept in sync there too --
+// this is every position value that currently drives an access rule anywhere).
+const POSITIONS = ['Sales Executive', 'Admin Assistant', 'Branch Team Leader', 'HR Supervisor', 'Inventory Supervisor', 'Operations Supervisor', 'Personal Assistant', 'Auditor'];
+const ROLES = ['Admin', 'Manager', 'Branch Supervisor', 'Staff'];
+const COLUMN_KEYS = [...ROLES.map((r) => 'ROLE:' + r), ...POSITIONS.map((p) => 'POSITION:' + p)];
+const columnLabel = (key) => key.startsWith('ROLE:') ? key.slice(5) + ' (role)' : key.slice(9);
+
+const employee = await initShell('access-matrix');
+if (employee) {
+  const root = document.getElementById('am-root');
+
+  if (employee.role !== 'Admin') {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">The Position Access Matrix is Admin-only.</p></div></div>';
+  } else {
+    let keys = []; // [{key, label, category}]
+    let grants = new Set(); // "permissionKey|positionKey"
+    let employees = [];
+    let overrides = [];
+    let log = [];
+    let overrideForm = { employeeId: '', permissionKey: '', grant: true, reason: '' };
+
+    async function load() {
+      try {
+        const [matrixRows, emps, ov, lg] = await Promise.all([
+          getPermissionMatrix(), getEmployeesForChecklist(), listEmployeePermissionOverrides(), listAccessChangeLog(80),
+        ]);
+        const byKey = {};
+        grants = new Set();
+        matrixRows.forEach((r) => {
+          if (!byKey[r.permission_key]) byKey[r.permission_key] = { key: r.permission_key, label: r.permission_label, category: r.category };
+          if (r.position_key) grants.add(r.permission_key + '|' + r.position_key);
+        });
+        keys = Object.values(byKey).sort((a, b) => a.category.localeCompare(b.category) || a.key.localeCompare(b.key));
+        employees = emps;
+        overrides = ov;
+        log = lg;
+      } catch (err) {
+        toast('am-msg', String(err.message || err), true);
+      }
+      render();
+    }
+
+    function render() {
+      const byCategory = {};
+      keys.forEach((k) => { (byCategory[k.category] = byCategory[k.category] || []).push(k); });
+
+      const headerRow = '<tr><th class="am-key-cell">Permission</th>' + COLUMN_KEYS.map((c) => '<th>' + esc(columnLabel(c)) + '</th>').join('') + '</tr>';
+      const bodyRows = Object.keys(byCategory).map((cat) => {
+        const catRow = '<tr class="am-cat-row"><td colspan="' + (COLUMN_KEYS.length + 1) + '">' + esc(cat) + '</td></tr>';
+        const rows = byCategory[cat].map((k) => {
+          const cells = COLUMN_KEYS.map((posKey) => {
+            const checked = grants.has(k.key + '|' + posKey);
+            return '<td><input type="checkbox" data-pos="' + esc(posKey) + '" data-perm="' + esc(k.key) + '"' + (checked ? ' checked' : '') + '></td>';
+          }).join('');
+          return '<tr><td class="am-key-cell"><b>' + esc(k.label) + '</b><br><span class="muted" style="font-size:11px;">' + esc(k.key) + '</span></td>' + cells + '</tr>';
+        }).join('');
+        return catRow + rows;
+      }).join('');
+
+      const overridesHtml = !overrides.length ? '<p class="muted">No individual overrides set.</p>' :
+        '<div class="table-scroll"><table><thead><tr><th>Employee</th><th>Permission</th><th>Grant/Revoke</th><th>Reason</th><th>Expires</th><th></th></tr></thead><tbody>' +
+        overrides.map((o) => '<tr>' +
+          '<td data-label="Employee">' + esc((o.employee && o.employee.full_name) || '—') + '</td>' +
+          '<td data-label="Permission">' + esc(o.permission_key) + '</td>' +
+          '<td data-label="Grant/Revoke"><span class="' + (o.granted ? 'am-source-override-grant' : 'am-source-override-revoke') + '">' + (o.granted ? 'Granted' : 'Revoked') + '</span></td>' +
+          '<td data-label="Reason">' + esc(o.reason || '—') + '</td>' +
+          '<td data-label="Expires">' + (o.expires_at ? esc(o.expires_at.slice(0, 10)) : 'Never') + '</td>' +
+          '<td><button type="button" class="btn small secondary" data-remove-override="' + o.employee_id + '|' + esc(o.permission_key) + '">Remove</button></td>' +
+        '</tr>').join('') + '</tbody></table></div>';
+
+      const empOptions = employees.map((e) => '<option value="' + e.id + '">' + esc(e.name || e.full_name) + '</option>').join('');
+      const permOptions = keys.map((k) => '<option value="' + esc(k.key) + '">' + esc(k.label) + '</option>').join('');
+
+      const logHtml = !log.length ? '<p class="muted">No access changes logged yet.</p>' :
+        log.map((l) => '<div class="am-log-item"><div>' + esc(l.action) + (l.employee ? ' — ' + esc(l.employee.full_name) : '') + '</div>' +
+          '<div class="muted">' + esc(l.details || '') + '</div>' +
+          '<div class="when">' + esc((l.changer && l.changer.full_name) || 'System') + ' · ' + new Date(l.changed_at).toLocaleString('en-PH') + '</div></div>').join('');
+
+      root.innerHTML =
+        '<h2>Position Access Matrix</h2>' +
+        '<p class="muted">What each role/position grants, company-wide. Checking a box grants that permission to everyone currently in that role/position; unchecking it revokes it from all of them immediately. Use the Individual Overrides section below for a single employee who needs something different from their role/position default.</p>' +
+        '<div class="card"><div class="am-matrix-scroll"><table class="am-matrix"><thead>' + headerRow + '</thead><tbody>' + bodyRows + '</tbody></table></div></div>' +
+        '<div class="card">' +
+          '<h3 style="margin-top:0;">Individual Overrides</h3>' +
+          '<p class="muted">Grants or revokes one permission for one specific employee, beating whatever their role/position would otherwise give them.</p>' +
+          '<form id="am-override-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;">' +
+            '<div class="field"><label>Employee</label><select id="am-ov-emp" required><option value="">Select…</option>' + empOptions + '</select></div>' +
+            '<div class="field"><label>Permission</label><select id="am-ov-perm" required><option value="">Select…</option>' + permOptions + '</select></div>' +
+            '<div class="field"><label>Action</label><select id="am-ov-grant"><option value="true">Grant</option><option value="false">Revoke</option></select></div>' +
+            '<div class="field" style="flex:1 1 200px;"><label>Reason</label><input type="text" id="am-ov-reason" placeholder="Why this override"></div>' +
+            '<button class="btn" type="submit">Set Override</button>' +
+          '</form>' +
+          overridesHtml +
+        '</div>' +
+        '<div class="card">' +
+          '<h3 style="margin-top:0;">Recent Access Changes</h3>' +
+          '<p class="muted">Every position-level grant/revoke, individual override, and HR role/position/status change, most recent first.</p>' +
+          logHtml +
+        '</div>';
+
+      root.querySelectorAll('.am-matrix input[type=checkbox]').forEach((cb) => cb.addEventListener('change', async () => {
+        const posKey = cb.dataset.pos, permKey = cb.dataset.perm;
+        const checked = cb.checked;
+        cb.disabled = true;
+        try {
+          await setPositionPermission(posKey, permKey, checked);
+          if (checked) grants.add(permKey + '|' + posKey); else grants.delete(permKey + '|' + posKey);
+          toast('am-msg', (checked ? 'Granted ' : 'Revoked ') + permKey + ' for ' + columnLabel(posKey) + '.', false);
+          await load();
+        } catch (err) {
+          cb.checked = !checked;
+          toast('am-msg', String(err.message || err), true);
+        } finally {
+          cb.disabled = false;
+        }
+      }));
+
+      document.getElementById('am-override-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const employeeId = document.getElementById('am-ov-emp').value;
+        const permissionKey = document.getElementById('am-ov-perm').value;
+        const granted = document.getElementById('am-ov-grant').value === 'true';
+        const reason = document.getElementById('am-ov-reason').value.trim();
+        if (!employeeId || !permissionKey) return;
+        try {
+          await setEmployeePermissionOverride(employeeId, permissionKey, granted, reason);
+          toast('am-msg', 'Override saved.', false);
+          await load();
+        } catch (err) {
+          toast('am-msg', String(err.message || err), true);
+        }
+      });
+
+      root.querySelectorAll('[data-remove-override]').forEach((btn) => btn.addEventListener('click', async () => {
+        const [employeeId, permissionKey] = btn.dataset.removeOverride.split('|');
+        if (!confirm('Remove this override? The employee will fall back to their role/position default.')) return;
+        try {
+          await removeEmployeePermissionOverride(employeeId, permissionKey);
+          toast('am-msg', 'Override removed.', false);
+          await load();
+        } catch (err) {
+          toast('am-msg', String(err.message || err), true);
+        }
+      }));
+    }
+
+    await load();
+  }
+}
+</script>
+</body>
+</html>
