@@ -188,15 +188,13 @@ const employee = await initShell('access-checklist');
 if (employee) {
   const root = document.getElementById('ac-root');
 
-  // Admin can view AND edit. Personal Assistant can view only -- the level pills and
-  // Position selector below render as plain, non-interactive display for her; the
-  // actual write paths (updateEmployeePosition/setAccessChecklistItem) are already
-  // Admin-only at the RLS level regardless, this just avoids showing controls that
-  // would only reject her click.
-  const canView = employee.role === 'Admin' || employee.position === 'Personal Assistant';
+  // Admin-only -- Ren, 2026-09-21: "only me can access the access checklist this is
+  // my personal monitoring" (Personal Assistant previously had read-only access;
+  // removed here and at the RLS level -- access_checklist_pa_read policy dropped).
+  const canView = employee.role === 'Admin';
   const canEdit = employee.role === 'Admin';
   if (!canView) {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">This checklist is limited to Admin (view &amp; edit) and Personal Assistant (view only).</p></div></div>';
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">This checklist is limited to Admin.</p></div></div>';
   } else {
     let people = [];
     let selectedId = null;

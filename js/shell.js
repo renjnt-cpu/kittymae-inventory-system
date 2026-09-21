@@ -106,9 +106,10 @@ export async function initShell(activePage) {
     if ((employee.role === 'Admin' || employee.position === 'HR Supervisor') && !employee.hr_201_file_blocked) {
       pages.push({ id: 'hr', ...ALL_PAGE_DEFS.hr });
     }
-    // Personal Assistant gets a read-only view (see access-checklist.html's own
-    // canEdit gate) -- Admin remains the only one who can actually change anything.
-    if (employee.role === 'Admin' || employee.position === 'Personal Assistant') {
+    // Admin-only -- Ren, 2026-09-21: "only me can access the access checklist this is
+    // my personal monitoring" (previously Personal Assistant also got a read-only
+    // view; that's removed here and at the RLS level).
+    if (employee.role === 'Admin') {
       pages.push({ id: 'access-checklist', ...ALL_PAGE_DEFS['access-checklist'] });
     }
   }
