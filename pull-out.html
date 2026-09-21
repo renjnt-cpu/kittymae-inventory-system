@@ -10,6 +10,14 @@
 <main>
   <div id="po-msg"></div>
   <div class="tiles" id="po-tiles"></div>
+  <!-- Summary -> Search -> active-filter strip -> form -> records (MASTER UI rules 2/4/28) -->
+  <div class="card">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="po-f-search" placeholder="SKU, item, branch, reason, who…"></div>
+      <button type="button" class="btn small secondary" id="po-f-clear">Clear Filters</button>
+    </div>
+  </div>
+  <div id="po-active"></div>
   <div class="card">
     <h3 style="margin-top:0;">Pull Out an Item</h3>
     <p class="muted" style="margin-top:-4px;">For a piece that's temporarily leaving the shelf — sent for cleaning/repair, borrowed for display — and expected back in stock later. This is not a sale and not a data-entry correction.</p>
@@ -41,6 +49,7 @@
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
 import { getBranches, searchProducts, listPullOuts, createPullOut, returnPullOut, subscribeToChanges } from './js/api.js';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons } from './js/uiKit.js';
 
 const fmtDate = (s) => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-PH', { dateStyle: 'medium' }) : '—';
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
@@ -95,23 +104,38 @@ if (employee) {
   }
 
   function render() {
-    const out = all.filter((r) => r.status === 'Out');
-    const returned = all.filter((r) => r.status === 'Returned');
+    // One search drives the tiles, both lists and the "Returned" count together
+    // (MASTER UI rules 6/19/20).
+    const q = document.getElementById('po-f-search').value.trim().toLowerCase();
+    const matches = (r) => !q || [r.sku, r.products?.item_name, r.branches?.name, r.reason, r.notes, r.puller?.full_name, r.returner?.full_name]
+      .some((v) => (v || '').toLowerCase().includes(q));
+    const rows = all.filter(matches);
+    const out = rows.filter((r) => r.status === 'Out');
+    const returned = rows.filter((r) => r.status === 'Returned');
     const overdueCount = out.filter((r) => r.expected_return_date && r.expected_return_date < todayStr()).length;
 
     document.getElementById('po-tiles').innerHTML =
       tile(out.length, 'Currently Out') + tile(out.reduce((s, r) => s + r.qty, 0), 'Qty Out') + tile(overdueCount, 'Overdue');
+    const activeEl = document.getElementById('po-active');
+    activeEl.innerHTML = activeFiltersHtml([{ label: 'Search', value: esc(q) }], 'po-f-clear');
+    wireProxyButtons(activeEl);
 
-    document.getElementById('po-out-list').innerHTML = !out.length ? '<p class="muted">Nothing currently pulled out.</p>' :
-      '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
+    const outList = document.getElementById('po-out-list');
+    outList.innerHTML = !out.length
+      ? emptyStateHtml({ message: q ? 'No pulled-out items match this search.' : 'Nothing currently pulled out.', hasFilters: !!q, clearId: 'po-f-clear' })
+      : '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
         '<thead><tr><th>SKU</th><th>Item</th><th>Branch</th><th>Qty</th><th>Reason</th><th>Pulled By</th><th>Expected Return</th><th></th></tr></thead>' +
         '<tbody>' + out.map((r) => rowHtml(r, true)).join('') + '</tbody></table></div>';
+    wireProxyButtons(outList);
 
     document.getElementById('po-returned-count').textContent = '(' + returned.length + ')';
-    document.getElementById('po-returned-list').innerHTML = !returned.length ? '<p class="muted">No returned items yet.</p>' :
-      '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
+    const returnedList = document.getElementById('po-returned-list');
+    returnedList.innerHTML = !returned.length
+      ? emptyStateHtml({ message: q ? 'No returned items match this search.' : 'No returned items yet.', hasFilters: !!q, clearId: 'po-f-clear' })
+      : '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
         '<thead><tr><th>SKU</th><th>Item</th><th>Branch</th><th>Qty</th><th>Reason</th><th>Pulled By</th><th>Expected Return</th><th>Returned By</th></tr></thead>' +
         '<tbody>' + returned.map((r) => rowHtml(r, false)).join('') + '</tbody></table></div>';
+    wireProxyButtons(returnedList);
 
     document.querySelectorAll('[data-act="return"]').forEach((btn) => btn.addEventListener('click', async () => {
       if (!confirm('Mark this item as returned to stock?')) return;
@@ -189,6 +213,12 @@ if (employee) {
     } finally {
       btn.disabled = false;
     }
+  });
+
+  document.getElementById('po-f-search').addEventListener('input', render);
+  document.getElementById('po-f-clear').addEventListener('click', () => {
+    document.getElementById('po-f-search').value = '';
+    render();
   });
 
   await load();
