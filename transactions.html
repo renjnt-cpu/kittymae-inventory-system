@@ -680,21 +680,28 @@ if (employee) {
           groups[key].push(t);
         });
         order.sort((a, b) => (accountLabel(groups[a][0]) > accountLabel(groups[b][0]) ? 1 : -1));
+        // Each account is its own collapsible group (Ren's 2026-09-22 expand/collapse
+        // spec -- "Summary by Category/Account"): collapsed shows just the account
+        // name + its txn count/credit/debit totals, expanded shows the full table.
+        // Open by default so nothing looks different until someone actually collapses
+        // one. The account-chips row above already covers "jump to just one account"
+        // (clicking a chip sets the Account filter), so this summary line's only job
+        // now is expand/collapse -- no separate click-to-filter target competing for
+        // the same click.
         list.innerHTML = order.map((key) => {
           const groupRows = groups[key];
           const groupCredit = groupRows.reduce((s, t) => s + Number(t.credit || 0), 0);
           const groupDebit = groupRows.reduce((s, t) => s + Number(t.debit || 0), 0);
           const label = accountLabel(groupRows[0]);
-          return '<h4 style="margin:16px 0 4px;cursor:pointer;display:inline-block;padding:2px 8px;border-radius:10px;' + accountColorStyle(label) + '" data-filter-account="' + key + '" title="Show only ' + esc(label) + '">' + esc(label) +
-            ' <span class="muted" style="font-weight:normal;font-size:12px;">— ' + groupRows.length + ' txn, +' + money(groupCredit) + ' / -' + money(groupDebit) + '</span></h4>' +
-            '<div class="table-scroll"><table style="table-layout:fixed;overflow-wrap:break-word;">' + theadHtml + '<tbody>' + groupRows.map(txRowHtml).join('') + '</tbody></table></div>';
+          return '<details class="exp exp-cat" style="margin-top:12px;" open>' +
+            '<summary><span class="exp-arrow" aria-hidden="true">▸</span>' +
+              '<span style="display:inline-block;padding:2px 8px;border-radius:10px;' + accountColorStyle(label) + '">' + esc(label) + '</span>' +
+              '<span class="exp-count">' + groupRows.length + ' txn, +' + money(groupCredit) + ' / -' + money(groupDebit) + '</span>' +
+            '</summary>' +
+            '<div class="exp-body" style="padding:8px 0 0;"><div class="table-scroll"><table style="table-layout:fixed;overflow-wrap:break-word;">' + theadHtml + '<tbody>' + groupRows.map(txRowHtml).join('') + '</tbody></table></div></div>' +
+          '</details>';
         }).join('');
       }
-
-      list.querySelectorAll('[data-filter-account]').forEach((el) => el.addEventListener('click', () => {
-        document.getElementById('f-account').value = String(el.dataset.filterAccount);
-        render();
-      }));
 
       list.querySelectorAll('[data-act="save"]').forEach((btn) => btn.addEventListener('click', async () => {
         const tr = btn.closest('tr');
