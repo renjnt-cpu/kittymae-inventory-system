@@ -8,7 +8,7 @@ import { initActivityFeed } from './activityFeed.js';
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
 const ACTIVITY_LINKS = {
-  pos_sale: 'branches.html?tab=pos',
+  pos_sale: 'branches.html?tab=pos&open=',
   layaway_holds: 'branches.html?tab=layaway&open=',
   scrap_entries: 'branches.html?tab=scrap&open=',
   subasta_items: 'branches.html?tab=subasta',
