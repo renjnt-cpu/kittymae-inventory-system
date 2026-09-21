@@ -54,7 +54,10 @@ const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocale
 // Every position value that currently drives an access rule somewhere, plus the other
 // job titles already in use -- kept as a fixed list (not free text) so a typo here
 // can't silently fail to match the position checks in shell.js/transactions.html/etc.
-const POSITIONS = ['Sales Executive', 'Admin Assistant', 'Branch Team Leader', 'HR Supervisor', 'Inventory Supervisor', 'Operations Supervisor', 'Personal Assistant'];
+// Auditor added 2026-09-21 (Ren's spec section 121-132) -- the position that, along
+// with any Supervisor-named position or Branch Supervisor role, gates amount editing
+// in POS/Layaway (is_amount_editor() in the DB). Assign it here to grant that.
+const POSITIONS = ['Sales Executive', 'Admin Assistant', 'Branch Team Leader', 'HR Supervisor', 'Inventory Supervisor', 'Operations Supervisor', 'Personal Assistant', 'Auditor'];
 const positionOptions = (selected) => '<option value="">— None —</option>' + POSITIONS.map((p) =>
   '<option' + (p === selected ? ' selected' : '') + '>' + p + '</option>'
 ).join('');
