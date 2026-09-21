@@ -3,6 +3,21 @@
 // page's script, mirroring the old app's renderShell()/renderGate() split.
 import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js';
 import { listMyPermissions } from './api.js';
+import { initActivityFeed } from './activityFeed.js';
+
+// Where a clicked activity notification opens its record (spec 321) -- keyed by the
+// event's record_table. A trailing '=' means the record id is appended.
+const ACTIVITY_LINKS = {
+  pos_sale: 'branches.html?tab=pos',
+  layaway_holds: 'branches.html?tab=layaway&open=',
+  scrap_entries: 'branches.html?tab=scrap&open=',
+  subasta_items: 'branches.html?tab=subasta',
+  pull_out_records: 'pull-out.html',
+  inventory_transfers: 'transfers.html',
+  inventory_transactions: 'item-monitoring.html',
+  refunds: 'refunds.html',
+  products: 'products.html',
+};
 
 // ERP access is now also gated by 201-File Job Title, on top of role/position --
 // ERP-only: kittymae-pos has no equivalent check, so these lists never affect POS
@@ -213,6 +228,13 @@ export async function initShell(activePage) {
       : ' <button class="btn small secondary" id="edit-name-btn">Edit Name</button>') +
     ' <button class="btn small secondary" id="signout-btn">Sign out</button>';
   header.querySelector('#signout-btn').addEventListener('click', signOut);
+
+  // Global Branch Activity feed (spec 303-332): bell + live panel + history drawer.
+  // Mounted async so a slow first fetch never delays the page itself; exposed on
+  // window so branches.html can park its Forfeited notice in the panel's pinned slot.
+  initActivityFeed({ employee, headerEl: header, esc, links: ACTIVITY_LINKS })
+    .then((feed) => { window.__kmActivity = feed; document.dispatchEvent(new Event('km-activity-ready')); })
+    .catch(() => { /* the feed is an overlay -- a failure here must never break the page */ });
 
   // Mobile/tablet off-canvas drawer (<1024px) -- the sidebar is always visible
   // above that, so the toggle/backdrop are only ever reachable via the hamburger
