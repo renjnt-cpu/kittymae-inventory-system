@@ -31,7 +31,8 @@ const ERP_BLOCKED_JOB_TITLES = [];
 // has_refund_approval_access()); 2026-09-21: added Branches too, "sales admin
 // associate in 201 file can access to layaway" -- Layaway lives inside the Branches
 // page as a sub-tab, so this is what makes it reachable. Every one of these
-// employees holds the Sales Executive position, which layawayTab.js's own
+// employees holds the Sales Admin Associate position (renamed 2026-09-22 from Sales
+// Executive to match this same job title), which layawayTab.js's own
 // UNSCOPED_POSITIONS already lets act company-wide once they can reach the page --
 // full access to just these pages, nothing else in the sidebar, regardless of what
 // role/position/extra_page_access would otherwise grant.
@@ -98,7 +99,7 @@ export async function initShell(activePage) {
     scopedIds.forEach((id) => pages.push({ id, ...ALL_PAGE_DEFS[id] }));
   } else {
     pages.push({ id: 'dashboard', ...ALL_PAGE_DEFS.dashboard });
-    if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Sales Executive', 'Admin Assistant', 'Personal Assistant'].includes(employee.position)) {
+    if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant'].includes(employee.position)) {
       // Personal Assistant is view-only here -- branches.html has no add/edit RLS grant
       // for this position (no branch_id, not in POSITION_MANAGERS), so canAddHere()/
       // canWriteHere() already resolve to false for her; this just lets her find the page.

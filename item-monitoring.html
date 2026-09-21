@@ -42,7 +42,7 @@ function cadenceForTier(tier) { return CADENCE_DAYS[tier] || 30; }
 
 // Same branch-scope rule as assert_can_act_on_branch() -- whole staff can log a count
 // for their own branch; this group (plus Admin/Manager) can do it for any branch.
-const UNSCOPED_POSITIONS = ['Sales Executive', 'Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
+const UNSCOPED_POSITIONS = ['Sales Admin Associate', 'Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
 
 // A wide "Log a Physical Count" form and a wide monitoring table both push the count
 // form's button and the low-stock/overdue rows far down the page -- scroll the message

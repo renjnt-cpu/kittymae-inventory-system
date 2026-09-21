@@ -143,7 +143,7 @@ function itemsForEmployee(emp) {
     cat.movement  = { label: 'Can record Stock In/Out, Damage, Missing at ' + branch, access: true, levels: ['encode'] };
     cat.transfers = { label: 'Can view transfers involving ' + branch + ' (cannot request/approve)', access: true, levels: ['view'] };
     cat.branches  = { label: 'Can add Subasta/Scrap entries for ' + branch + ' (cannot edit/delete)', access: true, levels: ['encode'] };
-  } else if (emp.role === 'None' && emp.position === 'Sales Executive') {
+  } else if (emp.role === 'None' && emp.position === 'Sales Admin Associate') {
     cat.inventory = { label: 'Sees inventory for every branch', access: true, levels: ['view'] };
     cat.transfers = { label: 'Can request transfers (cannot approve)', access: true, levels: ['encode'] };
     cat.branches  = { label: 'Can view and add Subasta/Scrap for any branch (cannot edit/delete)', access: true, levels: ['encode'] };
