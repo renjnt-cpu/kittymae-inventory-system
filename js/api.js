@@ -425,6 +425,33 @@ export async function getTransactionHistory(sku, branchId) {
   return data;
 }
 
+// ---- Pull Out Item (Ren, 2026-09-21) -- a temporary hold on a physical piece
+// (sent for cleaning/repair, borrowed for display, etc.), expected to return to
+// stock later. Admin/Manager only, matching create_pull_out()/return_pull_out()'s
+// own server-side gate exactly. ----
+export async function listPullOuts() {
+  const { data, error } = await supabase
+    .from('pull_out_records')
+    .select('*, products(item_name), branches(name)')
+    .order('pulled_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return attachEmployeeNames(data, { puller: 'pulled_by', returner: 'returned_by' });
+}
+
+export async function createPullOut({ sku, branchId, qty, reason, expectedReturnDate, notes }) {
+  const { data, error } = await supabase.rpc('create_pull_out', {
+    p_sku: sku, p_branch_id: branchId, p_qty: qty, p_reason: reason,
+    p_expected_return_date: expectedReturnDate || null, p_notes: notes || null,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function returnPullOut(id, notes) {
+  const { error } = await supabase.rpc('return_pull_out', { p_id: id, p_notes: notes || null });
+  if (error) throw new Error(error.message);
+}
+
 export async function listTransfers() {
   const { data, error } = await supabase
     .from('inventory_transfers')

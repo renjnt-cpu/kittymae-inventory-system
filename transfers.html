@@ -31,6 +31,7 @@
   </div>
 
   <h2>Transfers</h2>
+  <div class="tiles" id="transfer-tiles"></div>
   <div id="transfer-active"><div class="muted">Loading…</div></div>
 
   <details class="card" style="margin-top:16px;">
@@ -55,6 +56,9 @@ const STATUS_BADGE = {
   'In Transit': 'transit', Received: 'ok', Rejected: 'low', Cancelled: 'low',
 };
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+// Ren's spec section 160: KPI tiles at the top of the page, same pattern as every
+// other module (POS/Layaway/Scrap/Subasta/Online Orders) already uses.
+const tile = (num, label) => '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>';
 
 const employee = await initShell('transfers');
 if (employee) {
@@ -211,6 +215,12 @@ if (employee) {
     const active = rows.filter((t) => !['Received', 'Rejected', 'Cancelled'].includes(t.status));
     const cancelled = rows.filter((t) => ['Rejected', 'Cancelled'].includes(t.status));
     const received = rows.filter((t) => t.status === 'Received');
+    const inTransit = rows.filter((t) => t.status === 'In Transit');
+
+    document.getElementById('transfer-tiles').innerHTML =
+      tile(rows.length, filtered ? 'Matching Transfers' : 'Total Transfers') +
+      tile(active.length, 'Active') + tile(inTransit.length, 'In Transit') +
+      tile(received.length, 'Received') + tile(cancelled.length, 'Cancelled/Rejected');
 
     document.getElementById('transfer-active').innerHTML = active.length ? active.map(renderTransfer).join('')
       : '<p class="muted">No active transfers' + (filtered ? ' match this search.' : '.') + '</p>';

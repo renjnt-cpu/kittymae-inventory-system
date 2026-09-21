@@ -52,6 +52,7 @@ export async function initShell(activePage) {
     products: { label: 'SKU Catalog', href: 'products.html' },
     'item-monitoring': { label: 'Item Monitoring', href: 'item-monitoring.html' },
     transfers: { label: 'Transfers', href: 'transfers.html' },
+    'pull-out': { label: 'Pull Out Item', href: 'pull-out.html' },
     bills: { label: 'Bills', href: 'bills.html' },
     refunds: { label: 'Refunds', href: 'refunds.html' },
     transactions: { label: 'Transactions', href: 'transactions.html' },
@@ -79,6 +80,11 @@ export async function initShell(activePage) {
       { id: 'products', ...ALL_PAGE_DEFS.products },
       { id: 'item-monitoring', ...ALL_PAGE_DEFS['item-monitoring'] },
       { id: 'transfers', ...ALL_PAGE_DEFS.transfers },
+      // Visible to everyone, same tier as Transfers -- the page itself is Admin/
+      // Manager-only for actually pulling out or returning an item (matches
+      // create_pull_out()/return_pull_out()'s own gate), but anyone can see what's
+      // currently out.
+      { id: 'pull-out', ...ALL_PAGE_DEFS['pull-out'] },
       { id: 'bills', ...ALL_PAGE_DEFS.bills },
     );
     // Refunds: anyone can request one, so it's not role-gated like the rest of this
@@ -131,7 +137,7 @@ export async function initShell(activePage) {
   const NAV_GROUPS = [
     { label: 'Overview', ids: ['dashboard'] },
     { label: 'Sales', ids: ['branches', 'refunds'] },
-    { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers'] },
+    { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers', 'pull-out'] },
     { label: 'Operations', ids: ['lbc', 'assets'] },
     { label: 'Finance', ids: ['bills', 'transactions'] },
     { label: 'People', ids: ['hr', 'access-checklist'] },
@@ -146,6 +152,14 @@ export async function initShell(activePage) {
     '</div>';
   }).join('');
   const activeLabel = (pageById[activePage] || {}).label || 'Kittymae Jewels System';
+  // Ren's spec section 159: "Every page should have a clear title and optional
+  // breadcrumb" -- the sidebar group a page lives in doubles as its breadcrumb
+  // trail, so this is free from NAV_GROUPS above rather than a second list to keep
+  // in sync. Dashboard has no meaningful parent group, so it just shows its own name.
+  const activeGroup = NAV_GROUPS.find((g) => g.ids.includes(activePage));
+  const breadcrumbHtml = (activeGroup && activeGroup.label !== 'Overview')
+    ? '<div class="app-breadcrumb">' + esc(activeGroup.label) + ' <span class="app-breadcrumb-sep">/</span> ' + esc(activeLabel) + '</div>'
+    : '';
 
   const shell = document.createElement('div');
   shell.className = 'app-shell';
@@ -158,7 +172,10 @@ export async function initShell(activePage) {
     '<div class="app-main-col">' +
       '<header class="app-header">' +
         '<button type="button" class="app-menu-btn" id="app-menu-btn" aria-label="Open menu">☰</button>' +
-        '<h1 class="app-page-title">' + esc(activeLabel) + '</h1>' +
+        '<div class="app-title-block">' +
+          breadcrumbHtml +
+          '<h1 class="app-page-title">' + esc(activeLabel) + '</h1>' +
+        '</div>' +
         '<div class="who" id="app-header-who"></div>' +
       '</header>' +
     '</div>';
