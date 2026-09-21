@@ -15,7 +15,7 @@ const ACTIVITY_LINKS = {
   pull_out_records: 'pull-out.html?open=',
   inventory_transfers: 'transfers.html?open=',
   inventory_transactions: 'item-monitoring.html',
-  refunds: 'refunds.html',
+  refunds: 'refunds.html?open=',
   products: 'products.html',
 };
 

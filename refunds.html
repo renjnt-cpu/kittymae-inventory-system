@@ -9,462 +9,400 @@
 <body>
 <main>
   <div id="ref-msg"></div>
-  <div id="refunds-root"></div>
+  <!-- Same Form Drawer / Detail Drawer flow as the other modules (Ren's spec 271-288):
+       primary action at the top, Summary tiles, Search & Filters and the active-filter
+       strip, then the records. Requesting happens in the form drawer; a refund's full
+       details, its proof-of-payment photos and the approve/complete/reopen/delete
+       actions live in the detail drawer. Anyone can request; only the approval group
+       sees other people's refunds and the approver actions (RLS + has_refund_approval_
+       access() enforce that server-side -- this page just mirrors it). -->
+  <div class="module-topbar"><div></div><div style="text-align:right;">
+    <button type="button" class="btn" id="ref-new-btn">+ New Refund Request</button>
+  </div></div>
+  <div class="tiles" id="ref-tiles"></div>
+  <div class="card">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Customer, order ID, item…"></div>
+      <div class="field"><label>Status</label><select id="f-status"><option value="all">All Statuses</option><option>Pending Approval</option><option>Approved</option><option>Completed</option></select></div>
+      <div class="field"><label>Requested From</label><input type="date" id="f-from"></div>
+      <div class="field"><label>Requested To</label><input type="date" id="f-to"></div>
+      <button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>
+    </div>
+  </div>
+  <div id="ref-active-filters"></div>
+
+  <h3 style="margin:0 0 8px;" id="ref-list-heading">Active</h3>
+  <div id="ref-list"><div class="muted">Loading…</div></div>
+
+  <details class="card" style="margin-top:16px;">
+    <summary style="cursor:pointer;font-weight:bold;">Completed <span class="muted" id="ref-completed-count" style="font-weight:normal;"></span></summary>
+    <div id="ref-completed" style="margin-top:10px;"></div>
+  </details>
+
+  <div class="drawer-backdrop" id="ref-form-backdrop"></div>
+  <div class="drawer" id="ref-form-drawer">
+    <div class="drawer-header"><h3>New Refund Request</h3><button type="button" class="drawer-close" id="ref-form-close" aria-label="Close">✕</button></div>
+    <div class="drawer-body">
+      <p class="muted" style="margin-top:0;">Submit here — an approver will review it. A photo is optional (e.g. proof of purchase or the item itself); proof of payment is attached by the approver after approval, once it's actually paid out.</p>
+      <form id="ref-form" style="display:flex;flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:8px;">
+        <div class="drawer-section">
+          <h4>Customer</h4>
+          <div class="field"><label>Name *</label><input type="text" name="customerName" required></div>
+          <div class="field"><label>Order ID</label><input type="text" name="orderReference"></div>
+          <div class="field"><label>Date Purchased</label><input type="date" name="purchaseDate"></div>
+          <div class="field"><label>Date Requested</label><input type="date" name="dateRequested"></div>
+        </div>
+        <div class="drawer-section">
+          <h4>Refund</h4>
+          <div class="field"><label>Item</label><input type="text" name="itemDescription"></div>
+          <div class="field"><label>Reason</label><input type="text" name="reason"></div>
+          <div class="field"><label>Amount to Refund (PHP) *</label><input type="number" name="refundAmount" step="0.01" min="0.01" required></div>
+          <div class="field"><label>Refund Method *</label><select name="refundMethod" required><option>GCash</option><option>BDO</option><option>Maya</option><option>BPI</option><option>GoTyme</option><option>Maribank</option><option>Union Bank</option></select></div>
+          <div class="field"><label>Account Name</label><input type="text" name="accountName" placeholder="Payout account name"></div>
+          <div class="field"><label>Account Number</label><input type="text" name="accountNumber" placeholder="Payout account number"></div>
+        </div>
+        <div class="drawer-section">
+          <h4>Notes &amp; Photo</h4>
+          <div class="field"><label>Notes</label><input type="text" name="notes"></div>
+          <div class="field"><label>Photo (optional)</label><input type="file" name="requestPhoto" accept="image/*"></div>
+        </div>
+      </form>
+    </div>
+    <div class="drawer-footer">
+      <button class="btn" type="submit" form="ref-form" id="ref-submit-btn">Add Refund Request</button>
+      <button type="button" class="btn secondary" id="ref-form-cancel">Cancel</button>
+    </div>
+  </div>
+  <div class="drawer-backdrop" id="ref-detail-backdrop"></div>
+  <div class="drawer" id="ref-detail-drawer">
+    <div class="drawer-header"><div><h3 id="ref-detail-title">Refund Details</h3><div class="muted" id="ref-detail-sub"></div></div><button type="button" class="drawer-close" id="ref-detail-close" aria-label="Close">✕</button></div>
+    <div class="drawer-body" id="ref-detail-body"></div>
+  </div>
 </main>
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
 import { listRefunds, createRefund, uploadRefundRequestPhoto, setRefundStatus, deleteRefund, addRefundAttachment, removeRefundAttachment, getRefundAttachmentUrl, subscribeToChanges } from './js/api.js';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons } from './js/uiKit.js';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const STATUS_BADGE = { 'Pending Approval': 'pending', 'Approved': 'transit', 'Completed': 'ok' };
-function tile(num, label) { return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>'; }
+const tile = (num, label) => '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>';
+const paidOf = (r) => (r.refund_attachments || []).reduce((s, a) => s + Number(a.amount || 0), 0);
 
-/** Same customer name + same Order ID appearing on more than one refund is almost
- * always either an accidental double-submission or someone trying to claim a refund
- * twice — flag it in red wherever that name shows up, across every status, so an
- * approver notices before paying it out twice. */
+/** Same customer name + same Order ID on more than one refund is almost always a
+ * double-submission or a double claim -- flagged in red wherever that name shows up,
+ * across every status, so an approver notices before paying it out twice. */
 function duplicateKeySet(rows) {
   const counts = {};
-  rows.forEach((r) => {
-    const key = r.customer_name.trim().toLowerCase() + '|' + (r.order_reference || '').trim().toLowerCase();
-    counts[key] = (counts[key] || 0) + 1;
-  });
+  rows.forEach((r) => { const k = dupKey(r); counts[k] = (counts[k] || 0) + 1; });
   return new Set(Object.keys(counts).filter((k) => counts[k] > 1));
 }
-function dupWarn(r, dupKeys, text) {
-  const key = r.customer_name.trim().toLowerCase() + '|' + (r.order_reference || '').trim().toLowerCase();
-  return dupKeys.has(key) ? '<span style="color:var(--warn);font-weight:bold;" title="Possible duplicate: same Order ID + name appears more than once">' + text + ' ⚠</span>' : text;
-}
-function orderIdLabel(r, dupKeys) { return dupWarn(r, dupKeys, esc(r.order_reference || '(no Order ID)')); }
-function customerLabel(r, dupKeys) { return dupWarn(r, dupKeys, esc(r.customer_name)); }
+const dupKey = (r) => r.customer_name.trim().toLowerCase() + '|' + (r.order_reference || '').trim().toLowerCase();
+const dupWarn = (r, dupKeys, text) => dupKeys.has(dupKey(r))
+  ? '<span style="color:var(--warn);font-weight:bold;" title="Possible duplicate: same Order ID + name appears more than once">' + text + ' ⚠</span>' : text;
 
-/** The optional photo attached to the request itself (proof of purchase, the item,
- * etc.) -- separate from refund_attachments' proof-of-payment photos. */
-function requestPhotoBtn(r) {
-  return r.request_attachment_path
-    ? ' <button class="btn small secondary" type="button" data-view-id="req-' + r.id + '" data-path="' + esc(r.request_attachment_path) + '">View Photo</button>'
-    : '';
-}
-
-/** Any active employee lands here to request a refund. Only the approval group --
- * Admin/Manager/Branch Supervisor (role), Operations Supervisor/Inventory Supervisor/
- * Admin Assistant (position), or the hand-picked refund_approval_access flag (mirrors
- * has_refund_approval_access() in 62_position_managers_refund_scrap_subasta.sql) --
- * gets the full approve/manage view; everyone else gets just the request form plus a
- * read-only list of their own submissions. */
+// Approval group: Admin/Manager/Branch Supervisor (role), Operations Supervisor/
+// Inventory Supervisor/Admin Assistant (position), or the per-employee
+// refund_approval_access flag -- mirrors has_refund_approval_access(). The same
+// position-manager group can delete a refund / remove a wrong attachment
+// (can_edit_refund()).
 const POSITION_MANAGERS = ['Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
 const canApprove = (emp) => ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || POSITION_MANAGERS.includes(emp.position) || !!emp.refund_approval_access;
-// The same position-manager group can also delete a refund / remove a wrong
-// attachment now (can_edit_refund() in 62_position_managers_refund_scrap_subasta.sql),
-// matching the same expanded rule on Scrap/Subasta.
 const canEditRefund = (emp) => ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || POSITION_MANAGERS.includes(emp.position);
-
-const REFUND_FORM_FIELDS =
-  '<div class="field"><label>Name *</label><input type="text" name="customerName" required></div>' +
-  '<div class="field"><label>Order ID</label><input type="text" name="orderReference"></div>' +
-  '<div class="field"><label>Date Purchased</label><input type="date" name="purchaseDate"></div>' +
-  '<div class="field"><label>Date Requested</label><input type="date" name="dateRequested" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
-  '<div class="field"><label>Item</label><input type="text" name="itemDescription"></div>' +
-  '<div class="field"><label>Reason</label><input type="text" name="reason"></div>' +
-  '<div class="field"><label>Refund Method *</label><select name="refundMethod" required><option>GCash</option><option>BDO</option><option>Maya</option><option>BPI</option><option>GoTyme</option><option>Maribank</option><option>Union Bank</option></select></div>' +
-  '<div class="field"><label>Account Name</label><input type="text" name="accountName" placeholder="Payout account name"></div>' +
-  '<div class="field"><label>Account Number</label><input type="text" name="accountNumber" placeholder="Payout account number"></div>' +
-  '<div class="field"><label>Amount to Refund (PHP) *</label><input type="number" name="refundAmount" step="0.01" min="0.01" required></div>' +
-  '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
-  '<div class="field"><label>Photo (optional)</label><input type="file" name="requestPhoto" accept="image/*"></div>';
-
-function readRefundForm(f) {
-  return {
-    customerName: f.customerName.value.trim(), orderReference: f.orderReference.value.trim(),
-    purchaseDate: f.purchaseDate.value || null, dateRequested: f.dateRequested.value || null,
-    itemDescription: f.itemDescription.value.trim(),
-    reason: f.reason.value.trim(), refundMethod: f.refundMethod.value,
-    accountName: f.accountName.value.trim(), accountNumber: f.accountNumber.value.trim(),
-    refundAmount: Number(f.refundAmount.value), notes: f.notes.value.trim(),
-  };
-}
 
 const employee = await initShell('refunds');
 if (employee) {
-  const root = document.getElementById('refunds-root');
+  const approver = canApprove(employee);
+  const editor = canEditRefund(employee);
+  let allRefunds = [];
+  let refSort = null, refSortDir = 'desc';
+  let openDetailId = null;
 
-  if (canApprove(employee)) {
-    renderApproverView();
-  } else {
-    renderRequesterView();
+  if (!approver) document.getElementById('ref-list-heading').textContent = 'My Refund Requests';
+  const form = document.getElementById('ref-form');
+  form.dateRequested.value = new Date().toISOString().slice(0, 10);
+
+  // ---- form drawer ----
+  function openFormDrawer() {
+    document.getElementById('ref-form-backdrop').classList.add('open');
+    document.getElementById('ref-form-drawer').classList.add('open');
+  }
+  function closeFormDrawer() {
+    document.getElementById('ref-form-backdrop').classList.remove('open');
+    document.getElementById('ref-form-drawer').classList.remove('open');
+  }
+  document.getElementById('ref-new-btn').addEventListener('click', openFormDrawer);
+  document.getElementById('ref-form-close').addEventListener('click', closeFormDrawer);
+  document.getElementById('ref-form-cancel').addEventListener('click', closeFormDrawer);
+  document.getElementById('ref-form-backdrop').addEventListener('click', closeFormDrawer);
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    // The submit button lives in .drawer-footer (form="ref-form"), outside this <form>
+    // element's own subtree, so it's reached by its own id.
+    const btn = document.getElementById('ref-submit-btn');
+    btn.disabled = true;
+    try {
+      const newId = await createRefund({
+        customerName: f.customerName.value.trim(), orderReference: f.orderReference.value.trim(),
+        purchaseDate: f.purchaseDate.value || null, dateRequested: f.dateRequested.value || null,
+        itemDescription: f.itemDescription.value.trim(), reason: f.reason.value.trim(), refundMethod: f.refundMethod.value,
+        accountName: f.accountName.value.trim(), accountNumber: f.accountNumber.value.trim(),
+        refundAmount: Number(f.refundAmount.value), notes: f.notes.value.trim(),
+      });
+      if (f.requestPhoto.files[0]) await uploadRefundRequestPhoto(newId, f.requestPhoto.files[0]);
+      toast('ref-msg', 'Refund request added — pending approval.', false);
+      f.reset();
+      f.dateRequested.value = new Date().toISOString().slice(0, 10);
+      closeFormDrawer();
+      await load();
+      // The same drawer system now shows the saved request (spec 273).
+      if (newId != null) { openDetailId = newId; openDetail(newId); }
+    } catch (err) {
+      toast('ref-msg', String(err.message || err), true);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ---- detail drawer ----
+  function closeDetailDrawer() {
+    document.getElementById('ref-detail-backdrop').classList.remove('open');
+    document.getElementById('ref-detail-drawer').classList.remove('open');
+  }
+  document.getElementById('ref-detail-close').addEventListener('click', closeDetailDrawer);
+  document.getElementById('ref-detail-backdrop').addEventListener('click', closeDetailDrawer);
+  function openDetail(id) {
+    const r = allRefunds.find((x) => String(x.id) === String(id));
+    if (!r) return;
+    // .textContent escapes on its own -- esc() here would double-escape.
+    document.getElementById('ref-detail-title').textContent = (r.order_reference ? 'Order #' + r.order_reference + ' — ' : '') + r.customer_name;
+    document.getElementById('ref-detail-sub').textContent = r.status + ' · ' + money(r.refund_amount) + ' via ' + r.refund_method;
+    const body = document.getElementById('ref-detail-body');
+    body.innerHTML = renderDetailBody(r);
+    wireDetailBody(body, r);
+    document.getElementById('ref-detail-backdrop').classList.add('open');
+    document.getElementById('ref-detail-drawer').classList.add('open');
+  }
+  function refreshDetailIfOpen(id) {
+    if (!document.getElementById('ref-detail-drawer').classList.contains('open')) return;
+    if (!allRefunds.find((x) => String(x.id) === String(id))) { closeDetailDrawer(); return; }
+    openDetail(id);
   }
 
-  function renderRequesterView() {
-    root.innerHTML =
-      '<div class="layout-2col">' +
-        '<div class="layout-2col-side">' +
-          '<div class="card">' +
-            '<h3>Add Refund Request</h3>' +
-            '<p class="muted" style="margin-top:-4px;">Submit here — an approver will review it. A photo is optional (e.g. proof of purchase or the item itself).</p>' +
-            '<form id="ref-form" style="flex-direction:column;align-items:stretch;flex-wrap:nowrap;">' + REFUND_FORM_FIELDS +
-              '<button class="btn" type="submit">Add Refund Request</button>' +
-            '</form>' +
-          '</div>' +
-        '</div>' +
-        '<div class="layout-2col-main">' +
-          '<h3>My Refund Requests</h3>' +
-          '<div class="tiles" id="mine-tiles"></div>' +
-          '<div id="ref-list"><div class="muted">Loading…</div></div>' +
-        '</div>' +
-      '</div>';
-
-    document.getElementById('ref-form').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const f = ev.target;
-      try {
-        const newId = await createRefund(readRefundForm(f));
-        if (f.requestPhoto.files[0]) await uploadRefundRequestPhoto(newId, f.requestPhoto.files[0]);
-        toast('ref-msg', 'Refund request added — pending approval.', false);
-        f.reset();
-        await loadMine();
-      } catch (err) {
-        toast('ref-msg', String(err.message || err), true);
-      }
-    });
-
-    let myRows = [];
-    loadMine();
-    subscribeToChanges('refunds', loadMine);
-
-    async function loadMine() {
-      const list = document.getElementById('ref-list');
-      list.innerHTML = '<div class="muted">Loading…</div>';
-      try {
-        myRows = await listRefunds(); // RLS already limits this to the caller's own rows
-        renderMine();
-      } catch (err) {
-        list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
-      }
-    }
-
-    /** Every field shows directly in the row -- no click-to-expand -- matching the
-     * Transactions/Scrap/Subasta lists. Proof of Payment is view-only here (only an
-     * approver processes the payout). */
-    function renderMine() {
-      const list = document.getElementById('ref-list');
-      const mineTotalRequested = myRows.reduce((s, r) => s + Number(r.refund_amount || 0), 0);
-      const mineTotalPaid = myRows.reduce((s, r) => s + (r.refund_attachments || []).reduce((s2, a) => s2 + Number(a.amount || 0), 0), 0);
-      document.getElementById('mine-tiles').innerHTML =
-        tile(myRows.length, 'Qty') + tile(money(mineTotalRequested), 'Total Requested') + tile(money(mineTotalPaid), 'Total Paid');
-      if (!myRows.length) { list.innerHTML = '<p class="muted">No refund requests yet.</p>'; return; }
-      const dupKeys = duplicateKeySet(myRows);
-      const rowsHtml = myRows.map((r) => {
-        const photos = r.refund_attachments || [];
-        const paidSoFar = photos.reduce((s, a) => s + Number(a.amount || 0), 0);
-        const remaining = Number(r.refund_amount || 0) - paidSoFar;
-        return '<tr>' +
-          '<td data-label="Order ID / Customer">' + orderIdLabel(r, dupKeys) + ' — ' + customerLabel(r, dupKeys) + '</td>' +
-          '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
-          '<td data-label="Dates">' + (r.date_requested || '—') + '<div class="muted" style="font-size:10px;">Purchased: ' + (r.purchase_date || '—') + '</div></td>' +
-          '<td data-label="Item / Reason" style="font-size:11px;">' + esc(r.item_description || '—') + (r.reason ? '<div class="muted">' + esc(r.reason) + '</div>' : '') + requestPhotoBtn(r) + '</td>' +
-          '<td data-label="Amount">' + money(r.refund_amount) +
-            (photos.length ? '<div class="muted" style="font-size:10px;">' + money(paidSoFar) + (remaining > 0 ? ' paid · ' + money(remaining) + ' left' : ' paid · fully covered') + '</div>' : '') +
-          '</td>' +
-          '<td data-label="Method / Account" style="font-size:11px;">' + esc(r.refund_method) +
-            (r.account_name || r.account_number ? '<div class="muted">' + esc(r.account_name || '') + (r.account_number ? ' · ' + esc(r.account_number) : '') + '</div>' : '') +
-          '</td>' +
-          '<td data-label="Proof of Payment" style="font-size:11px;">' +
-            (photos.length
-              ? photos.map((a) => '<div>' + money(a.amount) + (a.reference_number ? ' · ' + esc(a.reference_number) : '') + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View Photo</button>' : ' <span class="muted">(no photo)</span>') + '</div>').join('')
-              : '<span class="muted">None yet</span>') +
-          '</td>' +
-          '<td data-label="Notes / Approved by" style="font-size:11px;">' + esc(r.notes || '') + '<div class="muted" style="font-size:10px;">Approved by: ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div></td>' +
-        '</tr>';
-      }).join('');
-      list.innerHTML = '<div class="table-scroll"><table style="min-width:900px;">' +
-        '<thead><tr><th>Order ID / Customer</th><th>Status</th><th>Dates</th><th>Item / Reason</th><th>Amount</th><th>Method / Account</th><th>Proof of Payment</th><th>Notes / Approved by</th></tr></thead>' +
-        '<tbody>' + rowsHtml + '</tbody>' +
-        '</table></div>';
-
-      list.querySelectorAll('[data-view-id]').forEach((btn) => btn.addEventListener('click', async () => {
-        try { window.open(await getRefundAttachmentUrl(btn.dataset.path), '_blank'); }
-        catch (err) { toast('ref-msg', String(err.message || err), true); }
-      }));
-    }
-  }
-
-  function renderApproverView() {
-    root.innerHTML =
-      '<div class="layout-3col">' +
-        '<div class="layout-3col-side">' +
-          '<div class="card">' +
-            '<h3>Add Refund Request</h3>' +
-            '<p class="muted" style="margin-top:-4px;">A photo here is optional (e.g. proof of purchase or the item itself) — separate from proof-of-payment, which gets attached after approval once it\'s actually paid out.</p>' +
-            '<form id="ref-form" style="flex-direction:column;align-items:stretch;flex-wrap:nowrap;">' + REFUND_FORM_FIELDS +
-              '<button class="btn" type="submit">Add Refund Request</button>' +
-            '</form>' +
-          '</div>' +
-        '</div>' +
-        '<div class="layout-3col-main">' +
-          '<div class="tiles" id="ref-tiles"></div>' +
-          '<div class="card">' +
-            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
-              '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="Customer, order ID, item…"></div>' +
-              '<div class="field"><label>Status</label><select id="f-status"><option value="all">All Statuses</option><option>Pending Approval</option><option>Approved</option></select></div>' +
-              '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
-            '</div>' +
-          '</div>' +
-          '<div id="ref-list"><div class="muted">Loading…</div></div>' +
-        '</div>' +
-        '<div class="layout-3col-right">' +
-          '<div class="card">' +
-            '<h3>Completed</h3>' +
-            '<div class="field"><label>Filter Order ID</label><input type="text" id="completed-search" placeholder="Order ID…"></div>' +
-            '<div id="completed-list"><div class="muted">Loading…</div></div>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-
-    document.getElementById('ref-form').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const f = ev.target;
-      try {
-        const newId = await createRefund(readRefundForm(f));
-        if (f.requestPhoto.files[0]) await uploadRefundRequestPhoto(newId, f.requestPhoto.files[0]);
-        toast('ref-msg', 'Refund request added — pending approval.', false);
-        f.reset();
-        await load();
-      } catch (err) {
-        toast('ref-msg', String(err.message || err), true);
-      }
-    });
-
-    let allRefunds = [];
-    // null = natural/insertion order until a header is clicked.
-    let refSort = null, refSortDir = 'desc';
-    load();
-    subscribeToChanges(['refunds', 'refund_attachments'], load);
-
-    document.getElementById('f-search').addEventListener('input', render);
-    document.getElementById('f-status').addEventListener('change', render);
-    document.getElementById('f-clear').addEventListener('click', () => {
-      document.getElementById('f-search').value = '';
-      document.getElementById('f-status').value = 'all';
+  async function load() {
+    const list = document.getElementById('ref-list');
+    list.innerHTML = '<div class="muted">Loading…</div>';
+    try {
+      allRefunds = await listRefunds(); // RLS: every row for approvers, only their own for everyone else
       render();
-    });
-    document.getElementById('completed-search').addEventListener('input', renderCompletedPanel);
-
-    async function load() {
-      const list = document.getElementById('ref-list');
-      list.innerHTML = '<div class="muted">Loading…</div>';
-      try {
-        allRefunds = await listRefunds();
-        render();
-      } catch (err) {
-        list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
-      }
-    }
-
-    /** Completed refunds move out of the main table entirely and live in the
-     * right-side panel instead. Every field shows directly -- no click-to-expand --
-     * same as the main list, just in a narrower table for this panel's width. */
-    function renderCompletedPanel() {
-      const box = document.getElementById('completed-list');
-      const q = document.getElementById('completed-search').value.trim().toLowerCase();
-      let completed = allRefunds.filter((r) => r.status === 'Completed');
-      if (q) completed = completed.filter((r) => (r.order_reference || '').toLowerCase().includes(q));
-      if (!completed.length) { box.innerHTML = '<p class="muted">No completed refunds yet.</p>'; return; }
-
-      const dupKeys = duplicateKeySet(allRefunds);
-      const total = completed.reduce((s, r) => s + Number(r.refund_amount || 0), 0);
-      // Stacked cards, not a table -- this panel is a fixed 280px-wide sidebar
-      // (css/styles.css .layout-3col-right) at every viewport width, and the old
-      // min-width:420px table never actually fit it, forcing an internal horizontal
-      // scrollbar that crowded/overlapped the rest of the card. A narrow panel showing
-      // a handful of fields per completed refund reads fine stacked; it never needs to
-      // be a grid. Qty/Total sits at the top now, not buried below every card.
-      const summaryHtml = '<div class="completed-item" style="font-weight:bold;background:#f7f7f7;margin:0 -16px 10px;padding:10px 16px;border-radius:10px 10px 0 0;">Qty: ' + completed.length + ' · ' + money(total) + '</div>';
-      const itemsHtml = completed.map((r) => {
-        const photos = r.refund_attachments || [];
-        return '<div class="completed-item">' +
-          '<div>' + orderIdLabel(r, dupKeys) + ' — ' + customerLabel(r, dupKeys) + requestPhotoBtn(r) + '</div>' +
-          '<div class="muted" style="font-size:10px;">' + esc(r.item_description || '') + '</div>' +
-          '<div style="margin-top:4px;"><b>' + money(r.refund_amount) + '</b> <span class="muted">— ' + esc(r.refund_method) + '</span></div>' +
-          '<div style="font-size:11px;margin-top:2px;">' +
-            (photos.length
-              ? photos.map((a) => '<div>' + money(a.amount) + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View Photo</button>' : '') + '</div>').join('')
-              : '<span class="muted">No proof of payment</span>') +
-          '</div>' +
-          '<div class="muted" style="font-size:10px;margin-top:2px;">By ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
-          '<button class="btn small secondary" type="button" data-id="' + r.id + '" data-act="reopen" style="margin-top:6px;">Reopen</button>' +
-        '</div>';
-      }).join('');
-      box.innerHTML = summaryHtml + itemsHtml;
-
-      box.querySelectorAll('[data-view-id]').forEach((btn) => btn.addEventListener('click', async () => {
-        try { window.open(await getRefundAttachmentUrl(btn.dataset.path), '_blank'); }
-        catch (err) { toast('ref-msg', String(err.message || err), true); }
-      }));
-      box.querySelectorAll('[data-act="reopen"]').forEach((btn) => btn.addEventListener('click', async () => {
-        try { await setRefundStatus(btn.dataset.id, 'Approved'); toast('ref-msg', 'Reopened to Approved.', false); await load(); }
-        catch (err) { toast('ref-msg', String(err.message || err), true); }
-      }));
-    }
-
-    function render() {
-      const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
-      const fStatus = document.getElementById('f-status').value;
-      let filtered = allRefunds;
-      if (fSearch) filtered = filtered.filter((r) =>
-        r.customer_name.toLowerCase().includes(fSearch) ||
-        (r.order_reference || '').toLowerCase().includes(fSearch) ||
-        (r.item_description || '').toLowerCase().includes(fSearch));
-      if (fStatus !== 'all') filtered = filtered.filter((r) => r.status === fStatus);
-
-      const pendingCount = filtered.filter((r) => r.status === 'Pending Approval').length;
-      const approvedCount = filtered.filter((r) => r.status === 'Approved').length;
-      const completedTotal = allRefunds.filter((r) => r.status === 'Completed').reduce((s, r) => s + Number(r.refund_amount || 0), 0);
-      // Completed refunds live in the right-side panel, not this table.
-      let rows = filtered.filter((r) => r.status !== 'Completed');
-      if (refSort) {
-        const dirMul = refSortDir === 'desc' ? -1 : 1;
-        rows = [...rows].sort((a, b) => {
-          const av = a[refSort], bv = b[refSort];
-          const cmp = refSort === 'refund_amount' ? Number(av || 0) - Number(bv || 0) : String(av || '').localeCompare(String(bv || ''));
-          return cmp * dirMul;
-        });
-      }
-      const activeTotal = rows.reduce((s, r) => s + Number(r.refund_amount || 0), 0);
-      const activePaid = rows.reduce((s, r) => s + (r.refund_attachments || []).reduce((s2, a) => s2 + Number(a.amount || 0), 0), 0);
-      const activeRemaining = rows.reduce((s, r) => {
-        const paid = (r.refund_attachments || []).reduce((s2, a) => s2 + Number(a.amount || 0), 0);
-        return s + Math.max(Number(r.refund_amount || 0) - paid, 0);
-      }, 0);
-      document.getElementById('ref-tiles').innerHTML =
-        tile(String(rows.length), 'Qty') + tile(money(activeTotal), 'Total Amount (Pending + Approved)') +
-        tile(money(activePaid), 'Total Paid') + tile(money(activeRemaining), 'Total Remaining') +
-        tile(String(pendingCount), 'Pending Approval') + tile(String(approvedCount), 'Approved') + tile(money(completedTotal), 'Total Refunded');
-
-      renderCompletedPanel();
-
-      const list = document.getElementById('ref-list');
-      if (!rows.length) { list.innerHTML = '<p class="muted">No refunds for this filter.</p>'; return; }
-
-      // Every field shows directly in the row -- no click-to-expand -- matching
-      // Transactions/Scrap/Subasta. Add Proof of Payment is an always-visible inline
-      // form (no "+ Add" toggle first) once the refund is past Pending Approval.
-      const dupKeys = duplicateKeySet(allRefunds);
-      const rowsHtml = rows.map((r) => {
-        const photos = r.refund_attachments || [];
-        const paidSoFar = photos.reduce((s, a) => s + Number(a.amount || 0), 0);
-        const remaining = Number(r.refund_amount || 0) - paidSoFar;
-        const canAttach = r.status !== 'Pending Approval';
-        const canComplete = r.status === 'Approved' && remaining <= 0;
-        return '<tr' + (r.status === 'Pending Approval' ? ' style="background:#fff8e8;"' : '') + '>' +
-          '<td data-label="Order ID">' + orderIdLabel(r, dupKeys) + requestPhotoBtn(r) + '</td>' +
-          '<td data-label="Customer">' + customerLabel(r, dupKeys) +
-            '<div class="muted" style="font-size:10px;">' + esc(r.item_description || '') + (r.reason ? ' · ' + esc(r.reason) : '') + '</div>' +
-          '</td>' +
-          '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
-          '<td data-label="Dates">' + (r.date_requested || '—') + '<div class="muted" style="font-size:10px;">Purchased: ' + (r.purchase_date || '—') + '</div></td>' +
-          '<td data-label="Amount">' + money(r.refund_amount) +
-            (photos.length ? '<div class="muted" style="font-size:10px;">' + money(paidSoFar) + (remaining > 0 ? ' paid · ' + money(remaining) + ' left' : ' paid · fully covered') + '</div>' : '') +
-          '</td>' +
-          '<td data-label="Method / Account" style="font-size:11px;">' + esc(r.refund_method) +
-            (r.account_name || r.account_number ? '<div class="muted">' + esc(r.account_name || '') + (r.account_number ? ' · ' + esc(r.account_number) : '') + '</div>' : '') +
-          '</td>' +
-          '<td data-label="Proof of Payment" style="font-size:11px;">' +
-            (photos.length
-              ? photos.map((a) => '<div style="margin-bottom:2px;">' + money(a.amount) + (a.reference_number ? ' · ' + esc(a.reference_number) : '') + (a.attachment_path ? ' <button class="btn small secondary" data-view-id="' + a.id + '" data-path="' + esc(a.attachment_path) + '">View Photo</button>' : ' <span class="muted">(no photo)</span>') + (canEditRefund(employee) ? ' <button class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path || '') + '">✕</button>' : '') + '</div>').join('')
-              : '<span class="muted">None yet</span>') +
-            (canAttach
-              ? '<form class="add-proof-form" data-refund-id="' + r.id + '" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">' +
-                  '<input type="number" name="amount" step="0.01" min="0.01" placeholder="Amount" required style="width:70px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:11px;">' +
-                  '<input type="text" name="referenceNumber" placeholder="Reference" required style="width:80px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:11px;">' +
-                  '<input type="file" name="photo" accept="image/*" style="font-size:10px;width:90px;">' +
-                  '<button class="btn small" type="submit">Save</button>' +
-                '</form>'
-              : '<div class="muted" style="font-size:11px;">Approve first</div>') +
-          '</td>' +
-          '<td data-label="Notes / By" style="font-size:11px;">' + esc(r.notes || '') +
-            '<div class="muted" style="font-size:10px;">Req by: ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div>' +
-            '<div class="muted" style="font-size:10px;">App by: ' + (r.approver ? esc(r.approver.full_name) : '—') + '</div>' +
-          '</td>' +
-          '<td style="white-space:nowrap;">' +
-            (r.status === 'Pending Approval' ? '<button class="btn small" data-id="' + r.id + '" data-act="approve">Approve</button> ' : '') +
-            (r.status === 'Approved' ? (canComplete
-                ? '<button class="btn small" data-id="' + r.id + '" data-act="complete">Mark Completed</button> '
-                : '<span class="muted" style="font-size:11px;">' + money(remaining) + ' left</span> ')
-              : '') +
-            (canEditRefund(employee) ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' : '') +
-          '</td>' +
-        '</tr>';
-      }).join('');
-      // Sort control sits beside the column's own name, same pattern as the Scrap
-      // Encoding Activity leaderboard and Bills.
-      const sortTh = (key, label) => {
-        const active = refSort === key;
-        const arrow = active ? (refSortDir === 'desc' ? ' ▼' : ' ▲') : '';
-        return '<th><button type="button" class="btn small' + (active ? '' : ' secondary') + '" data-ref-sort="' + key + '" style="padding:2px 8px;">' + label + arrow + '</button></th>';
-      };
-      list.innerHTML = '<div class="table-scroll"><table style="min-width:1000px;">' +
-        '<thead><tr>' + sortTh('order_reference', 'Order ID') + sortTh('customer_name', 'Customer') + sortTh('status', 'Status') + sortTh('date_requested', 'Dates') +
-          sortTh('refund_amount', 'Amount') + '<th>Method / Account</th><th>Proof of Payment</th><th>Notes / By</th><th></th></tr></thead>' +
-        '<tbody>' + rowsHtml + '</tbody>' +
-        '</table></div>';
-
-      list.querySelectorAll('[data-ref-sort]').forEach((btn) => btn.addEventListener('click', () => {
-        const key = btn.dataset.refSort;
-        if (refSort === key) { refSortDir = refSortDir === 'desc' ? 'asc' : 'desc'; }
-        else { refSort = key; refSortDir = 'desc'; }
-        render();
-      }));
-
-      list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
-        const id = btn.dataset.id;
-        try {
-          if (btn.dataset.act === 'approve') { await setRefundStatus(id, 'Approved'); toast('ref-msg', 'Approved.', false); await load(); }
-          else if (btn.dataset.act === 'complete') { await setRefundStatus(id, 'Completed'); toast('ref-msg', 'Marked completed.', false); await load(); }
-          else if (btn.dataset.act === 'reopen') { await setRefundStatus(id, 'Approved'); toast('ref-msg', 'Reopened to Approved.', false); await load(); }
-          else if (btn.dataset.act === 'delete') { if (!confirm('Delete this refund?')) return; await deleteRefund(id); toast('ref-msg', 'Deleted.', false); await load(); }
-        } catch (err) {
-          toast('ref-msg', String(err.message || err), true);
-        }
-      }));
-
-      list.querySelectorAll('[data-view-id]').forEach((btn) => btn.addEventListener('click', async () => {
-        try { window.open(await getRefundAttachmentUrl(btn.dataset.path), '_blank'); }
-        catch (err) { toast('ref-msg', String(err.message || err), true); }
-      }));
-
-      list.querySelectorAll('[data-remove-id]').forEach((btn) => btn.addEventListener('click', async () => {
-        if (!confirm('Remove this proof of payment?')) return;
-        try { await removeRefundAttachment(btn.dataset.removeId, btn.dataset.path); toast('ref-msg', 'Removed.', false); await load(); }
-        catch (err) { toast('ref-msg', String(err.message || err), true); }
-      }));
-
-      list.querySelectorAll('.add-proof-form').forEach((form) => form.addEventListener('submit', async (ev) => {
-        ev.preventDefault();
-        const refundId = form.dataset.refundId;
-        const file = form.photo.files[0];
-        const amount = Number(form.amount.value);
-        const referenceNumber = form.referenceNumber.value.trim();
-        try {
-          await addRefundAttachment(refundId, amount, file, referenceNumber);
-          // Auto-complete once the attached proof-of-payment fully covers the refund
-          // amount -- no separate manual "Mark Completed" click needed. The "Mark
-          // Completed" button stays as a manual fallback for edge cases.
-          const refund = allRefunds.find((x) => String(x.id) === String(refundId));
-          if (refund) {
-            const paidSoFar = (refund.refund_attachments || []).reduce((s, a) => s + Number(a.amount || 0), 0) + amount;
-            if (refund.status === 'Approved' && paidSoFar >= Number(refund.refund_amount || 0)) {
-              await setRefundStatus(refundId, 'Completed');
-            }
-          }
-          toast('ref-msg', 'Proof of payment added.', false);
-          await load();
-        } catch (err) {
-          toast('ref-msg', String(err.message || err), true);
-        }
-      }));
+      if (openDetailId != null) refreshDetailIfOpen(openDetailId);
+    } catch (err) {
+      list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
     }
   }
+
+  // ---- filters + lists ----
+  function currentFilters() {
+    return {
+      q: document.getElementById('f-search').value.trim().toLowerCase(),
+      status: document.getElementById('f-status').value,
+      from: document.getElementById('f-from').value,
+      to: document.getElementById('f-to').value,
+    };
+  }
+  function rowHtml(r, dupKeys) {
+    const paid = paidOf(r);
+    const remaining = Number(r.refund_amount || 0) - paid;
+    return '<tr' + (r.status === 'Pending Approval' ? ' style="background:#fff8e8;"' : '') + '>' +
+      '<td data-label="Order ID">' + dupWarn(r, dupKeys, esc(r.order_reference || '(no Order ID)')) + '</td>' +
+      '<td data-label="Customer" class="full-row">' + dupWarn(r, dupKeys, esc(r.customer_name)) +
+        '<div class="muted" style="font-size:10px;">' + esc(r.item_description || '') + (r.reason ? ' · ' + esc(r.reason) : '') + '</div></td>' +
+      '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
+      '<td data-label="Requested">' + (r.date_requested || '—') + '</td>' +
+      '<td data-label="Amount">' + money(r.refund_amount) +
+        ((r.refund_attachments || []).length ? '<div class="muted" style="font-size:10px;">' + money(paid) + (remaining > 0 ? ' paid · ' + money(remaining) + ' left' : ' paid · covered') + '</div>' : '') + '</td>' +
+      '<td data-label="Method">' + esc(r.refund_method) + '</td>' +
+      '<td class="full-row"><button type="button" class="btn small secondary" data-act="view-details" data-id="' + r.id + '">View Details</button></td>' +
+    '</tr>';
+  }
+  function sortRows(rows) {
+    if (!refSort) return rows;
+    const dirMul = refSortDir === 'desc' ? -1 : 1;
+    return [...rows].sort((a, b) => {
+      const av = a[refSort], bv = b[refSort];
+      const cmp = refSort === 'refund_amount' ? Number(av || 0) - Number(bv || 0) : String(av || '').localeCompare(String(bv || ''));
+      return cmp * dirMul;
+    });
+  }
+  const sortTh = (key, label) => {
+    const active = refSort === key;
+    return '<th><button type="button" class="btn small' + (active ? '' : ' secondary') + '" data-ref-sort="' + key + '" style="padding:2px 8px;">' + label + (active ? (refSortDir === 'desc' ? ' ▼' : ' ▲') : '') + '</button></th>';
+  };
+  const tableHtml = (rows, dupKeys) => '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
+    '<colgroup><col style="width:14%"><col style="width:26%"><col style="width:14%"><col style="width:12%"><col style="width:12%"><col style="width:10%"><col style="width:12%"></colgroup>' +
+    '<thead><tr>' + sortTh('order_reference', 'Order ID') + sortTh('customer_name', 'Customer') + sortTh('status', 'Status') + sortTh('date_requested', 'Requested') + sortTh('refund_amount', 'Amount') + '<th>Method</th><th></th></tr></thead>' +
+    '<tbody>' + rows.map((r) => rowHtml(r, dupKeys)).join('') + '</tbody></table></div>';
+
+  function render() {
+    const f = currentFilters();
+    let filtered = allRefunds;
+    if (f.q) filtered = filtered.filter((r) => r.customer_name.toLowerCase().includes(f.q) || (r.order_reference || '').toLowerCase().includes(f.q) || (r.item_description || '').toLowerCase().includes(f.q));
+    if (f.status !== 'all') filtered = filtered.filter((r) => r.status === f.status);
+    if (f.from) filtered = filtered.filter((r) => r.date_requested && r.date_requested >= f.from);
+    if (f.to) filtered = filtered.filter((r) => r.date_requested && r.date_requested <= f.to);
+    const hasFilters = !!(f.q || f.status !== 'all' || f.from || f.to);
+
+    const active = sortRows(filtered.filter((r) => r.status !== 'Completed'));
+    const completed = sortRows(filtered.filter((r) => r.status === 'Completed'));
+    const dupKeys = duplicateKeySet(allRefunds);
+
+    // Tiles, the active-filter strip, both lists and the folder count follow the same
+    // filters (MASTER UI rules 6/19/20/28).
+    const sum = (rows, fn) => rows.reduce((s, r) => s + fn(r), 0);
+    document.getElementById('ref-tiles').innerHTML = approver
+      ? tile(active.length, 'Qty') + tile(money(sum(active, (r) => Number(r.refund_amount || 0))), 'Total Amount (Pending + Approved)') +
+        tile(money(sum(active, paidOf)), 'Total Paid') + tile(money(sum(active, (r) => Math.max(Number(r.refund_amount || 0) - paidOf(r), 0))), 'Total Remaining') +
+        tile(active.filter((r) => r.status === 'Pending Approval').length, 'Pending Approval') + tile(active.filter((r) => r.status === 'Approved').length, 'Approved') +
+        tile(money(sum(completed, (r) => Number(r.refund_amount || 0))), 'Total Refunded')
+      : tile(filtered.length, 'Qty') + tile(money(sum(filtered, (r) => Number(r.refund_amount || 0))), 'Total Requested') + tile(money(sum(filtered, paidOf)), 'Total Paid');
+    const activeEl = document.getElementById('ref-active-filters');
+    activeEl.innerHTML = activeFiltersHtml([
+      { label: 'Search', value: esc(f.q) }, { label: 'Status', value: esc(f.status) },
+      { label: 'Requested From', value: esc(f.from) }, { label: 'Requested To', value: esc(f.to) },
+    ], 'f-clear');
+    wireProxyButtons(activeEl);
+
+    const list = document.getElementById('ref-list');
+    list.innerHTML = active.length ? tableHtml(active, dupKeys)
+      : emptyStateHtml({ message: hasFilters ? 'No refunds match these filters.' : (approver ? 'No pending or approved refunds.' : 'No refund requests yet.'), hasFilters, clearId: 'f-clear', createLabel: '+ New Refund Request', createId: 'ref-new-btn' });
+    wireProxyButtons(list);
+
+    document.getElementById('ref-completed-count').textContent = '(' + completed.length + (completed.length ? ' · ' + money(sum(completed, (r) => Number(r.refund_amount || 0))) : '') + ')';
+    const completedBox = document.getElementById('ref-completed');
+    completedBox.innerHTML = completed.length ? tableHtml(completed, dupKeys)
+      : emptyStateHtml({ message: hasFilters ? 'No completed refunds match these filters.' : 'No completed refunds yet.', hasFilters, clearId: 'f-clear' });
+    wireProxyButtons(completedBox);
+
+    document.querySelectorAll('[data-ref-sort]').forEach((btn) => btn.addEventListener('click', () => {
+      const key = btn.dataset.refSort;
+      if (refSort === key) refSortDir = refSortDir === 'desc' ? 'asc' : 'desc'; else { refSort = key; refSortDir = 'desc'; }
+      render();
+    }));
+    document.querySelectorAll('[data-act="view-details"]').forEach((btn) => btn.addEventListener('click', () => { openDetailId = btn.dataset.id; openDetail(openDetailId); }));
+  }
+
+  // ---- detail drawer body ----
+  const kv = (label, value) => value ? '<div class="drawer-kv"><span>' + label + '</span><b>' + value + '</b></div>' : '';
+  function renderDetailBody(r) {
+    const dupKeys = duplicateKeySet(allRefunds);
+    const photos = r.refund_attachments || [];
+    const paid = paidOf(r);
+    const remaining = Number(r.refund_amount || 0) - paid;
+    const canAttach = approver && r.status !== 'Pending Approval';
+    const canComplete = r.status === 'Approved' && remaining <= 0;
+    let actions = '';
+    if (approver) {
+      if (r.status === 'Pending Approval') actions += '<button type="button" class="btn small" data-act="approve">Approve</button> ';
+      if (r.status === 'Approved') actions += canComplete
+        ? '<button type="button" class="btn small" data-act="complete">Mark Completed</button> '
+        : '<span class="muted" style="font-size:11px;">' + money(remaining) + ' still to pay out before this can be completed</span> ';
+      if (r.status === 'Completed') actions += '<button type="button" class="btn small secondary" data-act="reopen">Reopen</button> ';
+      if (editor) actions += '<button type="button" class="btn small secondary" data-act="delete">Delete</button>';
+    }
+    return '<div class="drawer-section"><h4>Request</h4>' +
+      '<div class="drawer-kv"><span>Customer</span><b>' + dupWarn(r, dupKeys, esc(r.customer_name)) + '</b></div>' +
+      '<div class="drawer-kv"><span>Order ID</span><b>' + dupWarn(r, dupKeys, esc(r.order_reference || '—')) + '</b></div>' +
+      kv('Item', esc(r.item_description || '')) + kv('Reason', esc(r.reason || '')) +
+      '<div class="drawer-kv"><span>Date Purchased</span><b>' + (r.purchase_date || '—') + '</b></div>' +
+      '<div class="drawer-kv"><span>Date Requested</span><b>' + (r.date_requested || '—') + '</b></div>' +
+      '<div class="drawer-kv"><span>Status</span><b><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></b></div>' +
+      '<div class="drawer-kv"><span>Requested By</span><b>' + esc(r.creator ? r.creator.full_name : '—') + '</b></div>' +
+      '<div class="drawer-kv"><span>Approved By</span><b>' + esc(r.approver ? r.approver.full_name : '—') + '</b></div>' +
+      kv('Notes', esc(r.notes || '')) +
+      (r.request_attachment_path ? '<div style="margin-top:8px;"><button type="button" class="btn small secondary" data-view-path="' + esc(r.request_attachment_path) + '">View Request Photo</button></div>' : '') +
+    '</div>' +
+    '<div class="drawer-section"><h4>Refund</h4>' +
+      '<div class="drawer-kv"><span>Amount</span><b>' + money(r.refund_amount) + '</b></div>' +
+      '<div class="drawer-kv"><span>Method</span><b>' + esc(r.refund_method) + '</b></div>' +
+      kv('Account Name', esc(r.account_name || '')) + kv('Account Number', esc(r.account_number || '')) +
+      '<div class="drawer-kv"><span>Paid So Far</span><b>' + money(paid) + '</b></div>' +
+      '<div class="drawer-kv"><span>Remaining</span><b style="color:' + (remaining > 0 ? '#b23c3c' : 'var(--ok)') + ';">' + money(Math.max(remaining, 0)) + '</b></div>' +
+    '</div>' +
+    '<div class="drawer-section"><h4>Proof of Payment</h4>' +
+      (photos.length
+        ? photos.map((a) => '<div class="payment-line">' +
+            '<div>' + money(a.amount) + (a.reference_number ? ' · Ref ' + esc(a.reference_number) : '') + '</div>' +
+            '<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;">' +
+              (a.attachment_path ? '<button type="button" class="btn small secondary" data-view-path="' + esc(a.attachment_path) + '">View Photo</button>' : '<span class="muted" style="font-size:11px;">(no photo)</span>') +
+              (editor ? '<button type="button" class="btn small secondary" data-remove-id="' + a.id + '" data-path="' + esc(a.attachment_path || '') + '">Remove</button>' : '') +
+            '</div></div>').join('')
+        : '<p class="muted" style="margin:0;">None yet.</p>') +
+      (canAttach
+        ? '<form id="ref-proof-form" style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">' +
+            '<div class="field"><label>Amount Paid (PHP) *</label><input type="number" name="amount" step="0.01" min="0.01" required></div>' +
+            '<div class="field"><label>Reference *</label><input type="text" name="referenceNumber" required></div>' +
+            '<div class="field"><label>Photo</label><input type="file" name="photo" accept="image/*"></div>' +
+            '<button class="btn small" type="submit" style="align-self:flex-start;">Add Proof of Payment</button>' +
+          '</form>'
+        : (approver && r.status === 'Pending Approval' ? '<p class="muted" style="margin:8px 0 0;font-size:11px;">Approve first to record a payout.</p>' : '')) +
+    '</div>' +
+    (actions ? '<div class="drawer-section"><h4>Actions</h4>' + actions + '</div>' : '');
+  }
+
+  function wireDetailBody(container, r) {
+    const done = async (msg) => { toast('ref-msg', msg, false); await load(); };
+    const fail = (err) => toast('ref-msg', String(err.message || err), true);
+    container.querySelectorAll('[data-view-path]').forEach((btn) => btn.addEventListener('click', async () => {
+      try { window.open(await getRefundAttachmentUrl(btn.dataset.viewPath), '_blank'); } catch (err) { fail(err); }
+    }));
+    container.querySelector('[data-act="approve"]')?.addEventListener('click', async () => { try { await setRefundStatus(r.id, 'Approved'); done('Approved.'); } catch (err) { fail(err); } });
+    container.querySelector('[data-act="complete"]')?.addEventListener('click', async () => { try { await setRefundStatus(r.id, 'Completed'); done('Marked completed.'); } catch (err) { fail(err); } });
+    container.querySelector('[data-act="reopen"]')?.addEventListener('click', async () => { try { await setRefundStatus(r.id, 'Approved'); done('Reopened to Approved.'); } catch (err) { fail(err); } });
+    container.querySelector('[data-act="delete"]')?.addEventListener('click', async () => {
+      if (!confirm('Delete this refund?')) return;
+      try { await deleteRefund(r.id); closeDetailDrawer(); done('Deleted.'); } catch (err) { fail(err); }
+    });
+    container.querySelectorAll('[data-remove-id]').forEach((btn) => btn.addEventListener('click', async () => {
+      if (!confirm('Remove this proof of payment?')) return;
+      try { await removeRefundAttachment(btn.dataset.removeId, btn.dataset.path); done('Removed.'); } catch (err) { fail(err); }
+    }));
+    container.querySelector('#ref-proof-form')?.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const f = ev.target;
+      const amount = Number(f.amount.value);
+      const save = f.querySelector('button[type=submit]');
+      save.disabled = true;
+      try {
+        await addRefundAttachment(r.id, amount, f.photo.files[0], f.referenceNumber.value.trim());
+        // Auto-complete once the attached proof fully covers the refund amount -- the
+        // manual "Mark Completed" stays as a fallback for edge cases.
+        if (r.status === 'Approved' && paidOf(r) + amount >= Number(r.refund_amount || 0)) await setRefundStatus(r.id, 'Completed');
+        done('Proof of payment added.');
+      } catch (err) { fail(err); save.disabled = false; }
+    });
+  }
+
+  document.getElementById('f-search').addEventListener('input', render);
+  ['f-status', 'f-from', 'f-to'].forEach((id) => document.getElementById(id).addEventListener('change', render));
+  document.getElementById('f-clear').addEventListener('click', () => {
+    document.getElementById('f-search').value = '';
+    document.getElementById('f-status').value = 'all';
+    document.getElementById('f-from').value = '';
+    document.getElementById('f-to').value = '';
+    render();
+  });
+
+  // A clicked activity notification opens the refund here in place (spec 321), or via
+  // ?open=<id> when arriving from another page.
+  window.__kmOpenRecord = (table, id) => { if (table !== 'refunds') return false; openDetailId = id; openDetail(id); return true; };
+
+  await load();
+  const deepLinkId = new URLSearchParams(window.location.search).get('open');
+  if (deepLinkId) { openDetailId = deepLinkId; openDetail(deepLinkId); }
+  subscribeToChanges(['refunds', 'refund_attachments'], load);
 }
 </script>
 </body>
