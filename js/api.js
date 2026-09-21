@@ -1259,7 +1259,10 @@ export async function listLayaways(branchId) {
   if (branchId != null) query = query.eq('branch_id', branchId);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return attachEmployeeNames(data, { creator: 'created_by', handler: 'handled_by' });
+  return attachEmployeeNames(data, {
+    creator: 'created_by', handler: 'handled_by',
+    completer: 'completed_by', canceller: 'cancelled_by', forfeiter: 'forfeited_by',
+  });
 }
 
 /** stockStatus: 'In Stock' (default, reserves an existing piece immediately) or
