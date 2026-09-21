@@ -13,9 +13,14 @@ const ERP_BLOCKED_JOB_TITLES = [];
 // transfers and item monitoring"; 2026-09-17: added Refunds too, "only there request
 // can see in the refunds" -- refunds.html's own canApprove() check already renders the
 // request-only view, showing just the caller's own rows, for anyone without
-// has_refund_approval_access()) -- full access to just these pages, nothing else in
-// the sidebar, regardless of what role/position/extra_page_access would otherwise grant.
-const ERP_SCOPED_JOB_TITLES = { 'Sales Admin Associate': ['item-monitoring', 'transfers', 'refunds'] };
+// has_refund_approval_access()); 2026-09-21: added Branches too, "sales admin
+// associate in 201 file can access to layaway" -- Layaway lives inside the Branches
+// page as a sub-tab, so this is what makes it reachable. Every one of these
+// employees holds the Sales Executive position, which layawayTab.js's own
+// UNSCOPED_POSITIONS already lets act company-wide once they can reach the page --
+// full access to just these pages, nothing else in the sidebar, regardless of what
+// role/position/extra_page_access would otherwise grant.
+const ERP_SCOPED_JOB_TITLES = { 'Sales Admin Associate': ['item-monitoring', 'transfers', 'refunds', 'branches'] };
 
 export async function initShell(activePage) {
   const session = await requireSession();
