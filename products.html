@@ -17,6 +17,7 @@ import { initShell, toast, esc } from './js/shell.js';
 import {
   listProducts, updateProduct, getBranches, listAllInventoryQty, subscribeToChanges,
   requestProductEdit, listProductEditRequests, approveProductEdit, rejectProductEdit,
+  setProductStatus, listProductLastChanges,
 } from './js/api.js';
 import { branchColor } from './js/branchColors.js';
 
@@ -41,19 +42,27 @@ if (employee) {
   const root = document.getElementById('products-root');
   const canManage = ['Admin', 'Manager'].includes(employee.role);
   // Just decides who SEES an Edit button at all (Admin/Manager/Branch Supervisor) --
-  // whether it applies immediately or goes to Admin for approval is isAdmin/
-  // needsApproval below. Discontinue/Reactivate is isAdmin-only, not canManage --
-  // see the note below.
+  // whether it applies immediately or goes through approval is isAdmin/needsApproval
+  // below.
   const canEdit = canManage || employee.role === 'Branch Supervisor';
   const isAdmin = employee.role === 'Admin';
-  // Only Admin's edit applies immediately now (Ren, 2026-09-18: "give me editable all
-  // item only me so that if theres an error coming i can edit immediately") -- Manager
-  // and Branch Supervisor both submit a pending request instead (request_product_edit(),
-  // Admin-only to approve/reject) via the exact same edit form; products_update_admin_only
-  // now blocks a direct UPDATE at the RLS level too, so this isn't just a UI nicety. This
-  // also means Manager loses direct Discontinue/Reactivate below -- same RLS policy, no
-  // request-based path built for that yet.
+  // Only Admin's edit applies immediately (Ren, 2026-09-18: "give me editable all item
+  // only me so that if theres an error coming i can edit immediately") -- Manager and
+  // Branch Supervisor both submit a pending request instead (request_product_edit())
+  // via the exact same edit form; products_update_admin_only blocks a direct UPDATE at
+  // the RLS level too, so this isn't just a UI nicety.
   const needsApproval = !isAdmin;
+  // Ren, 2026-09-21: reversed the "only me" approval call from 3 days ago -- Branch
+  // Supervisor can now also approve/reject a pending Price/Grams/etc. request, on top
+  // of Admin (approve_product_edit()/reject_product_edit() enforce this server-side
+  // too, and block approving your own request).
+  const canApprove = isAdmin || employee.role === 'Branch Supervisor';
+  // Discontinue/Reactivate is a status flip, not a financial-field change -- lower risk
+  // than Price/Grams, so it's direct for this whole group (no approval queue), matching
+  // set_product_status()'s own server-side gate. Manager is restored here too --
+  // products_update_admin_only's tightening had silently taken this away as a side
+  // effect, which was never a deliberate call.
+  const canDiscontinue = canManage || employee.role === 'Branch Supervisor';
   const branches = await getBranches();
 
   root.innerHTML =
@@ -81,10 +90,11 @@ if (employee) {
       '<summary style="cursor:pointer;font-weight:600;">Discontinued <span class="muted" id="prod-discontinued-count" style="font-weight:normal;"></span></summary>' +
       '<div id="prod-discontinued-list" style="margin-top:10px;"><div class="muted">Loading…</div></div>' +
     '</details>' +
-    // Admin-only review queue for a Branch Supervisor's edit requests (Ren,
-    // 2026-09-17: "give me the final approver") -- open by default (unlike
-    // Discontinued) since a pending request is something to act on, not just browse.
-    (isAdmin
+    // Admin/Branch Supervisor review queue for a pending edit request (Ren,
+    // 2026-09-17: "give me the final approver"; widened 2026-09-21 to include
+    // Supervisor) -- open by default (unlike Discontinued) since a pending request is
+    // something to act on, not just browse.
+    (canApprove
       ? '<details class="card" id="prod-pending-edits-folder" style="margin-top:10px;" open>' +
           '<summary style="cursor:pointer;font-weight:600;">Pending Edit Requests <span class="muted" id="prod-pending-edits-count" style="font-weight:normal;"></span></summary>' +
           '<div id="prod-pending-edits-list" style="margin-top:10px;"><div class="muted">Loading…</div></div>' +
@@ -98,6 +108,7 @@ if (employee) {
   let discontinuedProducts = [];
   let pendingEditRequests = []; // every Pending row this employee can see (RLS: all for Admin/Manager, own for a Supervisor)
   let qtyBySku = {}; // { sku: { branchId: qty_available } }, from listAllInventoryQty()
+  let lastChangeBySku = {}; // { sku: { changer, changed_at, action } }, from listProductLastChanges() -- who last touched each SKU (Ren, 2026-09-21: "update admin name on the side who is last edited it")
   let filterBranchId = null; // set by clicking a branch column header -- only SKUs with pcs > 0 there
   let searchTimer = null;
   let productsRealtimeTimer = null;
@@ -108,7 +119,7 @@ if (employee) {
   // nothing to do with (typing a search term doesn't change anyone's stock). That was
   // most of the "SKU Catalog is lagging" feel while searching.
   await loadQty();
-  await Promise.all([loadProducts(), loadDiscontinued(), loadPendingEditRequests()]);
+  await Promise.all([loadProducts(), loadDiscontinued(), loadPendingEditRequests(), loadLastChanges()]);
   document.getElementById('f-category').addEventListener('change', render);
   // Split by table so a search keystroke's debounce isn't sharing a timer with
   // inventory's -- a sale/stock-in elsewhere shouldn't cancel/delay a pending search,
@@ -122,7 +133,9 @@ if (employee) {
       productsRealtimeTimer = setTimeout(async () => { await loadPendingEditRequests(); render(); }, 500);
     } else {
       clearTimeout(productsRealtimeTimer);
-      productsRealtimeTimer = setTimeout(async () => { await Promise.all([loadProducts(), loadDiscontinued()]); }, 500);
+      // Any products change (a direct edit, an approval, Discontinue/Reactivate) also
+      // logs to product_change_log, so "last edited by" needs a refresh here too.
+      productsRealtimeTimer = setTimeout(async () => { await Promise.all([loadProducts(), loadDiscontinued(), loadLastChanges()]); }, 500);
     }
   });
 
@@ -149,6 +162,26 @@ if (employee) {
     qtyRows.forEach((r) => {
       (qtyBySku[r.sku] || (qtyBySku[r.sku] = {}))[r.branch_id] = r.qty_available;
     });
+  }
+
+  async function loadLastChanges() {
+    try {
+      const rows = await listProductLastChanges();
+      lastChangeBySku = {};
+      rows.forEach((r) => { lastChangeBySku[r.sku] = r; });
+      render();
+    } catch (err) { /* a failed lookup here shouldn't block the catalog from showing */ }
+  }
+
+  /** Ren, 2026-09-21: "update admin name on the side who is last edited it" -- whoever
+   * actually applied the last change (an Admin's own direct edit, an approved request,
+   * or a Discontinue/Reactivate), since trg_log_product_change logs every one of those
+   * regardless of path. Blank for a SKU never individually touched since bulk import. */
+  function lastChangeCellHtml(sku) {
+    const c = lastChangeBySku[sku];
+    if (!c || !c.changer) return '';
+    return '<div class="muted" style="font-size:10px;">Last edited by ' + esc(c.changer.full_name) +
+      ' · ' + new Date(c.changed_at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) + '</div>';
   }
 
   // A branch name typed into Search (e.g. "APM Mall") isn't a SKU/Sub SKU/product-name
@@ -199,7 +232,7 @@ if (employee) {
     } catch (err) {
       pendingEditRequests = [];
     }
-    if (isAdmin) renderPendingEditRequests();
+    if (canApprove) renderPendingEditRequests();
   }
 
   function renderPendingEditRequests() {
@@ -268,18 +301,18 @@ if (employee) {
       '</tr></thead><tbody>' +
       discontinuedProducts.map((p) => '<tr>' +
         '<td data-label="SKU"><b>' + esc(p.sku) + '</b></td>' +
-        '<td data-label="Product Name">' + esc(p.item_name) + '</td>' +
+        '<td data-label="Product Name">' + esc(p.item_name) + lastChangeCellHtml(p.sku) + '</td>' +
         '<td data-label="Category">' + esc(p.category || '—') + '</td>' +
         '<td data-label="Sub SKU">' + esc(p.sub_sku || '—') + '</td>' +
         '<td data-label="Price">' + priceCellHtml(p) + '</td>' +
         '<td data-label="Est. Gram">' + weight(p.gross_weight_g) + '</td>' +
-        '<td>' + (isAdmin ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="reactivate-folder">Reactivate</button>' : '') + '</td>' +
+        '<td>' + (canDiscontinue ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="reactivate-folder">Reactivate</button>' : '') + '</td>' +
       '</tr>').join('') +
       '</tbody></table></div>';
-    if (!isAdmin) return;
+    if (!canDiscontinue) return;
     box.querySelectorAll('[data-act="reactivate-folder"]').forEach((btn) => btn.addEventListener('click', async () => {
       try {
-        await updateProduct(btn.dataset.sku, { productStatus: 'Active' });
+        await setProductStatus(btn.dataset.sku, 'Active');
         toast('prod-msg', 'SKU reactivated.', false);
         await Promise.all([loadProducts(), loadDiscontinued()]);
       } catch (err) {
@@ -366,9 +399,9 @@ if (employee) {
       const totalPcs = Object.values(qtyForSku).reduce((s, q) => s + Number(q || 0), 0);
       return '<tr data-row-id="' + esc(p.sku) + '">' +
           '<td data-label="SKU"><b>' + esc(p.sku) + '</b>' +
-            (pendingSkus.has(p.sku) ? ' <span class="badge pending" title="An edit request for this SKU is awaiting Admin approval">Pending Edit</span>' : '') +
+            (pendingSkus.has(p.sku) ? ' <span class="badge pending" title="An edit request for this SKU is awaiting Admin or Branch Supervisor approval">Pending Edit</span>' : '') +
           '</td>' +
-          '<td data-label="Product Name">' + esc(p.item_name) + '</td>' +
+          '<td data-label="Product Name">' + esc(p.item_name) + lastChangeCellHtml(p.sku) + '</td>' +
           '<td data-label="Category">' + esc(p.category || '—') + '</td>' +
           '<td data-label="Sub SKU">' + esc(p.sub_sku || '—') + '</td>' +
           '<td data-label="Price">' + priceCellHtml(p) + '</td>' +
@@ -382,7 +415,7 @@ if (employee) {
           }).join('') +
           '<td data-label="Actions" style="white-space:nowrap;">' +
             (canEdit ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="edit">Edit</button> ' : '') +
-            (isAdmin
+            (canDiscontinue
               ? (p.product_status === 'Active'
                   ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="discontinue">Discontinue</button>'
                   : '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="reactivate">Reactivate</button>')
@@ -418,16 +451,16 @@ if (employee) {
 
     list.querySelectorAll('[data-act="edit"]').forEach((btn) => btn.addEventListener('click', () => openEdit(btn.dataset.sku, rows)));
 
-    if (!isAdmin) return;
+    if (!canDiscontinue) return;
 
     list.querySelectorAll('[data-act="discontinue"]').forEach((btn) => btn.addEventListener('click', async () => {
-      if (!confirm('Mark ' + btn.dataset.sku + ' as Discontinued? It stays visible in history, just hidden from the default Active view -- and moves into the Discontinued folder below.')) return;
-      try { await updateProduct(btn.dataset.sku, { productStatus: 'Discontinued' }); toast('prod-msg', 'SKU discontinued.', false); await Promise.all([loadProducts(), loadDiscontinued()]); }
+      if (!confirm('Are you sure you want to discontinue this item (' + btn.dataset.sku + ')? It stays visible in history, just hidden from the default Active view -- and moves into the Discontinued folder below.')) return;
+      try { await setProductStatus(btn.dataset.sku, 'Discontinued'); toast('prod-msg', 'SKU discontinued.', false); await Promise.all([loadProducts(), loadDiscontinued()]); }
       catch (err) { toast('prod-msg', String(err.message || err), true); }
     }));
 
     list.querySelectorAll('[data-act="reactivate"]').forEach((btn) => btn.addEventListener('click', async () => {
-      try { await updateProduct(btn.dataset.sku, { productStatus: 'Active' }); toast('prod-msg', 'SKU reactivated.', false); await Promise.all([loadProducts(), loadDiscontinued()]); }
+      try { await setProductStatus(btn.dataset.sku, 'Active'); toast('prod-msg', 'SKU reactivated.', false); await Promise.all([loadProducts(), loadDiscontinued()]); }
       catch (err) { toast('prod-msg', String(err.message || err), true); }
     }));
   }
@@ -444,7 +477,7 @@ if (employee) {
     cell.style.display = '';
     cell.querySelector('td').innerHTML =
       '<form class="edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
-        (needsApproval ? '<p class="muted" style="width:100%;margin:0 0 4px;">Submitted for Admin approval -- won\'t apply until reviewed.</p>' : '') +
+        (needsApproval ? '<p class="muted" style="width:100%;margin:0 0 4px;">Submitted for Admin or Branch Supervisor approval -- won\'t apply until reviewed.</p>' : '') +
         '<div class="field"><label>Product Name</label><input type="text" name="itemName" value="' + esc(p.item_name) + '" required></div>' +
         '<div class="field"><label>Category</label><input type="text" name="category" value="' + esc(p.category || '') + '"></div>' +
         '<div class="field"><label>Sub SKU</label><input type="text" name="subSku" value="' + esc(p.sub_sku || '') + '"></div>' +
@@ -468,7 +501,7 @@ if (employee) {
       try {
         if (needsApproval) {
           await requestProductEdit({ sku, ...fields });
-          toast('prod-msg', 'Edit request submitted -- awaiting Admin approval.', false);
+          toast('prod-msg', 'Edit request submitted -- awaiting Admin or Branch Supervisor approval.', false);
           await loadPendingEditRequests();
           render();
         } else {

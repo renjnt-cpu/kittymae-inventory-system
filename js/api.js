@@ -277,6 +277,24 @@ export async function rejectProductEdit(requestId, reason) {
   if (error) throw new Error(error.message);
 }
 
+/** Admin/Manager/Branch Supervisor -- a status flip only, distinct from the Price/
+ * Grams approval queue above (set_product_status() enforces the role check server-side
+ * too). Discontinue keeps full history intact; it never deletes the SKU. */
+export async function setProductStatus(sku, status) {
+  const { error } = await supabase.rpc('set_product_status', { p_sku: sku, p_status: status });
+  if (error) throw new Error(error.message);
+}
+
+/** One row per SKU that's ever been touched (Add/Edit/Discontinue/Reactivate,
+ * whichever happened most recently) -- v_product_last_change (100_product_last_change.sql)
+ * collapses product_change_log to just the latest row per SKU so this stays cheap
+ * regardless of how many times a SKU has been edited over time. */
+export async function listProductLastChanges() {
+  const { data, error } = await supabase.from('v_product_last_change').select('*');
+  if (error) throw new Error(error.message);
+  return attachEmployeeNames(data, { changer: 'changed_by' });
+}
+
 /**
  * The one Record-a-Movement entry point for Phase 1's frontend — covers Stock In /
  * Stock Out / Damage / Missing / Adjustment / Correction. Sale and the two Transfer
