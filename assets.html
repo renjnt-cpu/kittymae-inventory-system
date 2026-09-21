@@ -16,6 +16,19 @@
 import { initShell, toast, esc } from './js/shell.js';
 import { getBranches, listActiveEmployees, listAssetCustodianItems, createAssetCustodianItem, updateAssetCustodianItem, deleteAssetCustodianItem, subscribeToChanges } from './js/api.js';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js';
+
+// Global Filter + Sort rules (Ren, 2026-09-21, section 14: Monitoring).
+const AC_SORT_FIELDS = [
+  { key: 'item_name', label: 'Item' }, { key: 'item_type', label: 'Type' }, { key: 'custodian', label: 'Custodian' },
+  { key: 'quantity', label: 'Qty' }, { key: 'unit_value', label: 'Unit Value' }, { key: 'condition', label: 'Condition' },
+  { key: 'date_assigned', label: 'Date Assigned' },
+];
+const AC_SORT_COMPARATORS = {
+  item_name: byText('item_name'), item_type: byText('item_type'), quantity: byNumber('quantity'),
+  unit_value: byNumber('unit_value'), condition: byText('condition'), date_assigned: byDate('date_assigned'),
+  custodian: (a, b) => String(a.custodian?.full_name || '').localeCompare(String(b.custodian?.full_name || '')),
+};
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const CONDITION_BADGE = { Good: 'ok', Damaged: 'low', Lost: 'low', Returned: 'pending' };
@@ -37,6 +50,7 @@ if (employee) {
     const custodianOptions = (selected) => '<option value="">Unassigned</option>' + employees.map((e) =>
       '<option value="' + e.id + '"' + (e.id === selected ? ' selected' : '') + '>' + esc(e.full_name) + '</option>'
     ).join('');
+    const sort = { field: 'item_name', dir: 'asc' };
 
     // Not layout-2col -- a 300px sidebar next to this particular table left too
     // little of the page's 1100px main width for 10 columns to read comfortably
@@ -64,6 +78,7 @@ if (employee) {
           '<div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="f-search" placeholder="Item, custodian, notes…"></div>' +
           '<div class="field"><label>Type</label><select id="f-type"><option value="all">All</option><option>Asset</option><option>Supplies</option></select></div>' +
           '<div class="field"><label>Condition</label><select id="f-condition"><option value="all">All</option>' + CONDITION_OPTIONS() + '</select></div>' +
+          sortControlHtml(AC_SORT_FIELDS, sort, 'ac-sort-field', 'ac-sort-dir') +
           '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
         '</div>' +
       '</div>' +
@@ -100,6 +115,7 @@ if (employee) {
       document.getElementById('f-condition').value = 'all';
       render();
     });
+    wireSortControl('ac-sort-field', 'ac-sort-dir', sort, render);
 
     async function load() {
       const list = document.getElementById('asset-list');
@@ -135,6 +151,8 @@ if (employee) {
       // table-layout:fixed + a colgroup so long Item/Notes text wraps within its own
       // column instead of stretching the table wider than the page (which pushed
       // Actions off-screen, needing a scroll just to see Edit/Delete or read Notes).
+      // Filtering already picked `rows`; sort only reorders them (section 11).
+      rows = applySort(rows, sort, AC_SORT_COMPARATORS);
       list.innerHTML = '<div class="table-scroll"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
         '<colgroup><col style="width:15%"><col style="width:6%"><col style="width:10%"><col style="width:9%">' +
           '<col style="width:4%"><col style="width:9%"><col style="width:8%"><col style="width:9%">' +

@@ -72,10 +72,16 @@ if (employee) {
         '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="SKU, Sub SKU, or product name…"></div>' +
         '<div class="field"><label>Status</label><select id="f-status"><option value="all">All</option><option value="Active" selected>Active</option><option value="Discontinued">Discontinued</option></select></div>' +
         '<div class="field"><label>Category</label><select id="f-category"><option value="all">All</option></select></div>' +
-        '<div class="field"><label>Sort by Branch</label><select id="f-sort-branch"><option value="none">— none (SKU order) —</option>' +
-          branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('') +
+        // One Sort control, same as every other module (Ren's 2026-09-21 Filter + Sort
+        // spec, section 36: no per-module sort UI) -- generic fields plus this catalog's
+        // own useful "pcs at this branch" sort share the one dropdown instead of two
+        // competing controls.
+        '<div class="field"><label>Sort By</label><select id="f-sort-branch">' +
+          '<option value="sku" selected>SKU</option><option value="item_name">Item Name</option>' +
+          '<option value="category">Category</option><option value="price">Price</option><option value="total_pcs">Total Pcs (All Branches)</option>' +
+          '<optgroup label="Pcs at Branch">' + branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('') + '</optgroup>' +
         '</select></div>' +
-        '<div class="field"><label>Order</label><select id="f-sort-dir"><option value="desc">Most pcs first</option><option value="asc">Fewest pcs first</option></select></div>' +
+        '<div class="field"><label>Direction</label><select id="f-sort-dir"><option value="asc" selected>Ascending</option><option value="desc">Descending</option></select></div>' +
         '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
       '</div>' +
     '</div>' +
@@ -150,8 +156,8 @@ if (employee) {
     document.getElementById('f-search').value = '';
     document.getElementById('f-status').value = 'all';
     document.getElementById('f-category').value = 'all';
-    document.getElementById('f-sort-branch').value = 'none';
-    document.getElementById('f-sort-dir').value = 'desc';
+    document.getElementById('f-sort-branch').value = 'sku';
+    document.getElementById('f-sort-dir').value = 'asc';
     filterBranchId = null;
     loadProducts();
   });
@@ -361,10 +367,24 @@ if (employee) {
     });
     document.getElementById('prod-tiles').innerHTML = tile(grandTotal.toLocaleString('en-PH'), 'Total Pcs (All Branches)') + branchTiles.join('');
 
-    const sortBranchId = document.getElementById('f-sort-branch').value;
-    if (sortBranchId !== 'none') {
-      const dirMul = document.getElementById('f-sort-dir').value === 'asc' ? 1 : -1;
-      const bId = Number(sortBranchId);
+    // One Sort control for the whole catalog (section 36) -- generic fields plus a
+    // per-branch "pcs there" sort share this same dropdown+direction pair. Filtering
+    // (search/status/category/branch-column click) already picked `rows` above; this
+    // only reorders them (section 11).
+    const sortKey = document.getElementById('f-sort-branch').value;
+    const totalPcsFor = (p) => Object.values(qtyBySku[p.sku] || {}).reduce((s, q) => s + Number(q || 0), 0);
+    const GENERIC_SORT_COMPARATORS = {
+      sku: (a, b) => a.sku.localeCompare(b.sku), item_name: (a, b) => a.item_name.localeCompare(b.item_name),
+      category: (a, b) => String(a.category || '').localeCompare(String(b.category || '')),
+      price: (a, b) => Number(effectivePrice(a) || 0) - Number(effectivePrice(b) || 0),
+      total_pcs: (a, b) => totalPcsFor(a) - totalPcsFor(b),
+    };
+    const dirMul = document.getElementById('f-sort-dir').value === 'asc' ? 1 : -1;
+    const genericCmp = GENERIC_SORT_COMPARATORS[sortKey];
+    if (genericCmp) {
+      rows = rows.slice().sort((a, b) => genericCmp(a, b) * dirMul);
+    } else if (sortKey !== 'none') {
+      const bId = Number(sortKey);
       rows = rows.slice().sort((a, b) => {
         const qa = Number((qtyBySku[a.sku] || {})[bId] || 0), qb = Number((qtyBySku[b.sku] || {})[bId] || 0);
         return (qa - qb) * dirMul;

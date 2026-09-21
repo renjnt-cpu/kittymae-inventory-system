@@ -16,6 +16,18 @@
 import { initShell, toast, esc } from './js/shell.js';
 import { getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, deleteLbcShipment, subscribeToChanges } from './js/api.js';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js';
+
+// Global Filter + Sort rules (Ren, 2026-09-21, section 14: LBC Monitoring is explicitly
+// named in the spec).
+const LBC_SORT_FIELDS = [
+  { key: 'ship_date', label: 'Ship Date' }, { key: 'order_id', label: 'Order ID' }, { key: 'customer_name', label: 'Customer' },
+  { key: 'tracking_number', label: 'Tracking #' }, { key: 'cod_amount', label: 'COD Amount' }, { key: 'status', label: 'Status' },
+];
+const LBC_SORT_COMPARATORS = {
+  ship_date: byDate('ship_date'), order_id: byText('order_id'), customer_name: byText('customer_name'),
+  tracking_number: byText('tracking_number'), cod_amount: byNumber('cod_amount'), status: byText('status'),
+};
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const STATUSES = ['Shipped', 'In Transit', 'Delivered', 'Returned to Sender'];
@@ -37,6 +49,7 @@ if (employee) {
     const branchOptions = (selected) => '<option value="">—</option>' + branches.map((b) =>
       '<option value="' + b.id + '"' + (b.id === selected ? ' selected' : '') + ' style="' + branchOptionStyle(b.id, branches) + '">' + esc(b.name) + '</option>'
     ).join('');
+    const sort = { field: 'ship_date', dir: 'desc' };
 
     root.innerHTML =
       '<div class="layout-2col">' +
@@ -65,6 +78,7 @@ if (employee) {
               '<div class="field"><label>Remitted</label><select id="f-remitted"><option value="all">All</option><option value="yes">Yes</option><option value="no">No</option></select></div>' +
               '<div class="field"><label>From</label><input type="date" id="f-from"></div>' +
               '<div class="field"><label>To</label><input type="date" id="f-to"></div>' +
+              sortControlHtml(LBC_SORT_FIELDS, sort, 'lbc-sort-field', 'lbc-sort-dir') +
               '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
             '</div>' +
           '</div>' +
@@ -108,6 +122,7 @@ if (employee) {
       document.getElementById('f-to').value = '';
       render();
     });
+    wireSortControl('lbc-sort-field', 'lbc-sort-dir', sort, render);
 
     async function load() {
       const list = document.getElementById('lbc-list');
@@ -150,6 +165,8 @@ if (employee) {
       // Every field shows directly in the row -- no click-to-expand -- matching the
       // rest of the app. Edit opens an inline form in the hidden row below (same
       // mechanic as Bills), quick status/remit buttons handle the common case.
+      // Filtering already picked `rows`; sort only reorders them (section 11).
+      rows = applySort(rows, sort, LBC_SORT_COMPARATORS);
       let totalCod = 0, totalRemitted = 0;
       const rowsHtml = rows.map((r) => {
         totalCod += Number(r.cod_amount || 0);

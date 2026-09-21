@@ -16,6 +16,21 @@
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
 import { listTransactions, listAccounts, createAccount, updateAccountNumber, createTransaction, importTransactions, updateTransactionReconciliation, deleteTransaction, subscribeToChanges } from './js/api.js';
+import { sortControlHtml, wireSortControl, applySort, byText, byDate } from './js/uiKit.js';
+
+// Global Filter + Sort rules (Ren, 2026-09-21, section 16-ish: Payment History) -- one
+// Sort control governs the ledger whether it's shown flat (one account picked) or
+// grouped by account (the "All" view groups after this same sort is applied).
+const TX_SORT_FIELDS = [
+  { key: 'transaction_datetime', label: 'Date & Time' }, { key: 'description', label: 'Description' },
+  { key: 'reference_number', label: 'Ref No.' }, { key: 'amount', label: 'Amount' },
+  { key: 'fb_name', label: 'FB Name' }, { key: 'customer_name', label: 'Customer Name' }, { key: 'order_id', label: 'Order ID' },
+];
+const TX_SORT_COMPARATORS = {
+  transaction_datetime: byDate('transaction_datetime'), description: byText('description'), reference_number: byText('reference_number'),
+  fb_name: byText('fb_name'), customer_name: byText('customer_name'), order_id: byText('order_id'),
+  amount: (a, b) => (Number(a.credit || 0) - Number(a.debit || 0)) - (Number(b.credit || 0) - Number(b.debit || 0)),
+};
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
@@ -337,6 +352,7 @@ if (employee) {
       const c = ACCOUNT_PALETTE[hash % ACCOUNT_PALETTE.length];
       return 'background:' + c.bg + ';color:' + c.fg + ';';
     }
+    const txSort = { field: 'transaction_datetime', dir: 'desc' };
 
     root.innerHTML =
       '<div class="layout-2col">' +
@@ -393,6 +409,7 @@ if (employee) {
               '<div class="field"><label>From</label><input type="datetime-local" id="f-from"></div>' +
               '<div class="field"><label>To</label><input type="datetime-local" id="f-to"></div>' +
               '<div class="field"><label><input type="checkbox" id="f-unreconciled" style="width:auto;"> Missing Order ID only</label></div>' +
+              sortControlHtml(TX_SORT_FIELDS, txSort, 'tx-sort-field', 'tx-sort-dir') +
               '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
             '</div>' +
           '</div>' +
@@ -548,6 +565,7 @@ if (employee) {
       document.getElementById('f-unreconciled').checked = false;
       render();
     });
+    wireSortControl('tx-sort-field', 'tx-sort-dir', txSort, render);
 
     async function load() {
       const list = document.getElementById('tx-list');
@@ -606,6 +624,9 @@ if (employee) {
 
       const list = document.getElementById('tx-list');
       if (!rows.length) { list.innerHTML = '<p class="muted">No transactions for this filter.</p>'; return; }
+      // Filtering already picked `rows`; sort only reorders them (section 11) -- done
+      // once here so both the flat view and the grouped-by-account view stay in sync.
+      rows = applySort(rows, txSort, TX_SORT_COMPARATORS);
 
       // Every field shows directly in its own row -- no click-to-expand. table-layout:
       // fixed with percentage widths makes long content (a 13-digit ref number, a long

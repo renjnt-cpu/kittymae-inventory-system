@@ -20,6 +20,14 @@ import {
   listFactoryPurchases, recordFactoryPurchase, deleteFactoryPurchase, subscribeToChanges,
 } from './js/api.js';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js';
+
+// Global Filter + Sort rules (Ren, 2026-09-21, section 14: Monitoring) -- one Sort
+// control for the Stock by Branch board.
+const SBB_SORT_FIELDS = [
+  { key: 'sku', label: 'SKU' }, { key: 'item_name', label: 'Product Name' }, { key: 'branch', label: 'Branch' },
+  { key: 'qty_available', label: 'Current Stock' }, { key: 'total_grams_on_hand', label: 'Weight on Hand' },
+];
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g';
@@ -52,6 +60,12 @@ if (employee) {
   const branches = await getBranches();
   const branchById = Object.fromEntries(branches.map((b) => [b.id, b.name]));
   const isScoped = ['Admin', 'Manager'].includes(employee.role) ? false : !UNSCOPED_POSITIONS.includes(employee.position);
+  const sbbSort = { field: 'sku', dir: 'asc' };
+  const SBB_SORT_COMPARATORS = {
+    sku: byText('sku'), qty_available: byNumber('qty_available'), total_grams_on_hand: byNumber('total_grams_on_hand'),
+    item_name: (a, b) => String((a.products || {}).item_name || '').localeCompare(String((b.products || {}).item_name || '')),
+    branch: (a, b) => String(branchById[a.branch_id] || '').localeCompare(String(branchById[b.branch_id] || '')),
+  };
 
   const branchFieldHtml = isScoped
     ? '<div class="field"><label>Branch</label>' + (branchById[employee.branch_id] ? branchBadge(esc, branchById[employee.branch_id], employee.branch_id, branches) : '<input type="text" value="None assigned" disabled>') + '</div>'
@@ -126,6 +140,7 @@ if (employee) {
         '<div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="f-search" placeholder="SKU or product name…"></div>' +
         '<div class="field"><label>Branch</label><select id="f-branch"><option value="all">All Branches</option>' + branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('') + '</select></div>' +
         '<div class="field"><label>Status</label><select id="f-status"><option value="low">Low Stock Only</option><option value="all">All</option></select></div>' +
+        sortControlHtml(SBB_SORT_FIELDS, sbbSort, 'sbb-sort-field', 'sbb-sort-dir') +
         '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
       '</div>' +
     '</div>' +
@@ -420,6 +435,7 @@ if (employee) {
     document.getElementById('f-status').value = 'low';
     renderStockByBranch();
   });
+  wireSortControl('sbb-sort-field', 'sbb-sort-dir', sbbSort, renderStockByBranch);
 
   document.getElementById('fp-trace-search').addEventListener('input', renderFactoryPurchases);
   document.getElementById('fp-trace-from').addEventListener('change', renderFactoryPurchases);
@@ -485,6 +501,8 @@ if (employee) {
     const list = document.getElementById('sbb-list');
     if (!rows.length) { list.innerHTML = '<p class="muted">No rows match this filter.</p>'; return; }
 
+    // Filtering already picked `rows`; sort only reorders them for display (section 11).
+    rows = applySort(rows, sbbSort, SBB_SORT_COMPARATORS);
     list.innerHTML = '<div class="table-scroll table-mini"><table><thead><tr>' +
       '<th>SKU</th><th>Product Name</th><th>Branch</th><th>Product Line</th><th>Metal Purity</th><th>Current Stock</th><th>Status</th><th>Weight on Hand</th><th>Next Count Due</th>' +
       '</tr></thead><tbody>' +
