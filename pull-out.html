@@ -21,6 +21,7 @@
   <div class="card">
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
       <div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="po-f-search" placeholder="SKU, item, branch, reason, who…"></div>
+      <span id="po-sort-slot"></span>
       <button type="button" class="btn small secondary" id="po-f-clear">Clear Filters</button>
     </div>
   </div>
@@ -81,7 +82,20 @@
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
 import { getBranches, searchProducts, listPullOuts, createPullOut, returnPullOut, subscribeToChanges } from './js/api.js';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons } from './js/uiKit.js';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js';
+
+// Global Filter + Sort rules (Ren, 2026-09-21, section 17-ish: this list is "Record
+// Movement"-adjacent inventory monitoring) -- one Sort control governs both Currently
+// Out and Returned (same rule as Layaway's status folders, section 20).
+const PO_SORT_FIELDS = [
+  { key: 'pulled_at', label: 'Pulled Date' }, { key: 'sku', label: 'SKU' }, { key: 'item', label: 'Item' },
+  { key: 'branch', label: 'Branch' }, { key: 'qty', label: 'Qty' }, { key: 'expected_return_date', label: 'Expected Return' },
+];
+const PO_SORT_COMPARATORS = {
+  pulled_at: byDate('pulled_at'), sku: byText('sku'), qty: byNumber('qty'), expected_return_date: byDate('expected_return_date'),
+  item: (a, b) => String(a.products?.item_name || '').localeCompare(String(b.products?.item_name || '')),
+  branch: (a, b) => String(a.branches?.name || '').localeCompare(String(b.branches?.name || '')),
+};
 
 const fmtDate = (s) => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-PH', { dateStyle: 'medium' }) : '—';
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
@@ -152,6 +166,9 @@ if (employee) {
     openDetail(id);
   }
   let openDetailId = null;
+  const sort = { field: 'pulled_at', dir: 'desc' };
+  document.getElementById('po-sort-slot').outerHTML = sortControlHtml(PO_SORT_FIELDS, sort, 'po-sort-field', 'po-sort-dir');
+  wireSortControl('po-sort-field', 'po-sort-dir', sort, render);
 
   let all = [];
   async function load() {
@@ -196,12 +213,16 @@ if (employee) {
     activeEl.innerHTML = activeFiltersHtml([{ label: 'Search', value: esc(q) }], 'po-f-clear');
     wireProxyButtons(activeEl);
 
+    // Filtering (search) already picked `out`/`returned`; sort only reorders each for
+    // display (section 11) -- same one control for both, per section 20's spirit.
+    const sortedOut = applySort(out, sort, PO_SORT_COMPARATORS);
+    const sortedReturned = applySort(returned, sort, PO_SORT_COMPARATORS);
     const outList = document.getElementById('po-out-list');
     outList.innerHTML = !out.length
       ? emptyStateHtml({ message: q ? 'No pulled-out items match this search.' : 'Nothing currently pulled out.', hasFilters: !!q, clearId: 'po-f-clear', createLabel: canCreate ? '+ Pull Out Item' : null, createId: 'po-new-btn' })
       : '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
         '<thead><tr><th>SKU</th><th>Item</th><th>Branch</th><th>Qty</th><th>Pulled By</th><th>Expected Return</th><th></th></tr></thead>' +
-        '<tbody>' + out.map((r) => rowHtml(r, false)).join('') + '</tbody></table></div>';
+        '<tbody>' + sortedOut.map((r) => rowHtml(r, false)).join('') + '</tbody></table></div>';
     wireProxyButtons(outList);
 
     document.getElementById('po-returned-count').textContent = '(' + returned.length + ')';
@@ -210,7 +231,7 @@ if (employee) {
       ? emptyStateHtml({ message: q ? 'No returned items match this search.' : 'No returned items yet.', hasFilters: !!q, clearId: 'po-f-clear' })
       : '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
         '<thead><tr><th>SKU</th><th>Item</th><th>Branch</th><th>Qty</th><th>Returned By</th><th></th></tr></thead>' +
-        '<tbody>' + returned.map((r) => rowHtml(r, true)).join('') + '</tbody></table></div>';
+        '<tbody>' + sortedReturned.map((r) => rowHtml(r, true)).join('') + '</tbody></table></div>';
     wireProxyButtons(returnedList);
 
     document.querySelectorAll('[data-act="view-details"]').forEach((btn) => btn.addEventListener('click', () => { openDetailId = Number(btn.dataset.id); openDetail(openDetailId); }));

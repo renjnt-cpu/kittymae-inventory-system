@@ -26,6 +26,7 @@
       <div class="field"><label>Status</label><select id="f-status"><option value="all">All Statuses</option><option>Pending Approval</option><option>Approved</option><option>Completed</option></select></div>
       <div class="field"><label>Requested From</label><input type="date" id="f-from"></div>
       <div class="field"><label>Requested To</label><input type="date" id="f-to"></div>
+      <span id="ref-sort-slot"></span>
       <button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>
     </div>
   </div>
@@ -83,7 +84,20 @@
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
 import { listRefunds, createRefund, uploadRefundRequestPhoto, setRefundStatus, deleteRefund, addRefundAttachment, removeRefundAttachment, getRefundAttachmentUrl, subscribeToChanges } from './js/api.js';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons } from './js/uiKit.js';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js';
+
+// Global Filter + Sort rules (Ren, 2026-09-21, section 16: Payment History) -- one
+// shared Sort control replaces the old per-column header-click sort below, which
+// silently stopped working once this table collapses to header-less cards on mobile.
+const REF_SORT_FIELDS = [
+  { key: 'date_requested', label: 'Requested Date' }, { key: 'order_reference', label: 'Order ID' },
+  { key: 'customer_name', label: 'Customer' }, { key: 'status', label: 'Status' },
+  { key: 'refund_amount', label: 'Amount' }, { key: 'refund_method', label: 'Payment Method' },
+];
+const REF_SORT_COMPARATORS = {
+  date_requested: byDate('date_requested'), order_reference: byText('order_reference'), customer_name: byText('customer_name'),
+  status: byText('status'), refund_amount: byNumber('refund_amount'), refund_method: byText('refund_method'),
+};
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const STATUS_BADGE = { 'Pending Approval': 'pending', 'Approved': 'transit', 'Completed': 'ok' };
@@ -116,8 +130,10 @@ if (employee) {
   const approver = canApprove(employee);
   const editor = canEditRefund(employee);
   let allRefunds = [];
-  let refSort = null, refSortDir = 'desc';
   let openDetailId = null;
+  const sort = { field: 'date_requested', dir: 'desc' };
+  document.getElementById('ref-sort-slot').outerHTML = sortControlHtml(REF_SORT_FIELDS, sort, 'ref-sort-field', 'ref-sort-dir');
+  wireSortControl('ref-sort-field', 'ref-sort-dir', sort, render);
 
   if (!approver) document.getElementById('ref-list-heading').textContent = 'My Refund Requests';
   const form = document.getElementById('ref-form');
@@ -228,23 +244,12 @@ if (employee) {
       '<td class="full-row"><button type="button" class="btn small secondary" data-act="view-details" data-id="' + r.id + '">View Details</button></td>' +
     '</tr>';
   }
-  function sortRows(rows) {
-    if (!refSort) return rows;
-    const dirMul = refSortDir === 'desc' ? -1 : 1;
-    return [...rows].sort((a, b) => {
-      const av = a[refSort], bv = b[refSort];
-      const cmp = refSort === 'refund_amount' ? Number(av || 0) - Number(bv || 0) : String(av || '').localeCompare(String(bv || ''));
-      return cmp * dirMul;
-    });
-  }
-  const sortTh = (key, label) => {
-    const active = refSort === key;
-    return '<th><button type="button" class="btn small' + (active ? '' : ' secondary') + '" data-ref-sort="' + key + '" style="padding:2px 8px;">' + label + (active ? (refSortDir === 'desc' ? ' ▼' : ' ▲') : '') + '</button></th>';
-  };
+  // Filtering already picked which rows are in play; sort only reorders them
+  // (section 11), applied once here so Active and Completed stay in sync.
   const tableHtml = (rows, dupKeys) => '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
     '<colgroup><col style="width:14%"><col style="width:26%"><col style="width:14%"><col style="width:12%"><col style="width:12%"><col style="width:10%"><col style="width:12%"></colgroup>' +
-    '<thead><tr>' + sortTh('order_reference', 'Order ID') + sortTh('customer_name', 'Customer') + sortTh('status', 'Status') + sortTh('date_requested', 'Requested') + sortTh('refund_amount', 'Amount') + '<th>Method</th><th></th></tr></thead>' +
-    '<tbody>' + rows.map((r) => rowHtml(r, dupKeys)).join('') + '</tbody></table></div>';
+    '<thead><tr><th>Order ID</th><th>Customer</th><th>Status</th><th>Requested</th><th>Amount</th><th>Method</th><th></th></tr></thead>' +
+    '<tbody>' + applySort(rows, sort, REF_SORT_COMPARATORS).map((r) => rowHtml(r, dupKeys)).join('') + '</tbody></table></div>';
 
   function render() {
     const f = currentFilters();
@@ -255,8 +260,8 @@ if (employee) {
     if (f.to) filtered = filtered.filter((r) => r.date_requested && r.date_requested <= f.to);
     const hasFilters = !!(f.q || f.status !== 'all' || f.from || f.to);
 
-    const active = sortRows(filtered.filter((r) => r.status !== 'Completed'));
-    const completed = sortRows(filtered.filter((r) => r.status === 'Completed'));
+    const active = filtered.filter((r) => r.status !== 'Completed');
+    const completed = filtered.filter((r) => r.status === 'Completed');
     const dupKeys = duplicateKeySet(allRefunds);
 
     // Tiles, the active-filter strip, both lists and the folder count follow the same
@@ -286,11 +291,6 @@ if (employee) {
       : emptyStateHtml({ message: hasFilters ? 'No completed refunds match these filters.' : 'No completed refunds yet.', hasFilters, clearId: 'f-clear' });
     wireProxyButtons(completedBox);
 
-    document.querySelectorAll('[data-ref-sort]').forEach((btn) => btn.addEventListener('click', () => {
-      const key = btn.dataset.refSort;
-      if (refSort === key) refSortDir = refSortDir === 'desc' ? 'asc' : 'desc'; else { refSort = key; refSortDir = 'desc'; }
-      render();
-    }));
     document.querySelectorAll('[data-act="view-details"]').forEach((btn) => btn.addEventListener('click', () => { openDetailId = btn.dataset.id; openDetail(openDetailId); }));
   }
 
