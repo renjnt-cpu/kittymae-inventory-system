@@ -49,17 +49,23 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 
 const employee = await initShell('pull-out');
 if (employee) {
-  // Matches create_pull_out()/return_pull_out()'s own server-side gate exactly
-  // (Ren, 2026-09-21: "Admin/Manager only, like Correction").
+  // Matches return_pull_out()'s own server-side gate exactly (Ren, 2026-09-21:
+  // "Admin/Manager only, like Correction") -- returning an item stays Admin/Manager,
+  // separate from who can CREATE one below.
   const isAdminManager = ['Admin', 'Manager'].includes(employee.role);
+  // Matches create_pull_out()'s own server-side gate: inventory.pull_out.create
+  // (Ren, 2026-09-21, spec 289-302 -- Supervisor/Auditor/Inventory Staff/Owner, via
+  // HR position mapping, not hardcoded role check). Adjustable anytime from the
+  // Position Access Matrix without a code change.
+  const canCreate = employee.permissions.includes('inventory.pull_out.create');
   const branches = await getBranches();
   document.getElementById('po-branch').innerHTML = branches.map((b) =>
     '<option value="' + b.id + '"' + (b.id === employee.branch_id ? ' selected' : '') + '>' + esc(b.name) + '</option>'
   ).join('');
 
   const form = document.getElementById('po-form');
-  if (!isAdminManager) {
-    form.closest('.card').innerHTML = '<h3 style="margin-top:0;">Pull Out an Item</h3><p class="muted">Pulling out an item is Admin/Manager only.</p>';
+  if (!canCreate) {
+    form.closest('.card').innerHTML = '<h3 style="margin-top:0;">Pull Out an Item</h3><p class="muted">Your role/position isn\'t authorized to pull out an item. Ask an Admin if you think this is wrong.</p>';
   }
 
   let all = [];
@@ -156,7 +162,7 @@ if (employee) {
   });
   skuInput.addEventListener('blur', () => setTimeout(hideSuggest, 150));
 
-  if (isAdminManager) form.addEventListener('submit', async (ev) => {
+  if (canCreate) form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const f = ev.target;
     const btn = f.querySelector('button[type=submit]');

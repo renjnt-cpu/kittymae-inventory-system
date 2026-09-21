@@ -88,10 +88,11 @@ export async function initShell(activePage) {
       { id: 'products', ...ALL_PAGE_DEFS.products },
       { id: 'item-monitoring', ...ALL_PAGE_DEFS['item-monitoring'] },
       { id: 'transfers', ...ALL_PAGE_DEFS.transfers },
-      // Visible to everyone, same tier as Transfers -- the page itself is Admin/
-      // Manager-only for actually pulling out or returning an item (matches
-      // create_pull_out()/return_pull_out()'s own gate), but anyone can see what's
-      // currently out.
+      // Visible to everyone, same tier as Transfers -- the page itself gates
+      // creating a pull-out on inventory.pull_out.create (Supervisor/Auditor/
+      // Inventory Staff/Admin, via the permission system) and returning one on
+      // Admin/Manager (return_pull_out()'s own gate, unchanged), but anyone can see
+      // what's currently out.
       { id: 'pull-out', ...ALL_PAGE_DEFS['pull-out'] },
       { id: 'bills', ...ALL_PAGE_DEFS.bills },
     );
