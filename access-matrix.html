@@ -30,11 +30,10 @@
   .am-detail-title { font-size:18px; font-weight:700; margin:0; }
   .am-toggle-row { display:flex; align-items:center; gap:8px; font-size:12px; }
   .am-toggle-row label { display:flex; align-items:center; gap:6px; cursor:pointer; }
-  .am-cat-section { border:1px solid #eee; border-radius:8px; margin-bottom:8px; overflow:hidden; }
-  .am-cat-section summary { cursor:pointer; padding:9px 12px; font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); background:#f7f5f0; list-style:none; }
-  .am-cat-section summary::-webkit-details-marker { display:none; }
-  .am-cat-section summary::before { content:'▸ '; }
-  .am-cat-section[open] summary::before { content:'▾ '; }
+  /* Category sections now use the shared details.exp.exp-cat pattern (css/styles.css,
+     Ren's 2026-09-22 expand/collapse spec) instead of a bespoke ::before-swap arrow --
+     same look, but the arrow is a real element (rotates, and isn't at risk of being
+     read into the accessible name by assistive tech the way ::before content can be). */
   .am-perm-row { display:flex; align-items:center; gap:10px; padding:9px 12px; border-top:1px solid #f4f4f4; }
   .am-perm-row label { display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; min-width:0; }
   .am-perm-row input[type=checkbox] { width:20px; height:20px; min-width:20px; cursor:pointer; }
@@ -169,7 +168,7 @@ if (employee) {
             '</label>' +
           '</div>';
         }).join('');
-        return '<details class="am-cat-section" open><summary>' + esc(cat) + ' <span class="muted" style="font-weight:normal;">(' + byCategory[cat].length + ')</span></summary>' + rows + '</details>';
+        return '<details class="exp exp-cat" open><summary><span class="exp-arrow" aria-hidden="true">▸</span>' + esc(cat) + ' <span class="exp-count">(' + byCategory[cat].length + ')</span></summary><div class="exp-body" style="padding:0;">' + rows + '</div></details>';
       }).join('') : '<p class="muted">No permissions match this filter.</p>';
 
       return '<div class="am-detail-header">' +

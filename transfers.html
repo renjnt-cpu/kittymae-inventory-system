@@ -34,9 +34,11 @@
   <h3 style="margin:0 0 8px;">Active</h3>
   <div id="transfer-active"><div class="muted">Loading…</div></div>
 
-  <details class="card" style="margin-top:16px;">
-    <summary style="cursor:pointer;font-weight:bold;">Cancelled / Rejected <span class="muted" id="tr-cancelled-count" style="font-weight:normal;"></span></summary>
-    <div id="transfer-cancelled" style="margin-top:10px;"></div>
+  <!-- Same expand/collapse pattern as every other folder system-wide (Ren, 2026-09-22,
+       see css/styles.css's details.exp). -->
+  <details class="card exp" style="margin-top:16px;">
+    <summary><span class="exp-arrow" aria-hidden="true">▸</span>Cancelled / Rejected <span class="exp-count" id="tr-cancelled-count"></span></summary>
+    <div class="exp-body" id="transfer-cancelled"></div>
   </details>
 
   <h3 style="margin-top:20px;">Received — by Branch</h3>
@@ -344,9 +346,9 @@ if (employee) {
     const branchBox = document.getElementById('transfer-received-by-branch');
     branchBox.innerHTML = branchIds.length
       ? branchIds.map((bid) =>
-          '<details class="card" style="margin-top:10px;">' +
-            '<summary style="cursor:pointer;font-weight:bold;">' + esc(byId[bid] || 'Unknown Branch') + ' <span class="muted" style="font-weight:normal;">(' + byBranch[bid].length + ')</span></summary>' +
-            '<div style="margin-top:10px;">' + tableHtml(byBranch[bid]) + '</div>' +
+          '<details class="card exp" style="margin-top:10px;">' +
+            '<summary><span class="exp-arrow" aria-hidden="true">▸</span>' + esc(byId[bid] || 'Unknown Branch') + ' <span class="exp-count">(' + byBranch[bid].length + ')</span></summary>' +
+            '<div class="exp-body">' + tableHtml(byBranch[bid]) + '</div>' +
           '</details>').join('')
       : emptyStateHtml({ message: hasFilters ? 'No received transfers match these filters.' : 'No received transfers yet.', hasFilters, clearId: 'tr-trace-clear' });
     wireProxyButtons(branchBox);

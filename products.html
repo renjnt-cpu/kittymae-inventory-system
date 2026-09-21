@@ -92,18 +92,18 @@ if (employee) {
     // Discontinued item meant remembering to flip the Status filter above) --
     // independent of whatever the Status/search/category filters above are set to, so
     // Discontinued SKUs are always one click away instead of hidden behind a dropdown.
-    '<details class="card" id="prod-discontinued-folder" style="margin-top:14px;">' +
-      '<summary style="cursor:pointer;font-weight:600;">Discontinued <span class="muted" id="prod-discontinued-count" style="font-weight:normal;"></span></summary>' +
-      '<div id="prod-discontinued-list" style="margin-top:10px;"><div class="muted">Loading…</div></div>' +
+    '<details class="card exp" id="prod-discontinued-folder" style="margin-top:14px;">' +
+      '<summary><span class="exp-arrow" aria-hidden="true">▸</span>Discontinued <span class="exp-count" id="prod-discontinued-count"></span></summary>' +
+      '<div class="exp-body" id="prod-discontinued-list"><div class="muted">Loading…</div></div>' +
     '</details>' +
     // Admin/Branch Supervisor review queue for a pending edit request (Ren,
     // 2026-09-17: "give me the final approver"; widened 2026-09-21 to include
     // Supervisor) -- open by default (unlike Discontinued) since a pending request is
     // something to act on, not just browse.
     (canApprove
-      ? '<details class="card" id="prod-pending-edits-folder" style="margin-top:10px;" open>' +
-          '<summary style="cursor:pointer;font-weight:600;">Pending Edit Requests <span class="muted" id="prod-pending-edits-count" style="font-weight:normal;"></span></summary>' +
-          '<div id="prod-pending-edits-list" style="margin-top:10px;"><div class="muted">Loading…</div></div>' +
+      ? '<details class="card exp" id="prod-pending-edits-folder" style="margin-top:10px;" open>' +
+          '<summary><span class="exp-arrow" aria-hidden="true">▸</span>Pending Edit Requests <span class="exp-count" id="prod-pending-edits-count"></span></summary>' +
+          '<div class="exp-body" id="prod-pending-edits-list"><div class="muted">Loading…</div></div>' +
         '</details>'
       : '');
 

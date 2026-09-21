@@ -336,12 +336,13 @@ if (employee) {
         const groups = CATEGORIES
           .map((cat) => ({ cat, bills: sectionRows.filter((b) => b.category === cat) }))
           .filter((g) => g.bills.length);
-        return groups.map((g) =>
-          '<details class="card" id="' + keyPrefix + '-' + g.cat.replace(/[^A-Za-z0-9]/g, '') + '" style="margin-bottom:8px;">' +
-            '<summary style="cursor:pointer;font-weight:600;">' + esc(g.cat) + ' <span class="muted" style="font-weight:normal;">(' + g.bills.length + ')</span></summary>' +
-            '<div style="margin-top:8px;">' + tableHtml(g.bills) + '</div>' +
-          '</details>'
-        ).join('');
+        return groups.map((g) => {
+          const subtotal = g.bills.reduce((s, b) => s + Number(b.amount || 0), 0);
+          return '<details class="card exp" id="' + keyPrefix + '-' + g.cat.replace(/[^A-Za-z0-9]/g, '') + '" style="margin-bottom:8px;">' +
+            '<summary><span class="exp-arrow" aria-hidden="true">▸</span>' + esc(g.cat) + ' <span class="exp-count">(' + g.bills.length + ') — ' + money(subtotal) + '</span></summary>' +
+            '<div class="exp-body">' + tableHtml(g.bills) + '</div>' +
+          '</details>';
+        }).join('');
       }
 
       // Split into two clearly separate sections so unpaid bills never get lost among
