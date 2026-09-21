@@ -6,19 +6,49 @@
 <title>Position Access Matrix — Kittymae Jewels System</title>
 <link rel="stylesheet" href="css/styles.css">
 <style>
-  .am-matrix-scroll { overflow-x:auto; }
-  .am-matrix { border-collapse:collapse; white-space:nowrap; }
-  .am-matrix th, .am-matrix td { padding:6px 10px; border-bottom:1px solid #f0f0f0; text-align:center; }
-  .am-matrix thead th { position:sticky; top:0; background:#fff; font-size:11px; color:var(--muted); font-weight:600; writing-mode:vertical-rl; transform:rotate(180deg); height:110px; vertical-align:bottom; }
-  .am-matrix td.am-key-cell, .am-matrix th.am-key-cell { text-align:left; white-space:normal; min-width:220px; position:sticky; left:0; background:#fff; }
-  .am-matrix tr.am-cat-row td { background:#f7f5f0; font-weight:600; text-align:left; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
-  .am-matrix input[type=checkbox] { width:16px; height:16px; cursor:pointer; }
-  .am-source-pos { color:#46586b; }
+  /* Ren's spec, 2026-09-22: HR-201-driven Position Access Matrix. Deliberately NOT a
+     giant position×permission grid with rotated column headers (that's exactly what
+     section 29 forbids -- "do not display position names vertically one letter at a
+     time"). Instead: pick a position/role (as a wrapping row of plain, horizontally-
+     readable pills -- never a narrow fixed column), then edit its permissions grouped
+     by category below. This is the SAME component at every width (section 30 -- "do
+     not create separate mobile permission logic"): the pills reflow via flex-wrap and
+     the detail panel stacks full-width on narrow screens, but it's one DOM tree, one
+     state, one set of event handlers throughout. */
+  .am-pill-row { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+  .am-pill {
+    display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+    padding:8px 14px; border-radius:10px; border:1px solid #e5e5e5; background:#fff;
+    cursor:pointer; font-size:13px; min-height:44px; justify-content:center;
+  }
+  .am-pill:hover { border-color:var(--rose); }
+  .am-pill.active { border-color:var(--rose); background:var(--rose); box-shadow:0 0 0 1px var(--rose); }
+  .am-pill .am-pill-name { font-weight:700; white-space:nowrap; }
+  .am-pill .am-pill-meta { font-size:10px; color:var(--muted); white-space:nowrap; }
+  .am-pill.am-pill-inactive { opacity:.55; }
+  .am-detail-header { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom:6px; }
+  .am-detail-title { font-size:18px; font-weight:700; margin:0; }
+  .am-toggle-row { display:flex; align-items:center; gap:8px; font-size:12px; }
+  .am-toggle-row label { display:flex; align-items:center; gap:6px; cursor:pointer; }
+  .am-cat-section { border:1px solid #eee; border-radius:8px; margin-bottom:8px; overflow:hidden; }
+  .am-cat-section summary { cursor:pointer; padding:9px 12px; font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); background:#f7f5f0; list-style:none; }
+  .am-cat-section summary::-webkit-details-marker { display:none; }
+  .am-cat-section summary::before { content:'▸ '; }
+  .am-cat-section[open] summary::before { content:'▾ '; }
+  .am-perm-row { display:flex; align-items:center; gap:10px; padding:9px 12px; border-top:1px solid #f4f4f4; }
+  .am-perm-row label { display:flex; align-items:center; gap:10px; cursor:pointer; flex:1; min-width:0; }
+  .am-perm-row input[type=checkbox] { width:20px; height:20px; min-width:20px; cursor:pointer; }
+  .am-perm-name { font-weight:600; font-size:13px; }
+  .am-perm-key { font-size:10px; color:var(--muted); }
+  .am-perm-row.am-perm-dim { opacity:.4; }
   .am-source-override-grant { color:var(--ok); }
   .am-source-override-revoke { color:var(--warn); }
   .am-log-item { padding:8px 0; border-bottom:1px solid #f0f0f0; font-size:13px; }
   .am-log-item:last-child { border-bottom:none; }
   .am-log-item .when { color:var(--muted); font-size:11px; }
+  @media (min-width: 900px) {
+    .am-pill { min-width:150px; }
+  }
 </style>
 </head>
 <body>
@@ -32,15 +62,20 @@ import { initShell, toast, esc } from './js/shell.js';
 import {
   getPermissionMatrix, setPositionPermission, getEmployeesForChecklist,
   listEmployeePermissionOverrides, setEmployeePermissionOverride, removeEmployeePermissionOverride,
-  listAccessChangeLog,
+  listAccessChangeLog, listHrPositions, createHrPosition, renameHrPosition,
+  setHrPositionAutomaticAccess, setHrPositionActive, getRoleEmployeeCounts,
 } from './js/api.js';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js';
 
-// Same fixed position list access-checklist.html uses (kept in sync there too --
-// this is every position value that currently drives an access rule anywhere).
-const POSITIONS = ['Sales Executive', 'Admin Assistant', 'Branch Team Leader', 'HR Supervisor', 'Inventory Supervisor', 'Operations Supervisor', 'Personal Assistant', 'Auditor', 'Supervisor', 'Editor', 'Inventory Staff'];
-const ROLES = ['Admin', 'Manager', 'Branch Supervisor', 'Staff'];
-const COLUMN_KEYS = [...ROLES.map((r) => 'ROLE:' + r), ...POSITIONS.map((p) => 'POSITION:' + p)];
-const columnLabel = (key) => key.startsWith('ROLE:') ? key.slice(5) + ' (role)' : key.slice(9);
+// Roles are a fixed system enum (employees_role_check), not HR 201 data -- unlike
+// positions, there's nothing to load dynamically here (spec section 1 is specifically
+// about POSITIONS; a role can't be added/renamed from HR 201 the way a position can).
+const ROLES = ['Admin', 'Manager', 'Branch Supervisor', 'Staff', 'None'];
+
+const SORT_FIELDS = [
+  { key: 'name', label: 'Name' }, { key: 'active_employee_count', label: 'Active Employees' },
+];
+const SORT_COMPARATORS = { name: byText('name'), active_employee_count: byNumber('active_employee_count') };
 
 const employee = await initShell('access-matrix');
 if (employee) {
@@ -51,15 +86,22 @@ if (employee) {
   } else {
     let keys = []; // [{key, label, category}]
     let grants = new Set(); // "permissionKey|positionKey"
+    let positions = []; // from listHrPositions(): {id, name, is_active, automatic_access, active_employee_count, total_employee_count}
+    let roleCounts = {}; // { role: active_employee_count }, from getRoleEmployeeCounts() -- Admin-inclusive, unlike getEmployeesForChecklist()
     let employees = [];
     let overrides = [];
     let log = [];
-    let overrideForm = { employeeId: '', permissionKey: '', grant: true, reason: '' };
+    let selectedColumnKey = null; // 'ROLE:Admin' or 'POSITION:<name>'
+    const sort = { field: 'name', dir: 'asc' };
+    const filters = { search: '', category: 'all', status: 'active' };
 
-    async function load() {
+    function columnLabel(key) { return key.startsWith('ROLE:') ? key.slice(5) + ' (role)' : key.slice(9); }
+    function positionByName(name) { return positions.find((p) => p.name === name); }
+
+    async function load(keepSelection) {
       try {
-        const [matrixRows, emps, ov, lg] = await Promise.all([
-          getPermissionMatrix(), getEmployeesForChecklist(), listEmployeePermissionOverrides(), listAccessChangeLog(80),
+        const [matrixRows, posRows, roleCountRows, emps, ov, lg] = await Promise.all([
+          getPermissionMatrix(), listHrPositions(), getRoleEmployeeCounts(), getEmployeesForChecklist(), listEmployeePermissionOverrides(), listAccessChangeLog(80),
         ]);
         const byKey = {};
         grants = new Set();
@@ -68,32 +110,92 @@ if (employee) {
           if (r.position_key) grants.add(r.permission_key + '|' + r.position_key);
         });
         keys = Object.values(byKey).sort((a, b) => a.category.localeCompare(b.category) || a.key.localeCompare(b.key));
+        positions = posRows;
+        roleCounts = roleCountRows;
         employees = emps;
         overrides = ov;
         log = lg;
+        if (!keepSelection) selectedColumnKey = null;
       } catch (err) {
         toast('am-msg', String(err.message || err), true);
       }
       render();
     }
 
-    function render() {
+    // ---- position/role picker ----
+    function pickerRows() {
+      const q = filters.search.trim().toLowerCase();
+      const roleRows = ROLES.map((r) => ({ key: 'ROLE:' + r, name: r, isRole: true, active_employee_count: null, automatic_access: null, is_active: true }));
+      let posRows = positions.map((p) => ({ key: 'POSITION:' + p.name, name: p.name, isRole: false, ...p }));
+      if (filters.status === 'active') posRows = posRows.filter((p) => p.is_active);
+      else if (filters.status === 'inactive') posRows = posRows.filter((p) => !p.is_active);
+      if (q) posRows = posRows.filter((p) => p.name.toLowerCase().includes(q));
+      posRows = applySort(posRows, sort, SORT_COMPARATORS);
+      return { roleRows: q ? roleRows.filter((r) => r.name.toLowerCase().includes(q)) : roleRows, posRows };
+    }
+
+    function pillHtml(row) {
+      const meta = row.isRole ? 'Role' :
+        (row.active_employee_count) + ' active' + (row.automatic_access ? '' : ' · Manual only') + (row.is_active ? '' : ' · Inactive');
+      return '<div class="am-pill' + (selectedColumnKey === row.key ? ' active' : '') + (row.is_active === false ? ' am-pill-inactive' : '') + '" data-col="' + esc(row.key) + '">' +
+        '<span class="am-pill-name">' + esc(row.name) + '</span>' +
+        '<span class="am-pill-meta">' + esc(meta) + '</span>' +
+      '</div>';
+    }
+
+    // ---- detail/edit panel for the selected position or role ----
+    function detailHtml() {
+      if (!selectedColumnKey) return '<p class="muted">Select a role or position above to view and edit its permissions.</p>';
+      const isPosition = selectedColumnKey.startsWith('POSITION:');
+      const name = columnLabel(selectedColumnKey).replace(' (role)', '');
+      const posRow = isPosition ? positionByName(name) : null;
+      const affected = isPosition ? (posRow ? posRow.active_employee_count : 0) : (roleCounts[name] || 0);
+
+      const catFilter = filters.category;
+      const permFilter = filters.permSearch ? filters.permSearch.trim().toLowerCase() : '';
       const byCategory = {};
-      keys.forEach((k) => { (byCategory[k.category] = byCategory[k.category] || []).push(k); });
+      keys.forEach((k) => {
+        if (catFilter !== 'all' && k.category !== catFilter) return;
+        if (permFilter && !k.label.toLowerCase().includes(permFilter) && !k.key.toLowerCase().includes(permFilter)) return;
+        (byCategory[k.category] = byCategory[k.category] || []).push(k);
+      });
 
-      const headerRow = '<tr><th class="am-key-cell">Permission</th>' + COLUMN_KEYS.map((c) => '<th>' + esc(columnLabel(c)) + '</th>').join('') + '</tr>';
-      const bodyRows = Object.keys(byCategory).map((cat) => {
-        const catRow = '<tr class="am-cat-row"><td colspan="' + (COLUMN_KEYS.length + 1) + '">' + esc(cat) + '</td></tr>';
+      const sectionsHtml = Object.keys(byCategory).length ? Object.keys(byCategory).sort().map((cat) => {
         const rows = byCategory[cat].map((k) => {
-          const cells = COLUMN_KEYS.map((posKey) => {
-            const checked = grants.has(k.key + '|' + posKey);
-            return '<td><input type="checkbox" data-pos="' + esc(posKey) + '" data-perm="' + esc(k.key) + '"' + (checked ? ' checked' : '') + '></td>';
-          }).join('');
-          return '<tr><td class="am-key-cell"><b>' + esc(k.label) + '</b><br><span class="muted" style="font-size:11px;">' + esc(k.key) + '</span></td>' + cells + '</tr>';
+          const checked = grants.has(k.key + '|' + selectedColumnKey);
+          return '<div class="am-perm-row">' +
+            '<label><input type="checkbox" data-perm="' + esc(k.key) + '"' + (checked ? ' checked' : '') + '>' +
+              '<span><span class="am-perm-name">' + esc(k.label) + '</span><br><span class="am-perm-key">' + esc(k.key) + '</span></span>' +
+            '</label>' +
+          '</div>';
         }).join('');
-        return catRow + rows;
-      }).join('');
+        return '<details class="am-cat-section" open><summary>' + esc(cat) + ' <span class="muted" style="font-weight:normal;">(' + byCategory[cat].length + ')</span></summary>' + rows + '</details>';
+      }).join('') : '<p class="muted">No permissions match this filter.</p>';
 
+      return '<div class="am-detail-header">' +
+          '<div><h3 class="am-detail-title">' + esc(name) + (isPosition ? '' : ' <span class="muted" style="font-size:12px;font-weight:normal;">(role)</span>') + '</h3>' +
+            '<p class="muted" style="margin:2px 0 0;">' + affected + ' active employee' + (affected === 1 ? '' : 's') + ' currently ' + (isPosition ? 'in this position' : 'holding this role') + '.</p>' +
+          '</div>' +
+          (isPosition ? '<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">' +
+            '<div class="am-toggle-row"><label><input type="checkbox" id="am-auto-access"' + (posRow.automatic_access ? ' checked' : '') + '> Automatic Access</label></div>' +
+            '<div class="am-toggle-row"><label><input type="checkbox" id="am-pos-active"' + (posRow.is_active ? ' checked' : '') + '> Position Active</label></div>' +
+            '<button type="button" class="btn small secondary" id="am-rename-pos">Rename Position</button>' +
+          '</div>' : '') +
+        '</div>' +
+        (isPosition && !posRow.automatic_access
+          ? '<p class="muted" style="background:#fff8e8;padding:8px 10px;border-radius:6px;">Automatic Access is OFF for this position -- these checkboxes define the template, but nobody currently in ' + esc(name) + ' inherits them passively. Grant access via an Individual Override below for anyone who needs it.</p>'
+          : '') +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin:10px 0;">' +
+          '<div class="field" style="min-width:180px;"><label>Permission Name</label><input type="text" id="am-perm-search" placeholder="Search permissions…" value="' + esc(filters.permSearch || '') + '"></div>' +
+          '<div class="field"><label>Category</label><select id="am-cat-filter">' +
+            '<option value="all">All Categories</option>' + [...new Set(keys.map((k) => k.category))].sort().map((c) => '<option' + (c === catFilter ? ' selected' : '') + '>' + esc(c) + '</option>').join('') +
+          '</select></div>' +
+        '</div>' +
+        sectionsHtml;
+    }
+
+    function render() {
+      const { roleRows, posRows } = pickerRows();
       const overridesHtml = !overrides.length ? '<p class="muted">No individual overrides set.</p>' :
         '<div class="table-scroll"><table><thead><tr><th>Employee</th><th>Permission</th><th>Grant/Revoke</th><th>Reason</th><th>Expires</th><th></th></tr></thead><tbody>' +
         overrides.map((o) => '<tr>' +
@@ -115,8 +217,19 @@ if (employee) {
 
       root.innerHTML =
         '<h2>Position Access Matrix</h2>' +
-        '<p class="muted">What each role/position grants, company-wide. Checking a box grants that permission to everyone currently in that role/position; unchecking it revokes it from all of them immediately. Use the Individual Overrides section below for a single employee who needs something different from their role/position default.</p>' +
-        '<div class="card"><div class="am-matrix-scroll"><table class="am-matrix"><thead>' + headerRow + '</thead><tbody>' + bodyRows + '</tbody></table></div></div>' +
+        '<p class="muted">Positions load straight from HR 201 -- adding, renaming, or reassigning a position there updates this matrix automatically, nothing to maintain here by hand. Checking a permission grants it to every active employee currently in that role/position immediately (unless Automatic Access is off for that position); unchecking revokes it from all of them immediately. Use Individual Overrides below for one employee who needs something different from their default.</p>' +
+        '<div class="card">' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+            '<div class="field" style="min-width:200px;"><label>Search Position/Role</label><input type="text" id="am-search" placeholder="Name…" value="' + esc(filters.search) + '"></div>' +
+            '<div class="field"><label>Position Status</label><select id="am-status-filter"><option value="active"' + (filters.status === 'active' ? ' selected' : '') + '>Active Only</option><option value="all"' + (filters.status === 'all' ? ' selected' : '') + '>All</option><option value="inactive"' + (filters.status === 'inactive' ? ' selected' : '') + '>Inactive Only</option></select></div>' +
+            sortControlHtml(SORT_FIELDS, sort, 'am-sort-field', 'am-sort-dir') +
+            '<button type="button" class="btn small secondary" id="am-add-pos">+ Add Position</button>' +
+          '</div>' +
+          '<h4 style="margin:14px 0 2px;">Roles</h4><div class="am-pill-row">' + roleRows.map(pillHtml).join('') + '</div>' +
+          '<h4 style="margin:10px 0 2px;">Positions <span class="muted" style="font-weight:normal;">— from HR 201</span></h4>' +
+          '<div class="am-pill-row">' + (posRows.length ? posRows.map(pillHtml).join('') : '<p class="muted">No positions match this filter.</p>') + '</div>' +
+        '</div>' +
+        '<div class="card">' + detailHtml() + '</div>' +
         '<div class="card">' +
           '<h3 style="margin-top:0;">Individual Overrides</h3>' +
           '<p class="muted">Grants or revokes one permission for one specific employee, beating whatever their role/position would otherwise give them.</p>' +
@@ -131,19 +244,121 @@ if (employee) {
         '</div>' +
         '<div class="card">' +
           '<h3 style="margin-top:0;">Recent Access Changes</h3>' +
-          '<p class="muted">Every position-level grant/revoke, individual override, and HR role/position/status change, most recent first.</p>' +
+          '<p class="muted">Every position-level grant/revoke, individual override, and HR role/position/branch/status change, most recent first. Also mirrored to the Global Activity feed (User Access / HR Changes / Audit categories).</p>' +
           logHtml +
         '</div>';
 
-      root.querySelectorAll('.am-matrix input[type=checkbox]').forEach((cb) => cb.addEventListener('change', async () => {
-        const posKey = cb.dataset.pos, permKey = cb.dataset.perm;
+      wireEvents();
+    }
+
+    function wireEvents() {
+      root.querySelectorAll('[data-col]').forEach((pill) => pill.addEventListener('click', () => {
+        selectedColumnKey = pill.dataset.col;
+        filters.permSearch = '';
+        filters.category = 'all';
+        render();
+      }));
+
+      document.getElementById('am-search').addEventListener('input', (ev) => { filters.search = ev.target.value; render(); });
+      document.getElementById('am-status-filter').addEventListener('change', (ev) => { filters.status = ev.target.value; render(); });
+      wireSortControl('am-sort-field', 'am-sort-dir', sort, render);
+
+      document.getElementById('am-add-pos').addEventListener('click', async () => {
+        const name = prompt('New position name (from HR 201 -- this also becomes selectable when assigning an employee\'s position):');
+        if (!name || !name.trim()) return;
+        try {
+          const id = await createHrPosition(name.trim());
+          toast('am-msg', 'Position added.', false);
+          await load(true);
+          selectedColumnKey = 'POSITION:' + name.trim();
+          render();
+        } catch (err) {
+          toast('am-msg', String(err.message || err), true);
+        }
+      });
+
+      const catFilterEl = document.getElementById('am-cat-filter');
+      if (catFilterEl) catFilterEl.addEventListener('change', (ev) => { filters.category = ev.target.value; render(); });
+      const permSearchEl = document.getElementById('am-perm-search');
+      if (permSearchEl) permSearchEl.addEventListener('input', (ev) => { filters.permSearch = ev.target.value; render(); });
+
+      const autoAccessEl = document.getElementById('am-auto-access');
+      if (autoAccessEl) autoAccessEl.addEventListener('change', async () => {
+        const name = columnLabel(selectedColumnKey);
+        const posRow = positionByName(name);
+        const enabling = autoAccessEl.checked;
+        const msg = enabling
+          ? 'Turn Automatic Access back ON for ' + name + '? All ' + posRow.active_employee_count + ' active employee(s) currently in this position will immediately receive its checked permissions again.'
+          : 'Turn Automatic Access OFF for ' + name + '? All ' + posRow.active_employee_count + ' active employee(s) currently in this position will immediately LOSE its checked permissions (unless they have an Individual Override).';
+        if (!confirm(msg)) { autoAccessEl.checked = !enabling; return; }
+        autoAccessEl.disabled = true;
+        try {
+          await setHrPositionAutomaticAccess(posRow.id, enabling);
+          toast('am-msg', 'Automatic Access ' + (enabling ? 'enabled' : 'disabled') + ' for ' + name + '.', false);
+          await load(true);
+        } catch (err) {
+          toast('am-msg', String(err.message || err), true);
+          autoAccessEl.checked = !enabling;
+          autoAccessEl.disabled = false;
+        }
+      });
+
+      const posActiveEl = document.getElementById('am-pos-active');
+      if (posActiveEl) posActiveEl.addEventListener('change', async () => {
+        const name = columnLabel(selectedColumnKey);
+        const posRow = positionByName(name);
+        const activating = posActiveEl.checked;
+        posActiveEl.disabled = true;
+        try {
+          await setHrPositionActive(posRow.id, activating);
+          toast('am-msg', 'Position ' + (activating ? 'reactivated' : 'deactivated') + '.', false);
+          await load(true);
+        } catch (err) {
+          toast('am-msg', String(err.message || err), true);
+          posActiveEl.checked = !activating;
+          posActiveEl.disabled = false;
+        }
+      });
+
+      const renameBtn = document.getElementById('am-rename-pos');
+      if (renameBtn) renameBtn.addEventListener('click', async () => {
+        const name = columnLabel(selectedColumnKey);
+        const posRow = positionByName(name);
+        const newName = prompt('Rename "' + name + '" to:', name);
+        if (!newName || !newName.trim() || newName.trim() === name) return;
+        if (!confirm('Rename "' + name + '" to "' + newName.trim() + '"? This updates the HR 201 record for all ' + posRow.total_employee_count + ' employee(s) ever assigned to it, plus its permission template.')) return;
+        try {
+          await renameHrPosition(posRow.id, newName.trim());
+          toast('am-msg', 'Position renamed.', false);
+          selectedColumnKey = 'POSITION:' + newName.trim();
+          await load(true);
+        } catch (err) {
+          toast('am-msg', String(err.message || err), true);
+        }
+      });
+
+      root.querySelectorAll('.am-perm-row input[type=checkbox]').forEach((cb) => cb.addEventListener('change', async () => {
+        const permKey = cb.dataset.perm;
         const checked = cb.checked;
+        // columnLabel() appends " (role)" for display -- strip it back off before
+        // using the name as a lookup key (positionByName()/roleCounts), the same fix
+        // detailHtml() already applies at its own call site above.
+        const name = columnLabel(selectedColumnKey).replace(' (role)', '');
+        const isPosition = selectedColumnKey.startsWith('POSITION:');
+        const affected = isPosition ? (positionByName(name) || {}).active_employee_count || 0 : (roleCounts[name] || 0);
+        const keyInfo = keys.find((k) => k.key === permKey);
+        // Section 19: confirm before a change that actually reaches live employees;
+        // skip the interruption for a pre-staged position nobody's in yet.
+        if (affected > 0) {
+          const msg = (checked ? 'Grant "' : 'Revoke "') + (keyInfo ? keyInfo.label : permKey) + '" ' + (checked ? 'to' : 'from') +
+            ' all ' + affected + ' active employee' + (affected === 1 ? '' : 's') + ' currently ' + (isPosition ? 'in ' + name : 'holding ' + name) + '?\n\nThis takes effect immediately.';
+          if (!confirm(msg)) { cb.checked = !checked; return; }
+        }
         cb.disabled = true;
         try {
-          await setPositionPermission(posKey, permKey, checked);
-          if (checked) grants.add(permKey + '|' + posKey); else grants.delete(permKey + '|' + posKey);
-          toast('am-msg', (checked ? 'Granted ' : 'Revoked ') + permKey + ' for ' + columnLabel(posKey) + '.', false);
-          await load();
+          await setPositionPermission(selectedColumnKey, permKey, checked);
+          if (checked) grants.add(permKey + '|' + selectedColumnKey); else grants.delete(permKey + '|' + selectedColumnKey);
+          toast('am-msg', (checked ? 'Granted ' : 'Revoked ') + (keyInfo ? keyInfo.label : permKey) + ' for ' + name + '.', false);
         } catch (err) {
           cb.checked = !checked;
           toast('am-msg', String(err.message || err), true);
@@ -162,7 +377,7 @@ if (employee) {
         try {
           await setEmployeePermissionOverride(employeeId, permissionKey, granted, reason);
           toast('am-msg', 'Override saved.', false);
-          await load();
+          await load(true);
         } catch (err) {
           toast('am-msg', String(err.message || err), true);
         }
@@ -174,7 +389,7 @@ if (employee) {
         try {
           await removeEmployeePermissionOverride(employeeId, permissionKey);
           toast('am-msg', 'Override removed.', false);
-          await load();
+          await load(true);
         } catch (err) {
           toast('am-msg', String(err.message || err), true);
         }

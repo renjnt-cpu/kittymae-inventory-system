@@ -16,18 +16,18 @@
 import { initShell, toast, esc } from './js/shell.js';
 import {
   listAllEmployee201Files, upsertEmployee201File, createEmployee, getBranches, updateEmployeeHireDate,
-  listEmployee201Documents, uploadEmployee201Document, getEmployee201DocumentUrl, deleteEmployee201Document,
+  listEmployee201Documents, uploadEmployee201Document, getEmployee201DocumentUrl, deleteEmployee201Document, listHrPositions,
 } from './js/api.js';
 
 // Roles mirror employees.role's own CHECK constraint exactly (Admin/Manager
 // picked here are rare via this form -- almost every new hire is Staff or Branch
 // Supervisor -- but included so a manager-level hire never needs a follow-up SQL
-// edit). Position is a free-text field with a <datalist> of the positions actually
-// used elsewhere in this app, same reasoning as Job Title below -- there's no fixed
-// list to enforce here (Personal Assistant/Sales Executive/etc. don't map to any
-// single department the way Job Title does).
+// edit). Position is a free-text field with a <datalist> of positions -- but per
+// Ren's 2026-09-22 spec ("HR 201 is the position source of truth... do not hard-code
+// position names"), that suggestion list now loads from hr_positions instead of a
+// hardcoded array. Typing a genuinely new value still works (the datalist only
+// suggests) and auto-registers it there for next time via a DB trigger.
 const EMPLOYEE_ROLES = ['Staff', 'Branch Supervisor', 'Manager', 'Admin', 'None'];
-const KNOWN_POSITIONS = ['HR Supervisor', 'Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant', 'Sales Executive', 'Personal Assistant', 'Auditor', 'Supervisor', 'Editor', 'Inventory Staff'];
 
 // Kittymae's real departments/positions only -- the reference roster sheet this
 // mirrors ("OFFICE NEEDED") has a much bigger Department/Position code list built for
@@ -93,6 +93,10 @@ if (employee) {
     const branchOptions = (selected) => branches.map((b) =>
       '<option value="' + b.id + '"' + (b.id === selected ? ' selected' : '') + '>' + esc(b.name) + '</option>'
     ).join('');
+    // Only Active positions suggested here (a discontinued title stays visible in the
+    // Access Matrix for history, but shouldn't be offered when hiring someone new).
+    let knownPositions = [];
+    try { knownPositions = (await listHrPositions()).filter((p) => p.is_active).map((p) => p.name); } catch (err) { /* datalist is a nice-to-have -- free-typing still works if this fails */ }
     await load();
 
     async function load() {
@@ -115,7 +119,7 @@ if (employee) {
               '<div class="field" style="min-width:180px;"><label>Full Name *</label><input type="text" name="fullName" required></div>' +
               '<div class="field" style="min-width:200px;"><label>Email *</label><input type="email" name="email" required></div>' +
               '<div class="field"><label>Role</label><select name="role">' + EMPLOYEE_ROLES.map((r) => '<option' + (r === 'Staff' ? ' selected' : '') + '>' + r + '</option>').join('') + '</select></div>' +
-              '<div class="field"><label>Position</label><input type="text" name="position" list="hr-add-position-list"><datalist id="hr-add-position-list">' + KNOWN_POSITIONS.map((p) => '<option value="' + esc(p) + '">').join('') + '</datalist></div>' +
+              '<div class="field"><label>Position</label><input type="text" name="position" list="hr-add-position-list"><datalist id="hr-add-position-list">' + knownPositions.map((p) => '<option value="' + esc(p) + '">').join('') + '</datalist></div>' +
               '<div class="field"><label>Branch</label><select name="branchId"><option value="">— none —</option>' + branchOptions() + '</select></div>' +
               '<div class="field"><label>Date Hired</label><input type="date" name="hireDate"></div>' +
               '<div class="field"><label>Contact Number</label><input type="text" name="contactNumber"></div>' +

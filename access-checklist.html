@@ -44,7 +44,7 @@
 import { initShell, toast, esc } from './js/shell.js';
 import {
   getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, listScrapEntries,
-  subscribeToChanges, getBranches, listProducts, listAllInventoryQty,
+  subscribeToChanges, getBranches, listProducts, listAllInventoryQty, listHrPositions,
 } from './js/api.js';
 import { branchColor } from './js/branchColors.js';
 import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js';
@@ -60,19 +60,16 @@ const SCRAP_LB_SORT_COMPARATORS = { name: byText('name'), count: byNumber('count
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g';
 
-// Every position value that currently drives an access rule somewhere, plus the other
-// job titles already in use -- kept as a fixed list (not free text) so a typo here
-// can't silently fail to match the position checks in shell.js/transactions.html/etc.
-// Auditor added 2026-09-21 (Ren's spec section 121-132) -- the position that, along
-// with any Supervisor-named position or Branch Supervisor role, gates amount editing
-// in POS/Layaway (is_amount_editor() in the DB). Assign it here to grant that.
-// Supervisor/Editor/Inventory Staff added 2026-09-21 (Ren's spec section 289-302,
-// Pull Out Item access) -- Supervisor and Editor also carry transaction.edit_amount,
-// matching Auditor's own dual grant; see position_permissions in the DB, editable
-// from the Position Access Matrix (access-matrix.html) without a code change.
-const POSITIONS = ['Sales Executive', 'Admin Assistant', 'Branch Team Leader', 'HR Supervisor', 'Inventory Supervisor', 'Operations Supervisor', 'Personal Assistant', 'Auditor', 'Supervisor', 'Editor', 'Inventory Staff'];
+// HR 201 is the position source of truth (Ren's spec, 2026-09-22) -- this dropdown's
+// options load from hr_positions (via listHrPositions() below, fetched once before the
+// first render) instead of a hardcoded list kept in sync by hand across three files.
+// A strict <select> (not free text) is still right here specifically -- this is a
+// "change this employee's actual position" control, so it should only ever offer
+// positions that genuinely exist, not let a typo silently create an orphan one
+// (creating a genuinely NEW position is a deliberate action on access-matrix.html).
+let POSITIONS = [];
 const positionOptions = (selected) => '<option value="">— None —</option>' + POSITIONS.map((p) =>
-  '<option' + (p === selected ? ' selected' : '') + '>' + p + '</option>'
+  '<option' + (p === selected ? ' selected' : '') + '>' + esc(p) + '</option>'
 ).join('');
 // Mirrors is_position_manager() in 62_position_managers_refund_scrap_subasta.sql --
 // full manage (approve/edit/delete) on Refunds/Scrap/Subasta, not just add.
@@ -222,6 +219,7 @@ if (employee) {
     // sensibly to what the system actually grants, with room to correct it if reality
     // differs from the computed default.
     let overrides = {};
+    try { POSITIONS = (await listHrPositions()).filter((p) => p.is_active).map((p) => p.name); } catch (err) { /* falls back to an empty dropdown -- access-matrix.html is the real fix if this keeps failing */ }
 
     // Inventory Value by Branch -- total pcs and total retail value (system selling
     // price x pcs on hand) per branch, same numbers SKU Catalog's own tiles show, just

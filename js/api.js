@@ -1683,6 +1683,68 @@ export async function setPositionPermission(positionKey, permissionKey, granted)
   if (error) throw new Error(error.message);
 }
 
+/** HR 201 is the position source of truth (Ren's spec, 2026-09-22): hr_positions is
+ * auto-populated whenever an employee's position is set to a new value (a DB trigger,
+ * not client-side logic), so this list is always exactly "every position HR 201 has
+ * ever used, plus any pre-staged via createHrPosition() ahead of hiring" -- never a
+ * hardcoded array. active_employee_count/total_employee_count come straight from a
+ * live join, never cached. */
+export async function listHrPositions() {
+  const { data, error } = await supabase.rpc('list_hr_positions');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Active employee count per ROLE (Admin/Manager/Branch Supervisor/Staff/None) --
+ * deliberately separate from getEmployeesForChecklist(), which excludes Admins and
+ * non-Kittymae-company employees for that page's own purpose and would undercount here. */
+export async function getRoleEmployeeCounts() {
+  const { data, error } = await supabase.rpc('get_role_employee_counts');
+  if (error) throw new Error(error.message);
+  return Object.fromEntries((data || []).map((r) => [r.role, Number(r.active_employee_count)]));
+}
+
+/** Admin-only: pre-stage a position (and its permission template) before anyone is
+ * hired into it, or register one on the fly. Returns the new/existing position's
+ * stable id. */
+export async function createHrPosition(name) {
+  const { data, error } = await supabase.rpc('create_hr_position', { p_name: name });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Admin-only: renames a position everywhere at once -- hr_positions.name, every
+ * employees.position currently on it, and every position_permissions grant -- so a
+ * rename never orphans an existing permission template (spec section 2). */
+export async function renameHrPosition(id, newName) {
+  const { error } = await supabase.rpc('rename_hr_position', { p_id: id, p_new_name: newName });
+  if (error) throw new Error(error.message);
+}
+
+/** Admin-only: spec section 5's "Automatic Access" toggle. When disabled, the
+ * position's checked permissions stop auto-applying to everyone in it -- only an
+ * Individual Override still grants access to someone nominally in that position. */
+export async function setHrPositionAutomaticAccess(id, enabled) {
+  const { error } = await supabase.rpc('set_hr_position_automatic_access', { p_id: id, p_enabled: enabled });
+  if (error) throw new Error(error.message);
+}
+
+/** Admin-only: a discontinued job title stays visible for history but drops out of
+ * the default (active-only) matrix view and the HR 201 position datalist. */
+export async function setHrPositionActive(id, active) {
+  const { error } = await supabase.rpc('set_hr_position_active', { p_id: id, p_active: active });
+  if (error) throw new Error(error.message);
+}
+
+/** Admin-only: everything spec section 18 wants shown for one position at a glance
+ * (counts, branches its people are in, its full permission list, and any Individual
+ * Overrides affecting someone currently in it) in one call. */
+export async function getPositionDetails(id) {
+  const { data, error } = await supabase.rpc('get_position_details', { p_id: id });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 /** Admin-only: every employee's currently-granted keys plus how each was granted
  * ('position' via role/position template, or 'override' via an individual grant) --
  * feeds each employee's "Access Source" display. */
