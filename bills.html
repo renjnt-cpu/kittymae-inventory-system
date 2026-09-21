@@ -15,6 +15,19 @@
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js';
 import { listBills, createBill, setBillStatus, updateBill, deleteBill, uploadBillAttachment, getBillAttachmentUrl, removeBillAttachment, subscribeToChanges } from './js/api.js';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js';
+
+// Global Filter + Sort rules (Ren, 2026-09-21, section 36) -- replaces this page's old
+// per-column header-click sort, invisible once its table collapses to header-less
+// cards on mobile, with the one shared Sort control used everywhere else.
+const BILL_SORT_FIELDS = [
+  { key: 'name', label: 'Name' }, { key: 'account_name', label: 'Account Name' }, { key: 'category', label: 'Category' },
+  { key: 'amount', label: 'Amount' }, { key: 'due_date', label: 'Due Date' }, { key: 'status', label: 'Status' },
+];
+const BILL_SORT_COMPARATORS = {
+  name: byText('name'), account_name: byText('account_name'), category: byText('category'),
+  amount: byNumber('amount'), due_date: byDate('due_date'), status: byText('status'),
+};
 
 const STATUS_BADGE = { Unpaid: 'pending', Overdue: 'low', 'Auto-debited': 'transit', Paid: 'ok' };
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
@@ -29,6 +42,7 @@ if (employee) {
     root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Bills tracking is restricted to Admin or accounts granted Bills access.</p></div></div>';
   } else {
     const canDelete = ['Admin', 'Manager'].includes(employee.role);
+    const sort = { field: 'due_date', dir: 'asc' };
     root.innerHTML =
       '<div class="bills-layout">' +
         '<div class="bills-col-add">' +
@@ -66,6 +80,7 @@ if (employee) {
               '<div class="field"><label>Min Amount</label><input type="number" id="f-amount-min" step="0.01" min="0" style="width:100px;"></div>' +
               '<div class="field"><label>Max Amount</label><input type="number" id="f-amount-max" step="0.01" min="0" style="width:100px;"></div>' +
               '<div class="field"><label>Recurring</label><select id="f-recurring"><option value="all">All</option><option value="1">Recurring only</option><option value="0">One-time only</option></select></div>' +
+              sortControlHtml(BILL_SORT_FIELDS, sort, 'bill-sort-field', 'bill-sort-dir') +
               '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
             '</div>' +
           '</div>' +
@@ -100,10 +115,6 @@ if (employee) {
     });
 
     let allBills = [];
-    // null = natural/insertion order until a header is clicked, same as every other
-    // page's default. Applied once, before the Unpaid/Paid split, so both sections
-    // stay consistently ordered.
-    let billSort = null, billSortDir = 'desc';
     await load();
     subscribeToChanges('bills', load);
 
@@ -120,6 +131,7 @@ if (employee) {
       document.getElementById('f-recurring').value = 'all';
       render();
     });
+    wireSortControl('bill-sort-field', 'bill-sort-dir', sort, render);
 
     async function load() {
       const list = document.getElementById('bill-list');
@@ -268,15 +280,6 @@ if (employee) {
       if (fMax) rows = rows.filter((b) => Number(b.amount || 0) <= Number(fMax));
       if (fRecurring !== 'all') rows = rows.filter((b) => (fRecurring === '1') === !!b.is_recurring);
 
-      if (billSort) {
-        const dirMul = billSortDir === 'desc' ? -1 : 1;
-        rows = [...rows].sort((a, b) => {
-          const av = a[billSort], bv = b[billSort];
-          const cmp = billSort === 'amount' ? Number(av || 0) - Number(bv || 0) : String(av || '').localeCompare(String(bv || ''));
-          return cmp * dirMul;
-        });
-      }
-
       const totalAll = rows.reduce((s, b) => s + Number(b.amount || 0), 0);
       const totalUnpaid = rows.filter((b) => b.status === 'Unpaid' || b.status === 'Overdue').reduce((s, b) => s + Number(b.amount || 0), 0);
       const totalPaid = rows.filter((b) => b.status === 'Paid' || b.status === 'Auto-debited').reduce((s, b) => s + Number(b.amount || 0), 0);
@@ -311,21 +314,15 @@ if (employee) {
           '<tr class="edit-row" data-edit-for="' + b.id + '" style="display:none;"><td colspan="11"></td></tr>';
       }
 
-      // Sort control sits beside the column's own name inside its <th>, matching the
-      // Scrap Encoding Activity leaderboard's pattern -- click to rank by that column
-      // (highest/Z-first), click again to flip to lowest/A-first.
-      const sortTh = (key, label) => {
-        const active = billSort === key;
-        const arrow = active ? (billSortDir === 'desc' ? ' ▼' : ' ▲') : '';
-        return '<th><button type="button" class="btn small' + (active ? '' : ' secondary') + '" data-bill-sort="' + key + '" style="padding:2px 8px;">' + label + arrow + '</button></th>';
-      };
-
+      // One shared Sort control governs every category folder in both sections
+      // (section 20's "don't use different sort controls per status/category" spirit);
+      // filtering already picked `sectionRows`, this only reorders them (section 11).
       function tableHtml(sectionRows) {
         return '<div class="table-scroll"><table><thead><tr>' +
-          sortTh('name', 'Name') + sortTh('account_name', 'Account Name') + '<th>Account Number</th>' + sortTh('category', 'Category') +
-          sortTh('amount', 'Amount') + sortTh('due_date', 'Due Date') + sortTh('status', 'Status') + '<th>Recurring</th><th>Notes</th><th>Photo</th><th></th>' +
+          '<th>Name</th><th>Account Name</th><th>Account Number</th><th>Category</th>' +
+          '<th>Amount</th><th>Due Date</th><th>Status</th><th>Recurring</th><th>Notes</th><th>Photo</th><th></th>' +
           '</tr></thead><tbody>' +
-          sectionRows.map(rowHtml).join('') + '</tbody></table></div>';
+          applySort(sectionRows, sort, BILL_SORT_COMPARATORS).map(rowHtml).join('') + '</tbody></table></div>';
       }
 
       // One collapsible folder per category (Ren, 2026-09-17: "make a folder by
@@ -357,12 +354,6 @@ if (employee) {
         '<h3 style="color:var(--ok);margin-top:22px;">Paid / Auto-debited (' + paidRows.length + ')</h3>' +
         categoryFoldersHtml(paidRows, 'bill-cat-paid');
 
-      list.querySelectorAll('[data-bill-sort]').forEach((btn) => btn.addEventListener('click', () => {
-        const key = btn.dataset.billSort;
-        if (billSort === key) { billSortDir = billSortDir === 'desc' ? 'asc' : 'desc'; }
-        else { billSort = key; billSortDir = 'desc'; }
-        render();
-      }));
 
       list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
         const id = btn.dataset.id;
