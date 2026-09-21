@@ -13,7 +13,7 @@ const ACTIVITY_LINKS = {
   scrap_entries: 'branches.html?tab=scrap&open=',
   subasta_items: 'branches.html?tab=subasta',
   pull_out_records: 'pull-out.html?open=',
-  inventory_transfers: 'transfers.html',
+  inventory_transfers: 'transfers.html?open=',
   inventory_transactions: 'item-monitoring.html',
   refunds: 'refunds.html',
   products: 'products.html',

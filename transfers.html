@@ -9,29 +9,28 @@
 <body>
 <main>
   <div id="tr-msg"></div>
+  <!-- Same Form Drawer / Detail Drawer flow as the branch modules (Ren's spec 271-288):
+       primary action at the top, Summary tiles, Search & Filters and the active-filter
+       strip, then the records. Requesting a transfer happens in the form drawer; every
+       transfer's details and its workflow actions (Approve / Ship / Receive / ...) live
+       in the detail drawer. -->
+  <div class="module-topbar"><div></div><div style="text-align:right;">
+    <button type="button" class="btn" id="tr-new-btn">+ New Transfer</button>
+  </div></div>
+  <div class="tiles" id="transfer-tiles"></div>
   <div class="card">
-    <h3>Request Transfer</h3>
-    <form id="req-form">
-      <div class="field"><label>From Branch *</label><select name="fromBranchId" id="from-branch" required></select></div>
-      <div class="field"><label>To Branch *</label><select name="toBranchId" id="to-branch" required></select></div>
-      <div id="req-lines"></div>
-      <button type="button" class="btn small secondary" id="add-line">+ Add Item</button>
-      <button class="btn" type="submit">Request Transfer</button>
-    </form>
-  </div>
-  <div class="card" style="margin-top:16px;">
-    <h3>Trace a Product</h3>
-    <p class="muted" style="margin-top:-4px;">Search transfers by SKU or product name, optionally narrowed to a date range. Applies to Active, Cancelled/Rejected, and Received below.</p>
+    <h3 style="margin-top:0;">Search &amp; Filter <span class="muted" style="font-weight:normal;">— trace a product across every transfer</span></h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
       <div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="tr-trace-search" placeholder="SKU or product name…"></div>
-      <div class="field"><label>From</label><input type="date" id="tr-trace-from"></div>
-      <div class="field"><label>To</label><input type="date" id="tr-trace-to"></div>
-      <button type="button" class="btn small secondary" id="tr-trace-clear">Clear</button>
+      <div class="field"><label>Status</label><select id="tr-f-status"><option value="all">All</option></select></div>
+      <div class="field"><label>Requested From</label><input type="date" id="tr-trace-from"></div>
+      <div class="field"><label>Requested To</label><input type="date" id="tr-trace-to"></div>
+      <button type="button" class="btn small secondary" id="tr-trace-clear">Clear Filters</button>
     </div>
   </div>
+  <div id="tr-active-filters"></div>
 
-  <h2>Transfers</h2>
-  <div class="tiles" id="transfer-tiles"></div>
+  <h3 style="margin:0 0 8px;">Active</h3>
   <div id="transfer-active"><div class="muted">Loading…</div></div>
 
   <details class="card" style="margin-top:16px;">
@@ -41,6 +40,34 @@
 
   <h3 style="margin-top:20px;">Received — by Branch</h3>
   <div id="transfer-received-by-branch"></div>
+
+  <div class="drawer-backdrop" id="tr-form-backdrop"></div>
+  <div class="drawer" id="tr-form-drawer">
+    <div class="drawer-header"><h3>New Transfer</h3><button type="button" class="drawer-close" id="tr-form-close" aria-label="Close">✕</button></div>
+    <div class="drawer-body">
+      <form id="req-form" style="display:flex;flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:8px;">
+        <div class="drawer-section">
+          <h4>Route</h4>
+          <div class="field"><label>From Branch *</label><select name="fromBranchId" id="from-branch" required></select></div>
+          <div class="field"><label>To Branch *</label><select name="toBranchId" id="to-branch" required></select></div>
+        </div>
+        <div class="drawer-section">
+          <h4>Items</h4>
+          <div id="req-lines"></div>
+          <button type="button" class="btn small secondary" id="add-line" style="align-self:flex-start;margin-top:4px;">+ Add another item</button>
+        </div>
+      </form>
+    </div>
+    <div class="drawer-footer">
+      <button class="btn" type="submit" form="req-form" id="tr-submit-btn">Request Transfer</button>
+      <button type="button" class="btn secondary" id="tr-form-cancel">Cancel</button>
+    </div>
+  </div>
+  <div class="drawer-backdrop" id="tr-detail-backdrop"></div>
+  <div class="drawer" id="tr-detail-drawer">
+    <div class="drawer-header"><div><h3 id="tr-detail-title">Transfer</h3><div class="muted" id="tr-detail-sub"></div></div><button type="button" class="drawer-close" id="tr-detail-close" aria-label="Close">✕</button></div>
+    <div class="drawer-body" id="tr-detail-body"></div>
+  </div>
 </main>
 
 <script type="module">
@@ -50,81 +77,63 @@ import {
   shipTransfer, receiveTransfer, rejectTransfer, cancelTransfer, deleteTransfer, subscribeToChanges, searchProducts,
 } from './js/api.js';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons } from './js/uiKit.js';
 
 const STATUS_BADGE = {
   Draft: 'pending', Requested: 'pending', Approved: 'pending', Preparing: 'pending',
   'In Transit': 'transit', Received: 'ok', Rejected: 'low', Cancelled: 'low',
 };
+const STATUSES = ['Requested', 'Approved', 'Preparing', 'In Transit', 'Received', 'Rejected', 'Cancelled'];
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
-// Ren's spec section 160: KPI tiles at the top of the page, same pattern as every
-// other module (POS/Layaway/Scrap/Subasta/Online Orders) already uses.
 const tile = (num, label) => '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>';
 
 const employee = await initShell('transfers');
 if (employee) {
   const branches = await getBranches();
   const byId = Object.fromEntries(branches.map((b) => [b.id, b.name]));
-  let allTransfers = []; // so handleAction's 'edit' case can look up a transfer's own from/to/items by id
-  // Requesting is now open to any branch staff again (Ren, 2026-09-16: "since
-  // everyone can access now ERP they can also request in transfers") -- reversing the
-  // earlier same-day tightening. create_transfer_request() enforces the actual rule
-  // server-side: non-Admin/Manager/unscoped-position staff must have their own branch
-  // as either end of the transfer. Approve/Reject/Cancel-of-someone-else's-request
-  // stay Admin/Manager only, unchanged.
+  const isAdminManager = employee.role === 'Admin' || employee.role === 'Manager';
+  let allTransfers = [];
+  let openDetailId = null;
 
-  ['from-branch', 'to-branch'].forEach((id) => {
-    document.getElementById(id).innerHTML = branches.map((b) => '<option value="' + b.id + '" style="' + branchOptionStyle(b.id, branches) + '">' + esc(b.name) + '</option>').join('');
-  });
+  // Requesting is open to any branch staff (Ren, 2026-09-16) -- create_transfer_request()
+  // enforces the actual rule server-side: non-Admin/Manager/unscoped-position staff
+  // must have their own branch as either end of the transfer.
+  const branchOptionsHtml = (selected) => branches.map((b) =>
+    '<option value="' + b.id + '" style="' + branchOptionStyle(b.id, branches) + '"' + (b.id === selected ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('');
+  document.getElementById('from-branch').innerHTML = branchOptionsHtml(employee.branch_id ?? null);
+  document.getElementById('to-branch').innerHTML = branchOptionsHtml(null);
+  document.getElementById('tr-f-status').innerHTML += STATUSES.map((s) => '<option>' + s + '</option>').join('');
 
-  addLine(document.getElementById('req-lines'));
-  document.getElementById('add-line').addEventListener('click', () => addLine(document.getElementById('req-lines')));
-  // container param lets the Edit-transfer inline form (Admin only, see handleAction's
-  // 'edit' case below) reuse the exact same row markup/autocomplete for its own item
-  // list instead of duplicating it.
+  // ---- item line rows (request form + the Edit form inside the detail drawer) ----
   function addLine(container, prefill) {
     const div = document.createElement('div');
     div.className = 'line-row';
-    div.style.cssText = 'display:flex;gap:8px;align-items:flex-end;';
-    div.innerHTML = '<div class="field" style="width:200px;position:relative;">' +
+    div.style.cssText = 'display:flex;gap:8px;align-items:flex-end;margin-bottom:6px;';
+    div.innerHTML = '<div class="field" style="flex:1;min-width:0;position:relative;">' +
         '<label>SKU</label>' +
         '<input type="text" class="line-sku" autocomplete="off" placeholder="Type a SKU or item name…" required value="' + esc(prefill ? prefill.sku : '') + '">' +
         '<div class="line-sku-name muted" style="font-size:11px;"></div>' +
         '<div class="line-sku-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>' +
       '</div>' +
       '<div class="field" style="width:80px;"><label>Qty</label><input type="number" class="line-qty" min="1" required value="' + (prefill ? prefill.qty : '') + '"></div>' +
-      '<button type="button" class="btn small secondary" onclick="this.closest(\'.line-row\').remove()">Remove</button>';
+      '<button type="button" class="btn small secondary line-remove" aria-label="Remove item">✕</button>';
     container.appendChild(div);
+    div.querySelector('.line-remove').addEventListener('click', () => { if (container.querySelectorAll('.line-row').length > 1) div.remove(); });
     attachSkuAutocomplete(div);
   }
-
-  // Same SKU autocomplete pattern as Layaway/POS Walk-In's item rows (movement.html's
-  // original) -- lets whoever's requesting pick a real SKU instead of typing one that
-  // might not match anything, without changing what actually gets submitted (still
-  // just the .line-sku input's value).
+  function readLines(container) {
+    return Array.from(container.querySelectorAll('.line-row')).map((row) => ({
+      sku: row.querySelector('.line-sku').value.trim(),
+      qty: Number(row.querySelector('.line-qty').value),
+    })).filter((i) => i.sku);
+  }
+  // Same SKU autocomplete pattern as the other modules' item rows.
   function attachSkuAutocomplete(row) {
     const skuInput = row.querySelector('.line-sku');
     const skuSuggest = row.querySelector('.line-sku-suggest');
     const skuNamePreview = row.querySelector('.line-sku-name');
     let searchToken = 0, searchTimer = null;
     function hide() { skuSuggest.style.display = 'none'; skuSuggest.innerHTML = ''; }
-    function pick(p) {
-      skuInput.value = p.sku;
-      skuNamePreview.textContent = p.item_name + (p.category || p.product_line ? ' · ' + (p.category || p.product_line) : '');
-      hide();
-    }
-    function renderSuggestions(matches) {
-      if (!matches.length) { hide(); return; }
-      skuSuggest.innerHTML = matches.map((p) =>
-        '<div data-sku="' + esc(p.sku) + '" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;">' +
-          '<strong>' + esc(p.sku) + '</strong> — ' + esc(p.item_name) +
-          (p.category || p.product_line ? '<div class="muted" style="font-size:11px;">' + esc(p.category || p.product_line) + '</div>' : '') +
-        '</div>'
-      ).join('');
-      skuSuggest.style.display = '';
-      skuSuggest.querySelectorAll('[data-sku]').forEach((el, i) => {
-        el.addEventListener('mousedown', (ev) => { ev.preventDefault(); pick(matches[i]); });
-      });
-    }
     skuInput.addEventListener('input', () => {
       skuNamePreview.textContent = '';
       const q = skuInput.value.trim();
@@ -135,100 +144,178 @@ if (employee) {
         try {
           const results = await searchProducts(q);
           if (token !== searchToken) return;
-          renderSuggestions(results);
+          if (!results.length) { hide(); return; }
+          skuSuggest.innerHTML = results.slice(0, 8).map((p, i) =>
+            '<div data-i="' + i + '" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;">' +
+              '<strong>' + esc(p.sku) + '</strong> — ' + esc(p.item_name) +
+              (p.category || p.product_line ? '<div class="muted" style="font-size:11px;">' + esc(p.category || p.product_line) + '</div>' : '') +
+            '</div>').join('');
+          skuSuggest.style.display = '';
+          skuSuggest.querySelectorAll('[data-i]').forEach((el, i) => el.addEventListener('mousedown', (ev) => {
+            ev.preventDefault();
+            const p = results[i];
+            skuInput.value = p.sku;
+            skuNamePreview.textContent = p.item_name + (p.category || p.product_line ? ' · ' + (p.category || p.product_line) : '');
+            hide();
+          }));
           const exact = results.find((p) => p.sku.toLowerCase() === q.toLowerCase());
           if (exact) skuNamePreview.textContent = exact.item_name + (exact.category || exact.product_line ? ' · ' + (exact.category || exact.product_line) : '');
         } catch (err) { /* a failed lookup shouldn't block typing a SKU by hand */ }
       }, 200);
     });
+    skuInput.addEventListener('blur', () => setTimeout(hide, 150));
   }
+
+  // ---- form drawer ----
+  const reqLines = document.getElementById('req-lines');
+  addLine(reqLines);
+  document.getElementById('add-line').addEventListener('click', () => addLine(reqLines));
+  function openFormDrawer() {
+    document.getElementById('tr-form-backdrop').classList.add('open');
+    document.getElementById('tr-form-drawer').classList.add('open');
+  }
+  function closeFormDrawer() {
+    document.getElementById('tr-form-backdrop').classList.remove('open');
+    document.getElementById('tr-form-drawer').classList.remove('open');
+  }
+  document.getElementById('tr-new-btn').addEventListener('click', openFormDrawer);
+  document.getElementById('tr-form-close').addEventListener('click', closeFormDrawer);
+  document.getElementById('tr-form-cancel').addEventListener('click', closeFormDrawer);
+  document.getElementById('tr-form-backdrop').addEventListener('click', closeFormDrawer);
 
   document.getElementById('req-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const f = ev.target;
-    const items = Array.from(document.querySelectorAll('#req-lines .line-row')).map((row) => ({
-      sku: row.querySelector('.line-sku').value.trim(),
-      qty: Number(row.querySelector('.line-qty').value),
-    }));
+    // The submit button lives in .drawer-footer (form="req-form"), outside this <form>
+    // element's own subtree, so it's reached by its own id.
+    const btn = document.getElementById('tr-submit-btn');
+    const items = readLines(reqLines);
+    if (!items.length) { toast('tr-msg', 'Add at least one item.', true); return; }
+    if (Number(f.fromBranchId.value) === Number(f.toBranchId.value)) { toast('tr-msg', 'From and To must be different branches.', true); return; }
+    btn.disabled = true;
     try {
-      await createTransferRequest(Number(f.fromBranchId.value), Number(f.toBranchId.value), items);
+      const newId = await createTransferRequest(Number(f.fromBranchId.value), Number(f.toBranchId.value), items);
       toast('tr-msg', 'Transfer requested.', false);
       f.reset();
-      document.getElementById('req-lines').innerHTML = '';
-      addLine(document.getElementById('req-lines'));
-      await loadTransfers();
+      document.getElementById('from-branch').value = employee.branch_id ?? branches[0].id;
+      reqLines.innerHTML = '';
+      addLine(reqLines);
+      closeFormDrawer();
+      await load();
+      // The same drawer system now shows the saved request (spec 273).
+      if (newId) { openDetailId = newId; openDetail(newId); }
     } catch (err) {
       toast('tr-msg', String(err.message || err), true);
+    } finally {
+      btn.disabled = false;
     }
   });
 
-  await loadTransfers();
-  subscribeToChanges(['inventory_transfers', 'inventory_transfer_items'], loadTransfers);
-
-  document.getElementById('tr-trace-search').addEventListener('input', renderTransfers);
-  document.getElementById('tr-trace-from').addEventListener('change', renderTransfers);
-  document.getElementById('tr-trace-to').addEventListener('change', renderTransfers);
-  document.getElementById('tr-trace-clear').addEventListener('click', () => {
-    document.getElementById('tr-trace-search').value = '';
-    document.getElementById('tr-trace-from').value = '';
-    document.getElementById('tr-trace-to').value = '';
-    renderTransfers();
-  });
-
-  // Trace a Product: SKU or product name (via the products(item_name) join added to
-  // listTransfers) plus an optional date range on requested_at -- entirely client-side
-  // over the already-fetched allTransfers array, same pattern as Item Monitoring's
-  // Trace a Product filter.
-  function filterTransfers(rows) {
-    const q = document.getElementById('tr-trace-search').value.trim().toLowerCase();
-    const from = document.getElementById('tr-trace-from').value;
-    const to = document.getElementById('tr-trace-to').value;
-    let out = rows;
-    if (q) out = out.filter((t) => t.inventory_transfer_items.some((i) =>
-      i.sku.toLowerCase().includes(q) || ((i.products || {}).item_name || '').toLowerCase().includes(q)
-    ));
-    if (from) out = out.filter((t) => t.requested_at && t.requested_at.slice(0, 10) >= from);
-    if (to) out = out.filter((t) => t.requested_at && t.requested_at.slice(0, 10) <= to);
-    return out;
+  // ---- detail drawer ----
+  function closeDetailDrawer() {
+    document.getElementById('tr-detail-backdrop').classList.remove('open');
+    document.getElementById('tr-detail-drawer').classList.remove('open');
+  }
+  document.getElementById('tr-detail-close').addEventListener('click', closeDetailDrawer);
+  document.getElementById('tr-detail-backdrop').addEventListener('click', closeDetailDrawer);
+  function openDetail(id) {
+    const t = allTransfers.find((x) => String(x.id) === String(id));
+    if (!t) return;
+    // .textContent escapes on its own -- esc() here would double-escape.
+    document.getElementById('tr-detail-title').textContent = 'Transfer — ' + (byId[t.from_branch_id] || '?') + ' → ' + (byId[t.to_branch_id] || '?');
+    document.getElementById('tr-detail-sub').textContent = t.status + ' · requested ' + fmtDateTime(t.requested_at);
+    const body = document.getElementById('tr-detail-body');
+    body.innerHTML = renderDetailBody(t);
+    wireDetailBody(body, t);
+    document.getElementById('tr-detail-backdrop').classList.add('open');
+    document.getElementById('tr-detail-drawer').classList.add('open');
+  }
+  function refreshDetailIfOpen(id) {
+    if (!document.getElementById('tr-detail-drawer').classList.contains('open')) return;
+    if (!allTransfers.find((x) => String(x.id) === String(id))) { closeDetailDrawer(); return; }
+    openDetail(id);
   }
 
-  // Three buckets instead of one flat list (Ren, 2026-09-16: "make a folder to those
-  // cancel request. other folder per branch for received") -- Active covers every
-  // in-progress status, Cancelled/Rejected is one collapsed folder, and Received gets
-  // its own folder per receiving branch so "what has branch X gotten over time" is a
-  // one-click answer instead of scrolling a mixed list. The 3 buckets are a full,
-  // non-overlapping partition of every status in the CHECK constraint.
-  async function loadTransfers() {
+  async function load() {
     const activeBox = document.getElementById('transfer-active');
     activeBox.innerHTML = '<div class="muted">Loading…</div>';
     try {
       allTransfers = await listTransfers();
-      renderTransfers();
+      render();
+      if (openDetailId != null) refreshDetailIfOpen(openDetailId);
     } catch (err) {
       activeBox.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
     }
   }
 
-  function renderTransfers() {
-    const rows = filterTransfers(allTransfers);
-    const filtered = rows.length !== allTransfers.length;
+  // ---- filters + lists ----
+  function currentFilters() {
+    return {
+      q: document.getElementById('tr-trace-search').value.trim().toLowerCase(),
+      status: document.getElementById('tr-f-status').value,
+      from: document.getElementById('tr-trace-from').value,
+      to: document.getElementById('tr-trace-to').value,
+    };
+  }
+  function filterTransfers(rows, f) {
+    let out = rows;
+    if (f.q) out = out.filter((t) => t.inventory_transfer_items.some((i) =>
+      i.sku.toLowerCase().includes(f.q) || ((i.products || {}).item_name || '').toLowerCase().includes(f.q)));
+    if (f.status !== 'all') out = out.filter((t) => t.status === f.status);
+    if (f.from) out = out.filter((t) => t.requested_at && t.requested_at.slice(0, 10) >= f.from);
+    if (f.to) out = out.filter((t) => t.requested_at && t.requested_at.slice(0, 10) <= f.to);
+    return out;
+  }
+
+  function rowHtml(t) {
+    const items = t.inventory_transfer_items || [];
+    const qty = items.reduce((s, i) => s + Number(i.received_qty ?? i.sent_qty ?? i.requested_qty ?? 0), 0);
+    return '<tr>' +
+      '<td data-label="Route" class="full-row">' + branchBadge(esc, byId[t.from_branch_id], t.from_branch_id, branches) + ' → ' + branchBadge(esc, byId[t.to_branch_id], t.to_branch_id, branches) + '</td>' +
+      '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[t.status] || 'pending') + '">' + esc(t.status) + '</span>' + (t.has_discrepancy ? ' <span class="badge low">Discrepancy</span>' : '') + '</td>' +
+      '<td data-label="Items" class="full-row">' + items.length + ' item' + (items.length === 1 ? '' : 's') + ' · ' + qty + ' pcs<div class="muted" style="font-size:10px;">' + esc(items.map((i) => i.sku).slice(0, 4).join(', ')) + (items.length > 4 ? ' +' + (items.length - 4) + ' more' : '') + '</div></td>' +
+      '<td data-label="Requested">' + esc(t.requester ? t.requester.full_name : '—') + '<div class="muted" style="font-size:10px;">' + fmtDateTime(t.requested_at) + '</div></td>' +
+      '<td class="full-row"><button type="button" class="btn small secondary" data-act="view-details" data-id="' + esc(t.id) + '">View Details</button></td>' +
+    '</tr>';
+  }
+  const tableHtml = (rows) => '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
+    '<colgroup><col style="width:30%"><col style="width:16%"><col style="width:22%"><col style="width:18%"><col style="width:14%"></colgroup>' +
+    '<thead><tr><th>Route</th><th>Status</th><th>Items</th><th>Requested</th><th></th></tr></thead><tbody>' + rows.map(rowHtml).join('') + '</tbody></table></div>';
+
+  function render() {
+    const f = currentFilters();
+    const rows = filterTransfers(allTransfers, f);
+    const hasFilters = !!(f.q || f.status !== 'all' || f.from || f.to);
+    // Three buckets (Ren, 2026-09-16): Active covers every in-progress status,
+    // Cancelled/Rejected is one collapsed folder, Received gets a folder per branch.
     const active = rows.filter((t) => !['Received', 'Rejected', 'Cancelled'].includes(t.status));
     const cancelled = rows.filter((t) => ['Rejected', 'Cancelled'].includes(t.status));
     const received = rows.filter((t) => t.status === 'Received');
     const inTransit = rows.filter((t) => t.status === 'In Transit');
 
+    // Tiles, active-filter strip, every list and every count follow the same filters
+    // (MASTER UI rules 6/19/20/28).
     document.getElementById('transfer-tiles').innerHTML =
-      tile(rows.length, filtered ? 'Matching Transfers' : 'Total Transfers') +
+      tile(rows.length, hasFilters ? 'Matching Transfers' : 'Total Transfers') +
       tile(active.length, 'Active') + tile(inTransit.length, 'In Transit') +
       tile(received.length, 'Received') + tile(cancelled.length, 'Cancelled/Rejected');
+    const activeEl = document.getElementById('tr-active-filters');
+    activeEl.innerHTML = activeFiltersHtml([
+      { label: 'Search', value: esc(f.q) }, { label: 'Status', value: esc(f.status) },
+      { label: 'Requested From', value: esc(f.from) }, { label: 'Requested To', value: esc(f.to) },
+    ], 'tr-trace-clear');
+    wireProxyButtons(activeEl);
 
-    document.getElementById('transfer-active').innerHTML = active.length ? active.map(renderTransfer).join('')
-      : '<p class="muted">No active transfers' + (filtered ? ' match this search.' : '.') + '</p>';
+    const activeBox = document.getElementById('transfer-active');
+    activeBox.innerHTML = active.length ? tableHtml(active)
+      : emptyStateHtml({ message: hasFilters ? 'No active transfers match these filters.' : 'No active transfers.', hasFilters, clearId: 'tr-trace-clear', createLabel: '+ New Transfer', createId: 'tr-new-btn' });
+    wireProxyButtons(activeBox);
 
     document.getElementById('tr-cancelled-count').textContent = '(' + cancelled.length + ')';
-    document.getElementById('transfer-cancelled').innerHTML = cancelled.length
-      ? cancelled.map(renderTransfer).join('')
-      : '<p class="muted">None' + (filtered ? ' match this search.' : '.') + '</p>';
+    const cancelledBox = document.getElementById('transfer-cancelled');
+    cancelledBox.innerHTML = cancelled.length ? tableHtml(cancelled)
+      : emptyStateHtml({ message: hasFilters ? 'None match these filters.' : 'None.', hasFilters, clearId: 'tr-trace-clear' });
+    wireProxyButtons(cancelledBox);
 
     const byBranch = {};
     received.forEach((t) => { (byBranch[t.to_branch_id] = byBranch[t.to_branch_id] || []).push(t); });
@@ -238,156 +325,201 @@ if (employee) {
       ? branchIds.map((bid) =>
           '<details class="card" style="margin-top:10px;">' +
             '<summary style="cursor:pointer;font-weight:bold;">' + esc(byId[bid] || 'Unknown Branch') + ' <span class="muted" style="font-weight:normal;">(' + byBranch[bid].length + ')</span></summary>' +
-            '<div style="margin-top:10px;">' + byBranch[bid].map(renderTransfer).join('') + '</div>' +
-          '</details>'
-        ).join('')
-      : '<p class="muted">No received transfers' + (filtered ? ' match this search.' : ' yet.') + '</p>';
+            '<div style="margin-top:10px;">' + tableHtml(byBranch[bid]) + '</div>' +
+          '</details>').join('')
+      : emptyStateHtml({ message: hasFilters ? 'No received transfers match these filters.' : 'No received transfers yet.', hasFilters, clearId: 'tr-trace-clear' });
+    wireProxyButtons(branchBox);
 
-    wireActions();
+    document.querySelectorAll('[data-act="view-details"]').forEach((btn) => btn.addEventListener('click', () => { openDetailId = btn.dataset.id; openDetail(openDetailId); }));
   }
 
-  function renderTransfer(t) {
-    const canActOnFrom = employee.role === 'Admin' || employee.role === 'Manager' ||
-      (employee.role === 'Branch Supervisor' && employee.branch_id === t.from_branch_id);
-    const canActOnTo = employee.role === 'Admin' || employee.role === 'Manager' ||
-      (employee.role === 'Branch Supervisor' && employee.branch_id === t.to_branch_id);
-    const isAdminManager = employee.role === 'Admin' || employee.role === 'Manager';
-    // Maker-checker: whoever requested this transfer can't also approve it -- a
-    // different Admin/Manager has to (see approve_transfer()'s own server-side check,
-    // which this UI gate just mirrors so the button isn't shown only to fail).
-    // Approval is Admin/Manager-only now -- Branch Supervisor lost it along with
-    // request access (Ren: "only 2 admin can process... preparing and approved").
+  // ---- detail drawer body ----
+  function permissionsFor(t) {
+    const canActOnFrom = isAdminManager || (employee.role === 'Branch Supervisor' && employee.branch_id === t.from_branch_id);
+    const canActOnTo = isAdminManager || (employee.role === 'Branch Supervisor' && employee.branch_id === t.to_branch_id);
+    // Maker-checker: whoever requested it can't also approve or ship it -- a different
+    // Admin/Manager has to (approve_transfer()'s own server-side check, mirrored here).
     const isRequester = t.requested_by === employee.id;
-    const canApprove = !isRequester && isAdminManager;
-    const canShip = !isRequester && canActOnFrom;
-
+    return {
+      isRequester, canActOnFrom, canActOnTo,
+      canApprove: !isRequester && isAdminManager,
+      canShip: !isRequester && canActOnFrom,
+      // Edit is Admin-only and only while still Requested (Ren, 2026-09-16: "add edit
+      // transfer only me can edit") -- matching edit_transfer_request's own gate.
+      canEdit: employee.role === 'Admin' && t.status === 'Requested',
+      canDelete: employee.role === 'Admin' && ['Received', 'Rejected', 'Cancelled'].includes(t.status),
+    };
+  }
+  const actBtn = (label, act, secondary) => '<button type="button" class="btn small' + (secondary ? ' secondary' : '') + '" data-act="' + act + '">' + label + '</button> ';
+  function actionsHtml(t) {
+    const p = permissionsFor(t);
     let actions = '';
     if (t.status === 'Requested') {
-      if (canApprove) actions += btn('Approve', 'approve', t.id);
-      else if (isRequester) actions += '<span class="muted" style="font-size:11px;">Awaiting approval from someone else</span> ';
-      // Edit is deliberately narrower than everything else here -- Admin only (Ren,
-      // 2026-09-16: "add edit transfer only me can edit"), matching
-      // edit_transfer_request's own server-side gate, and only while still
-      // Requested -- once approved/prepared/shipped, cancel and re-request instead.
-      if (employee.role === 'Admin') actions += btn('Edit', 'edit', t.id, true);
-      if (isAdminManager) actions += btn('Reject', 'reject', t.id, true);
+      if (p.canApprove) actions += actBtn('Approve', 'approve');
+      else if (p.isRequester) actions += '<span class="muted" style="font-size:11px;">Awaiting approval from someone else</span> ';
+      if (p.canEdit) actions += actBtn('Edit', 'edit', true);
+      if (isAdminManager) actions += actBtn('Reject', 'reject', true);
     }
-    if (t.status === 'Approved' && canActOnFrom) actions += btn('Start Preparing', 'prepare', t.id);
-    if ((t.status === 'Approved' || t.status === 'Preparing')) {
-      if (canShip) actions += btn('Ship', 'ship', t.id);
-      else if (isRequester) actions += '<span class="muted" style="font-size:11px;">Awaiting shipping from someone else</span> ';
+    if (t.status === 'Approved' && p.canActOnFrom) actions += actBtn('Start Preparing', 'prepare');
+    if (t.status === 'Approved' || t.status === 'Preparing') {
+      if (p.canShip) actions += actBtn('Ship', 'ship');
+      else if (p.isRequester) actions += '<span class="muted" style="font-size:11px;">Awaiting shipping from someone else</span> ';
     }
-    if (t.status === 'In Transit' && canActOnTo) actions += btn('Receive', 'receive', t.id);
-    if (['Draft', 'Requested', 'Approved', 'Preparing'].includes(t.status) && isAdminManager) actions += btn('Cancel', 'cancel', t.id, true);
-    // Distinct from Cancel -- for a transfer that's already Received (a real
-    // duplicate, say) or a dead Rejected/Cancelled one, not something still in
-    // progress. Reverses the transfer's own inventory movements server-side, blocked
-    // if that would take any SKU/branch negative -- Admin-only (Ren, 2026-09-17:
-    // "delete this its duplicate already").
-    if (['Received', 'Rejected', 'Cancelled'].includes(t.status) && employee.role === 'Admin') actions += btn('Delete', 'delete', t.id, true);
-
-    const items = t.inventory_transfer_items.map((i) =>
-      '<tr><td data-label="SKU">' + esc(i.sku) + '</td><td data-label="Requested">' + i.requested_qty + '</td><td data-label="Sent">' + (i.sent_qty ?? '—') + '</td><td data-label="Received">' + (i.received_qty ?? '—') +
-      '</td><td data-label="Discrepancy">' + (i.discrepancy_qty ? '<span class="badge low">' + i.discrepancy_qty + '</span>' : '—') + '</td></tr>'
-    ).join('');
-
-    return '<div class="card" data-transfer-id="' + t.id + '">' +
-      '<h3>' + branchBadge(esc, byId[t.from_branch_id], t.from_branch_id, branches) + ' → ' + branchBadge(esc, byId[t.to_branch_id], t.to_branch_id, branches) +
-      ' &nbsp; <span class="badge ' + (STATUS_BADGE[t.status] || 'pending') + '">' + esc(t.status) + '</span>' +
-      (t.has_discrepancy ? ' <span class="badge low">DISCREPANCY</span>' : '') + '</h3>' +
-      '<p class="muted" style="margin:-6px 0 8px;font-size:12px;">Requested by ' + esc(t.requester ? t.requester.full_name : '—') +
-        ' on ' + fmtDateTime(t.requested_at) +
-        (t.approver ? ' · Approved by ' + esc(t.approver.full_name) + ' on ' + fmtDateTime(t.approved_at) : '') + '</p>' +
-      '<div class="table-scroll"><table><tr><th>SKU</th><th>Requested</th><th>Sent</th><th>Received</th><th>Discrepancy</th></tr>' + items + '</table></div>' +
-      '<div class="tr-actions" style="margin-top:8px;">' + actions + '</div>' +
-      '<div class="tr-inline" style="margin-top:8px;"></div>' +
-      '</div>';
+    if (t.status === 'In Transit' && p.canActOnTo) actions += actBtn('Receive', 'receive');
+    if (['Draft', 'Requested', 'Approved', 'Preparing'].includes(t.status) && isAdminManager) actions += actBtn('Cancel Transfer', 'cancel', true);
+    // Distinct from Cancel -- for a Received transfer (a real duplicate) or a dead
+    // Rejected/Cancelled one; reverses its inventory movements server-side, blocked if
+    // that would take any SKU/branch negative. Admin-only (Ren, 2026-09-17).
+    if (p.canDelete) actions += actBtn('Delete', 'delete', true);
+    return actions;
   }
-  function btn(label, action, id, secondary) {
-    return '<button class="btn small' + (secondary ? ' secondary' : '') + '" data-action="' + action + '" data-id="' + id + '">' + label + '</button> ';
+  const kv = (label, value) => value ? '<div class="drawer-kv"><span>' + label + '</span><b>' + value + '</b></div>' : '';
+  function renderDetailBody(t) {
+    const items = t.inventory_transfer_items || [];
+    const actions = actionsHtml(t);
+    return '<div class="drawer-section"><h4>Route</h4>' +
+      '<div class="drawer-kv"><span>From</span><b>' + branchBadge(esc, byId[t.from_branch_id], t.from_branch_id, branches) + '</b></div>' +
+      '<div class="drawer-kv"><span>To</span><b>' + branchBadge(esc, byId[t.to_branch_id], t.to_branch_id, branches) + '</b></div>' +
+      '<div class="drawer-kv"><span>Status</span><b><span class="badge ' + (STATUS_BADGE[t.status] || 'pending') + '">' + esc(t.status) + '</span>' + (t.has_discrepancy ? ' <span class="badge low">Discrepancy</span>' : '') + '</b></div>' +
+    '</div>' +
+    '<div class="drawer-section"><h4>Items</h4>' +
+      '<div class="table-scroll table-mini"><table><tr><th>SKU</th><th>Requested</th><th>Sent</th><th>Received</th><th>Disc.</th></tr>' +
+        items.map((i) => '<tr><td data-label="SKU">' + esc(i.sku) + (i.products && i.products.item_name ? '<div class="muted" style="font-size:10px;">' + esc(i.products.item_name) + '</div>' : '') + '</td>' +
+          '<td data-label="Requested">' + i.requested_qty + '</td><td data-label="Sent">' + (i.sent_qty ?? '—') + '</td><td data-label="Received">' + (i.received_qty ?? '—') + '</td>' +
+          '<td data-label="Disc.">' + (i.discrepancy_qty ? '<span class="badge low">' + i.discrepancy_qty + '</span>' : '—') + '</td></tr>').join('') +
+      '</table></div>' +
+    '</div>' +
+    '<div class="drawer-section"><h4>Timeline</h4>' +
+      kv('Requested', esc(t.requester ? t.requester.full_name : '—') + ' · ' + fmtDateTime(t.requested_at)) +
+      kv('Approved', t.approved_at ? esc(t.approver ? t.approver.full_name : '—') + ' · ' + fmtDateTime(t.approved_at) : '') +
+      kv('Shipped', t.shipped_at ? esc(t.shipper ? t.shipper.full_name : '—') + ' · ' + fmtDateTime(t.shipped_at) : '') +
+      kv('Received', t.received_at ? esc(t.receiver ? t.receiver.full_name : '—') + ' · ' + fmtDateTime(t.received_at) : '') +
+      kv('Rejected', t.rejected_at ? esc(t.rejecter ? t.rejecter.full_name : '—') + ' · ' + fmtDateTime(t.rejected_at) : '') +
+      kv('Reason', t.rejection_reason ? esc(t.rejection_reason) : '') +
+      kv('Cancelled', t.cancelled_at ? esc(t.canceller ? t.canceller.full_name : '—') + ' · ' + fmtDateTime(t.cancelled_at) : '') +
+      kv('Notes', t.notes ? esc(t.notes) : '') +
+    '</div>' +
+    (actions ? '<div class="drawer-section"><h4>Actions</h4>' + actions + '</div>' : '');
   }
 
-  function wireActions() {
-    document.querySelectorAll('[data-action]').forEach((el) => el.addEventListener('click', () => handleAction(el.dataset.action, el.dataset.id)));
+  // Workflow sub-forms rendered INSIDE the drawer body (spec 279/282); Cancel returns
+  // to the unchanged details, a successful save to the refreshed ones.
+  function qtyFormHtml(t, action) {
+    const label = action === 'ship' ? 'Sent' : 'Received';
+    return '<form id="tr-qty-form" style="display:flex;flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:8px;">' +
+      '<div class="drawer-section"><h4>' + (action === 'ship' ? 'Confirm quantities being shipped' : 'Confirm quantities received') + '</h4>' +
+        (t.inventory_transfer_items || []).map((i, idx) =>
+          '<div class="field"><label>' + esc(i.sku) + (i.products && i.products.item_name ? ' — ' + esc(i.products.item_name) : '') + ' <span class="muted">(requested ' + i.requested_qty + (i.sent_qty != null ? ', sent ' + i.sent_qty : '') + ')</span></label>' +
+          '<input type="number" name="q' + idx + '" min="0" required value="' + (action === 'ship' ? i.requested_qty : (i.sent_qty ?? i.requested_qty)) + '" aria-label="' + label + ' qty for ' + esc(i.sku) + '"></div>').join('') +
+      '</div>' +
+      '<div class="drawer-section" style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="btn" type="submit">Confirm ' + (action === 'ship' ? 'Ship' : 'Receive') + '</button>' +
+        '<button class="btn secondary" type="button" data-act="cancel-edit">Cancel</button>' +
+      '</div>' +
+    '</form>';
+  }
+  function reasonFormHtml(action) {
+    return '<form id="tr-reason-form" style="display:flex;flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:8px;">' +
+      '<div class="drawer-section"><h4>' + (action === 'reject' ? 'Reject this transfer' : 'Cancel this transfer') + '</h4>' +
+        '<div class="field"><label>Reason</label><input type="text" name="reason" placeholder="Why?"></div>' +
+      '</div>' +
+      '<div class="drawer-section" style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="btn" type="submit">Confirm ' + (action === 'reject' ? 'Reject' : 'Cancel Transfer') + '</button>' +
+        '<button class="btn secondary" type="button" data-act="cancel-edit">Back</button>' +
+      '</div>' +
+    '</form>';
+  }
+  function editFormHtml(t) {
+    return '<form id="tr-edit-form" style="display:flex;flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:8px;">' +
+      '<div class="drawer-section"><h4>Route</h4>' +
+        '<div class="field"><label>From Branch *</label><select name="fromBranchId" required>' + branchOptionsHtml(t.from_branch_id) + '</select></div>' +
+        '<div class="field"><label>To Branch *</label><select name="toBranchId" required>' + branchOptionsHtml(t.to_branch_id) + '</select></div>' +
+      '</div>' +
+      '<div class="drawer-section"><h4>Items</h4>' +
+        '<div id="tr-edit-lines"></div>' +
+        '<button type="button" class="btn small secondary" id="tr-edit-add-line" style="align-self:flex-start;margin-top:4px;">+ Add another item</button>' +
+      '</div>' +
+      '<div class="drawer-section" style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="btn" type="submit">Save Changes</button>' +
+        '<button class="btn secondary" type="button" data-act="cancel-edit">Cancel</button>' +
+      '</div>' +
+    '</form>';
   }
 
-  async function handleAction(action, transferId) {
-    const card = document.querySelector('[data-transfer-id="' + transferId + '"]');
-    const inline = card.querySelector('.tr-inline');
-    try {
-      if (action === 'approve') { await approveTransfer(transferId); return refresh(); }
-      if (action === 'prepare') { await startPreparingTransfer(transferId); return refresh(); }
-      if (action === 'reject') { await rejectTransfer(transferId, prompt('Reason for rejecting?') || ''); return refresh(); }
-      if (action === 'cancel') { await cancelTransfer(transferId, prompt('Reason for cancelling?') || ''); return refresh(); }
-      if (action === 'delete') {
-        if (!confirm('Permanently delete this transfer? This reverses the stock it moved and cannot be undone (blocked automatically if that would take any SKU negative).')) return;
-        await deleteTransfer(transferId);
-        return refresh();
-      }
-      if (action === 'edit') {
-        const t = allTransfers.find((x) => x.id === transferId);
-        if (!t) return;
-        inline.innerHTML = '';
-        const form = document.createElement('form');
-        form.id = 'edit-transfer-form';
-        form.innerHTML =
-          '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-            '<div class="field"><label>From Branch *</label><select name="fromBranchId" required>' +
-              branches.map((b) => '<option value="' + b.id + '" style="' + branchOptionStyle(b.id, branches) + '"' + (b.id === t.from_branch_id ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('') +
-            '</select></div>' +
-            '<div class="field"><label>To Branch *</label><select name="toBranchId" required>' +
-              branches.map((b) => '<option value="' + b.id + '" style="' + branchOptionStyle(b.id, branches) + '"' + (b.id === t.to_branch_id ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('') +
-            '</select></div>' +
-          '</div>' +
-          '<div class="edit-transfer-lines" style="margin-top:8px;"></div>';
-        inline.appendChild(form);
-        const linesBox = form.querySelector('.edit-transfer-lines');
-        t.inventory_transfer_items.forEach((i) => addLine(linesBox, { sku: i.sku, qty: i.requested_qty }));
-        const btnRow = document.createElement('div');
-        btnRow.style.cssText = 'display:flex;gap:6px;margin-top:8px;';
-        btnRow.innerHTML =
-          '<button type="button" class="btn small secondary" id="edit-add-line">+ Add Item</button>' +
-          '<button class="btn small" type="submit">Save Changes</button>' +
-          '<button type="button" class="btn small secondary" id="edit-cancel">Cancel</button>';
-        form.appendChild(btnRow);
-        form.querySelector('#edit-add-line').addEventListener('click', () => addLine(linesBox));
-        form.querySelector('#edit-cancel').addEventListener('click', () => { inline.innerHTML = ''; });
-        form.addEventListener('submit', async (ev) => {
-          ev.preventDefault();
-          const items = Array.from(linesBox.querySelectorAll('.line-row')).map((row) => ({
-            sku: row.querySelector('.line-sku').value.trim(),
-            qty: Number(row.querySelector('.line-qty').value),
-          }));
-          try {
-            await editTransferRequest(transferId, Number(form.fromBranchId.value), Number(form.toBranchId.value), items);
-            inline.innerHTML = '';
-            refresh();
-          } catch (err) {
-            toast('tr-msg', String(err.message || err), true);
-          }
-        });
-      }
-      if (action === 'ship' || action === 'receive') {
-        const rows = Array.from(card.querySelectorAll('tbody tr, table tr')).slice(1); // skip header row
-        const skus = Array.from(card.querySelectorAll('table td:first-child')).map((td) => td.textContent);
-        const requestedOrSent = Array.from(card.querySelectorAll('table td:nth-child(' + (action === 'ship' ? 2 : 3) + ')')).map((td) => Number(td.textContent));
-        inline.innerHTML = '<form id="qty-form">' +
-          skus.map((sku, i) => '<div class="field" style="width:120px;"><label>' + esc(sku) + '</label><input type="number" name="' + esc(sku) + '" value="' + (requestedOrSent[i] || 0) + '" min="0" required></div>').join('') +
-          '<button class="btn small" type="submit">Confirm ' + (action === 'ship' ? 'Ship' : 'Receive') + '</button></form>';
-        inline.querySelector('#qty-form').addEventListener('submit', async (ev) => {
-          ev.preventDefault();
-          const f = ev.target;
-          const items = skus.map((sku) => ({ sku, sentQty: Number(f[sku].value), receivedQty: Number(f[sku].value) }));
-          if (action === 'ship') await shipTransfer(transferId, items);
-          else await receiveTransfer(transferId, items);
-          refresh();
-        });
-      }
-    } catch (err) {
-      toast('tr-msg', String(err.message || err), true);
-    }
+  function wireDetailBody(container, t) {
+    const done = async (msg) => { toast('tr-msg', msg || 'Updated.', false); await load(); };
+    const fail = (err) => toast('tr-msg', String(err.message || err), true);
+    const swapTo = (html) => { container.innerHTML = html; container.querySelector('[data-act="cancel-edit"]')?.addEventListener('click', () => openDetail(t.id)); };
+
+    container.querySelector('[data-act="approve"]')?.addEventListener('click', async () => { try { await approveTransfer(t.id); done('Approved.'); } catch (err) { fail(err); } });
+    container.querySelector('[data-act="prepare"]')?.addEventListener('click', async () => { try { await startPreparingTransfer(t.id); done('Marked as preparing.'); } catch (err) { fail(err); } });
+    container.querySelector('[data-act="delete"]')?.addEventListener('click', async () => {
+      if (!confirm('Permanently delete this transfer? This reverses the stock it moved and cannot be undone (blocked automatically if that would take any SKU negative).')) return;
+      try { await deleteTransfer(t.id); closeDetailDrawer(); done('Deleted.'); } catch (err) { fail(err); }
+    });
+    ['reject', 'cancel'].forEach((action) => container.querySelector('[data-act="' + action + '"]')?.addEventListener('click', () => {
+      swapTo(reasonFormHtml(action));
+      container.querySelector('#tr-reason-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const reason = ev.target.reason.value.trim();
+        try {
+          if (action === 'reject') await rejectTransfer(t.id, reason); else await cancelTransfer(t.id, reason);
+          done(action === 'reject' ? 'Rejected.' : 'Cancelled.');
+        } catch (err) { fail(err); }
+      });
+    }));
+    ['ship', 'receive'].forEach((action) => container.querySelector('[data-act="' + action + '"]')?.addEventListener('click', () => {
+      swapTo(qtyFormHtml(t, action));
+      container.querySelector('#tr-qty-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        const items = (t.inventory_transfer_items || []).map((i, idx) => ({ sku: i.sku, sentQty: Number(f['q' + idx].value), receivedQty: Number(f['q' + idx].value) }));
+        const save = f.querySelector('button[type=submit]');
+        save.disabled = true;
+        try {
+          if (action === 'ship') await shipTransfer(t.id, items); else await receiveTransfer(t.id, items);
+          done(action === 'ship' ? 'Shipped — now In Transit.' : 'Received.');
+        } catch (err) { fail(err); save.disabled = false; }
+      });
+    }));
+    container.querySelector('[data-act="edit"]')?.addEventListener('click', () => {
+      swapTo(editFormHtml(t));
+      const linesBox = container.querySelector('#tr-edit-lines');
+      (t.inventory_transfer_items || []).forEach((i) => addLine(linesBox, { sku: i.sku, qty: i.requested_qty }));
+      container.querySelector('#tr-edit-add-line').addEventListener('click', () => addLine(linesBox));
+      container.querySelector('#tr-edit-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        const items = readLines(linesBox);
+        if (!items.length) { toast('tr-msg', 'Add at least one item.', true); return; }
+        const save = f.querySelector('button[type=submit]');
+        save.disabled = true;
+        try {
+          await editTransferRequest(t.id, Number(f.fromBranchId.value), Number(f.toBranchId.value), items);
+          done('Transfer updated.');
+        } catch (err) { fail(err); save.disabled = false; }
+      });
+    });
   }
-  function refresh() { toast('tr-msg', 'Updated.', false); loadTransfers(); }
+
+  ['tr-trace-search'].forEach((id) => document.getElementById(id).addEventListener('input', render));
+  ['tr-f-status', 'tr-trace-from', 'tr-trace-to'].forEach((id) => document.getElementById(id).addEventListener('change', render));
+  document.getElementById('tr-trace-clear').addEventListener('click', () => {
+    document.getElementById('tr-trace-search').value = '';
+    document.getElementById('tr-f-status').value = 'all';
+    document.getElementById('tr-trace-from').value = '';
+    document.getElementById('tr-trace-to').value = '';
+    render();
+  });
+
+  // A clicked activity notification opens the transfer here in place (spec 321), or
+  // via ?open=<id> when arriving from another page.
+  window.__kmOpenRecord = (table, id) => { if (table !== 'inventory_transfers') return false; openDetailId = id; openDetail(id); return true; };
+
+  await load();
+  const deepLinkId = new URLSearchParams(window.location.search).get('open');
+  if (deepLinkId) { openDetailId = deepLinkId; openDetail(deepLinkId); }
+  subscribeToChanges(['inventory_transfers', 'inventory_transfer_items'], load);
 }
 </script>
 </body>
