@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Item Monitoring — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260922d">
+<link rel="stylesheet" href="css/styles.css?v=20260922e">
 </head>
 <body>
 <main>
@@ -13,14 +13,14 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260922d';
+import { initShell, toast, esc } from './js/shell.js?v=20260922e';
 import {
   getBranches, listStockByBranch, searchProducts, logCycleCount, listRecentCycleCounts,
   markCycleCountInvestigated, listLatestCycleCountBySkuBranch, listProductChangeLog,
   listFactoryPurchases, recordFactoryPurchase, deleteFactoryPurchase, subscribeToChanges,
-} from './js/api.js?v=20260922d';
-import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260922d';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260922d';
+} from './js/api.js?v=20260922e';
+import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260922e';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260922e';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 14: Monitoring) -- one Sort
 // control for the Stock by Branch board.
@@ -74,8 +74,10 @@ if (employee) {
   // Record Factory Purchase -- replaces SKU Catalog's old "Add Item" (95_products_add_item.sql's
   // group), now also scoping a Branch Supervisor to their own branch since this moves
   // real stock instead of just editing catalog text (record_factory_purchase() enforces
-  // this same rule server-side).
-  const canRecordPurchase = ['Admin', 'Manager'].includes(employee.role) || employee.role === 'Branch Supervisor' || employee.position === 'Admin Assistant';
+  // this same rule server-side). inventory.record_factory_purchase_any_branch is a
+  // personal override (Ren, 2026-09-22: granted to just Angelyn), not a position grant.
+  const canRecordPurchase = ['Admin', 'Manager'].includes(employee.role) || employee.role === 'Branch Supervisor' || employee.position === 'Admin Assistant' ||
+    employee.permissions.includes('inventory.record_factory_purchase_any_branch');
   const fpIsBranchLocked = employee.role === 'Branch Supervisor';
   const fpBranchFieldHtml = fpIsBranchLocked
     ? '<div class="field"><label>Branch</label>' + (branchById[employee.branch_id] ? branchBadge(esc, branchById[employee.branch_id], employee.branch_id, branches) : '<input type="text" value="None assigned" disabled>') + '</div>'
