@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Position Access Matrix — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260922a">
+<link rel="stylesheet" href="css/styles.css?v=20260922b">
 <style>
   /* Ren's spec, 2026-09-22: HR-201-driven Position Access Matrix. Deliberately NOT a
      giant position×permission grid with rotated column headers (that's exactly what
@@ -57,14 +57,14 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260922a';
+import { initShell, toast, esc } from './js/shell.js?v=20260922b';
 import {
   getPermissionMatrix, setPositionPermission, getEmployeesForChecklist,
   listEmployeePermissionOverrides, setEmployeePermissionOverride, removeEmployeePermissionOverride,
   listAccessChangeLog, listHrPositions, createHrPosition, renameHrPosition,
   setHrPositionAutomaticAccess, setHrPositionActive, getRoleEmployeeCounts,
-} from './js/api.js?v=20260922a';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260922a';
+} from './js/api.js?v=20260922b';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260922b';
 
 // Roles are a fixed system enum (employees_role_check), not HR 201 data -- unlike
 // positions, there's nothing to load dynamically here (spec section 1 is specifically
