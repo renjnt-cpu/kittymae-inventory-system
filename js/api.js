@@ -467,9 +467,10 @@ export async function returnPullOut(id, notes) {
  * which would need the same inventory-reversal handling as update_pos_sale_item and
  * wasn't asked for. Gated by inventory.pull_out.edit (edit_pull_out()'s own
  * server-side check). */
-export async function editPullOut({ id, reason, expectedReturnDate, notes }) {
+export async function editPullOut({ id, reason, expectedReturnDate, notes, sku, branchId, qty, pulledAt }) {
   const { error } = await supabase.rpc('edit_pull_out', {
     p_id: id, p_reason: reason, p_expected_return_date: expectedReturnDate || null, p_notes: notes || null,
+    p_sku: sku || null, p_branch_id: branchId || null, p_qty: qty || null, p_pulled_at: pulledAt || null,
   });
   if (error) throw new Error(error.message);
 }

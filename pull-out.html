@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pull Out Item — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260922c">
+<link rel="stylesheet" href="css/styles.css?v=20260922d">
 </head>
 <body>
 <main>
@@ -80,9 +80,9 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260922c';
-import { getBranches, searchProducts, listPullOuts, createPullOut, returnPullOut, editPullOut, subscribeToChanges } from './js/api.js?v=20260922c';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260922c';
+import { initShell, toast, esc } from './js/shell.js?v=20260922d';
+import { getBranches, searchProducts, listPullOuts, createPullOut, returnPullOut, editPullOut, subscribeToChanges } from './js/api.js?v=20260922d';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260922d';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 17-ish: this list is "Record
 // Movement"-adjacent inventory monitoring) -- one Sort control governs both Currently
@@ -261,15 +261,29 @@ if (employee) {
         '<div class="drawer-kv"><span>Expected Return</span><b>' + (r.expected_return_date ? fmtDate(r.expected_return_date) : '—') + '</b></div>' +
         (r.notes ? '<div class="drawer-kv"><span>Notes</span><b>' + esc(r.notes) + '</b></div>' : '') +
       '</div>' +
-      // Reason/Expected Return/Notes only -- not SKU/Qty/Branch, which would need the
-      // same inventory-reversal handling as update_pos_sale_item and wasn't asked for.
+      // SKU/Qty/Branch carry real inventory impact (reverses the original deduction and
+      // applies the corrected one -- see edit_pull_out()), so they're only enabled while
+      // status is still 'Out', mirroring Mark Returned's own gate. Reason/Notes/Expected
+      // Return/Pulled Date are pure metadata and stay editable regardless of status.
       (canEdit
-        ? '<form id="po-edit-form" style="display:none;flex-direction:column;gap:8px;margin-top:8px;border:1px solid #e5e5e5;border-radius:8px;padding:8px;background:#fafafa;">' +
-            '<div class="field"><label>Reason *</label><input type="text" name="reason" value="' + esc(r.reason) + '" required></div>' +
-            '<div class="field"><label>Expected Return Date</label><input type="date" name="expectedReturnDate" value="' + (r.expected_return_date || '') + '"></div>' +
-            '<div class="field"><label>Notes</label><input type="text" name="notes" value="' + esc(r.notes || '') + '"></div>' +
-            '<div style="display:flex;gap:6px;"><button type="submit" class="btn small">Save</button><button type="button" class="btn small secondary" data-act="edit-cancel">Cancel</button></div>' +
-          '</form>'
+        ? (function () {
+            const locked = r.status !== 'Out';
+            return '<form id="po-edit-form" style="display:none;flex-direction:column;gap:8px;margin-top:8px;border:1px solid #e5e5e5;border-radius:8px;padding:8px;background:#fafafa;">' +
+              '<div class="field"><label>Branch *</label><select id="po-edit-branch"' + (locked ? ' disabled' : '') + '></select></div>' +
+              '<div class="field" style="position:relative;">' +
+                '<label>SKU *</label>' +
+                '<input type="text" id="po-edit-sku" autocomplete="off" value="' + esc(r.sku) + '"' + (locked ? ' disabled' : '') + '>' +
+                '<div id="po-edit-sku-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:20;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>' +
+              '</div>' +
+              '<div class="field"><label>Qty *</label><input type="number" name="qty" id="po-edit-qty" min="1" value="' + r.qty + '"' + (locked ? ' disabled' : '') + '></div>' +
+              (locked ? '<p class="muted" style="font-size:11px;margin:0;">SKU, Qty, and Branch are locked once an item is ' + esc(r.status) + '.</p>' : '') +
+              '<div class="field"><label>Pulled Date</label><input type="date" name="pulledAt" value="' + localDateStr(new Date(r.pulled_at)) + '"></div>' +
+              '<div class="field"><label>Reason *</label><input type="text" name="reason" value="' + esc(r.reason) + '" required></div>' +
+              '<div class="field"><label>Expected Return Date</label><input type="date" name="expectedReturnDate" value="' + (r.expected_return_date || '') + '"></div>' +
+              '<div class="field"><label>Notes</label><input type="text" name="notes" value="' + esc(r.notes || '') + '"></div>' +
+              '<div style="display:flex;gap:6px;"><button type="submit" class="btn small">Save</button><button type="button" class="btn small secondary" data-act="edit-cancel">Cancel</button></div>' +
+            '</form>';
+          })()
         : '') +
     '</div>' +
     '<div class="drawer-section"><h4>Handled By</h4>' +
@@ -317,13 +331,62 @@ if (employee) {
         editForm.style.display = 'none';
         editToggle.style.display = '';
       });
+
+      // ---- Branch select + SKU autocomplete inside the edit form (mirrors the New
+      // Pull Out drawer's own widget, but scoped to this form's own elements) ----
+      const editBranchSelect = container.querySelector('#po-edit-branch');
+      if (editBranchSelect) {
+        editBranchSelect.innerHTML = branches.map((b) =>
+          '<option value="' + b.id + '"' + (b.id === r.branch_id ? ' selected' : '') + '>' + esc(b.name) + '</option>'
+        ).join('');
+      }
+      const editSkuInput = container.querySelector('#po-edit-sku');
+      const editSkuSuggest = container.querySelector('#po-edit-sku-suggest');
+      let editPickedSku = r.sku;
+      if (editSkuInput && !editSkuInput.disabled) {
+        let editSearchTimer = null, editSearchToken = 0;
+        const hideEditSuggest = () => { editSkuSuggest.style.display = 'none'; editSkuSuggest.innerHTML = ''; };
+        editSkuInput.addEventListener('input', () => {
+          editPickedSku = null;
+          const q = editSkuInput.value.trim();
+          clearTimeout(editSearchTimer);
+          if (!q) { hideEditSuggest(); return; }
+          const token = ++editSearchToken;
+          editSearchTimer = setTimeout(async () => {
+            try {
+              const results = await searchProducts(q, Number(editBranchSelect.value));
+              if (token !== editSearchToken) return;
+              if (!results.length) { hideEditSuggest(); return; }
+              editSkuSuggest.innerHTML = results.slice(0, 8).map((p, i) =>
+                '<div data-i="' + i + '" style="padding:6px 8px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:12px;">' +
+                  '<strong>' + esc(p.sku) + '</strong> — ' + esc(p.item_name) +
+                '</div>').join('');
+              editSkuSuggest.style.display = '';
+              editSkuSuggest.querySelectorAll('[data-i]').forEach((el, i) => el.addEventListener('mousedown', (ev) => {
+                ev.preventDefault();
+                editSkuInput.value = results[i].sku;
+                editPickedSku = results[i].sku;
+                hideEditSuggest();
+              }));
+            } catch (err) { /* non-critical -- leave suggestions empty rather than block typing */ }
+          }, 200);
+        });
+        editSkuInput.addEventListener('blur', () => setTimeout(hideEditSuggest, 150));
+      }
+
       editForm.addEventListener('submit', async (ev) => {
         ev.preventDefault();
         const f = ev.target;
         const saveBtn = f.querySelector('button[type=submit]');
         saveBtn.disabled = true;
         try {
-          await editPullOut({ id: r.id, reason: f.reason.value.trim(), expectedReturnDate: f.expectedReturnDate.value || null, notes: f.notes.value.trim() });
+          await editPullOut({
+            id: r.id, reason: f.reason.value.trim(), expectedReturnDate: f.expectedReturnDate.value || null, notes: f.notes.value.trim(),
+            pulledAt: f.pulledAt.value || null,
+            sku: editSkuInput && !editSkuInput.disabled ? (editPickedSku || editSkuInput.value.trim()) : null,
+            branchId: editBranchSelect && !editBranchSelect.disabled ? Number(editBranchSelect.value) : null,
+            qty: f.qty && !f.qty.disabled ? Number(f.qty.value) : null,
+          });
           toast('po-msg', 'Pull-out details updated.', false);
           await load();
           refreshDetailIfOpen(r.id);
