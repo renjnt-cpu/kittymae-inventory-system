@@ -437,8 +437,9 @@ export async function getTransactionHistory(sku, branchId) {
 
 // ---- Pull Out Item (Ren, 2026-09-21) -- a temporary hold on a physical piece
 // (sent for cleaning/repair, borrowed for display, etc.), expected to return to
-// stock later. Admin/Manager only, matching create_pull_out()/return_pull_out()'s
-// own server-side gate exactly. ----
+// stock later. Create/Edit follow inventory.pull_out.create/.edit (adjustable from
+// the Position Access Matrix); Return stays Admin/Manager only per return_pull_out()'s
+// own hardcoded gate. ----
 export async function listPullOuts() {
   const { data, error } = await supabase
     .from('pull_out_records')
@@ -459,6 +460,17 @@ export async function createPullOut({ sku, branchId, qty, reason, expectedReturn
 
 export async function returnPullOut(id, notes) {
   const { error } = await supabase.rpc('return_pull_out', { p_id: id, p_notes: notes || null });
+  if (error) throw new Error(error.message);
+}
+
+/** Corrects Reason/Expected Return/Notes on an existing record -- not SKU/Qty/Branch,
+ * which would need the same inventory-reversal handling as update_pos_sale_item and
+ * wasn't asked for. Gated by inventory.pull_out.edit (edit_pull_out()'s own
+ * server-side check). */
+export async function editPullOut({ id, reason, expectedReturnDate, notes }) {
+  const { error } = await supabase.rpc('edit_pull_out', {
+    p_id: id, p_reason: reason, p_expected_return_date: expectedReturnDate || null, p_notes: notes || null,
+  });
   if (error) throw new Error(error.message);
 }
 

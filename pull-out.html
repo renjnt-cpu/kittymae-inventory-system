@@ -81,7 +81,7 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js?v=20260922a';
-import { getBranches, searchProducts, listPullOuts, createPullOut, returnPullOut, subscribeToChanges } from './js/api.js?v=20260922a';
+import { getBranches, searchProducts, listPullOuts, createPullOut, returnPullOut, editPullOut, subscribeToChanges } from './js/api.js?v=20260922a';
 import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260922a';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 17-ish: this list is "Record
@@ -113,6 +113,10 @@ if (employee) {
   // Ren's spec 289-302 -- Supervisor/Auditor/Editor/Inventory Staff/Owner via the HR
   // position mapping). Adjustable from the Position Access Matrix, no code change.
   const canCreate = employee.permissions.includes('inventory.pull_out.create');
+  // Editing Reason/Expected Return/Notes on an existing record -- Ren, 2026-09-22:
+  // "FOR BRANCH TEAM LEADER, SUPERVISOR ADD EDIT DETAILS" -- same
+  // Position-Access-Matrix-adjustable pattern as canCreate, via inventory.pull_out.edit.
+  const canEdit = employee.permissions.includes('inventory.pull_out.edit');
   const branches = await getBranches();
   const branchName = (id) => (branches.find((b) => b.id === id) || {}).name || (id ? 'Branch #' + id : '—');
   document.getElementById('po-branch').innerHTML = branches.map((b) =>
@@ -247,10 +251,26 @@ if (employee) {
       '<div class="drawer-kv"><span>Source Branch</span><b>' + esc(r.branches?.name || branchName(r.branch_id)) + '</b></div>' +
       '<div class="drawer-kv"><span>Status</span><b><span class="badge ' + (r.status === 'Out' ? (overdue ? 'low' : 'pending') : 'ok') + '">' + esc(r.status) + (overdue ? ' · Overdue' : '') + '</span></b></div>' +
     '</div>' +
-    '<div class="drawer-section"><h4>Pull Out</h4>' +
-      '<div class="drawer-kv"><span>Reason</span><b>' + esc(r.reason) + '</b></div>' +
-      '<div class="drawer-kv"><span>Expected Return</span><b>' + (r.expected_return_date ? fmtDate(r.expected_return_date) : '—') + '</b></div>' +
-      (r.notes ? '<div class="drawer-kv"><span>Notes</span><b>' + esc(r.notes) + '</b></div>' : '') +
+    '<div class="drawer-section">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<h4 style="margin:0;">Pull Out</h4>' +
+        (canEdit ? '<button type="button" class="btn small secondary" data-act="edit-toggle">Edit Details</button>' : '') +
+      '</div>' +
+      '<div id="po-view-fields">' +
+        '<div class="drawer-kv"><span>Reason</span><b>' + esc(r.reason) + '</b></div>' +
+        '<div class="drawer-kv"><span>Expected Return</span><b>' + (r.expected_return_date ? fmtDate(r.expected_return_date) : '—') + '</b></div>' +
+        (r.notes ? '<div class="drawer-kv"><span>Notes</span><b>' + esc(r.notes) + '</b></div>' : '') +
+      '</div>' +
+      // Reason/Expected Return/Notes only -- not SKU/Qty/Branch, which would need the
+      // same inventory-reversal handling as update_pos_sale_item and wasn't asked for.
+      (canEdit
+        ? '<form id="po-edit-form" style="display:none;flex-direction:column;gap:8px;margin-top:8px;border:1px solid #e5e5e5;border-radius:8px;padding:8px;background:#fafafa;">' +
+            '<div class="field"><label>Reason *</label><input type="text" name="reason" value="' + esc(r.reason) + '" required></div>' +
+            '<div class="field"><label>Expected Return Date</label><input type="date" name="expectedReturnDate" value="' + (r.expected_return_date || '') + '"></div>' +
+            '<div class="field"><label>Notes</label><input type="text" name="notes" value="' + esc(r.notes || '') + '"></div>' +
+            '<div style="display:flex;gap:6px;"><button type="submit" class="btn small">Save</button><button type="button" class="btn small secondary" data-act="edit-cancel">Cancel</button></div>' +
+          '</form>'
+        : '') +
     '</div>' +
     '<div class="drawer-section"><h4>Handled By</h4>' +
       '<div class="drawer-kv"><span>Pulled Out By</span><b>' + esc(r.puller?.full_name || '—') + '</b></div>' +
@@ -282,6 +302,37 @@ if (employee) {
         btn.disabled = false;
       }
     });
+
+    const editToggle = container.querySelector('[data-act="edit-toggle"]');
+    if (editToggle) {
+      const viewFields = container.querySelector('#po-view-fields');
+      const editForm = container.querySelector('#po-edit-form');
+      editToggle.addEventListener('click', () => {
+        viewFields.style.display = 'none';
+        editForm.style.display = 'flex';
+        editToggle.style.display = 'none';
+      });
+      container.querySelector('[data-act="edit-cancel"]').addEventListener('click', () => {
+        viewFields.style.display = '';
+        editForm.style.display = 'none';
+        editToggle.style.display = '';
+      });
+      editForm.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        const saveBtn = f.querySelector('button[type=submit]');
+        saveBtn.disabled = true;
+        try {
+          await editPullOut({ id: r.id, reason: f.reason.value.trim(), expectedReturnDate: f.expectedReturnDate.value || null, notes: f.notes.value.trim() });
+          toast('po-msg', 'Pull-out details updated.', false);
+          await load();
+          refreshDetailIfOpen(r.id);
+        } catch (err) {
+          toast('po-msg', String(err.message || err), true);
+          saveBtn.disabled = false;
+        }
+      });
+    }
   }
 
   // ---- SKU autocomplete in the form drawer -- searched against the selected branch so
