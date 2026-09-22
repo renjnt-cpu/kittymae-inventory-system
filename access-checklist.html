@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Access Checklist — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260922f">
+<link rel="stylesheet" href="css/styles.css?v=20260922g">
 <style>
   .ac-item { padding:10px 0; border-bottom:1px solid #f0f0f0; }
   .ac-item:last-child { border-bottom:none; }
@@ -41,13 +41,13 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260922f';
+import { initShell, toast, esc } from './js/shell.js?v=20260922g';
 import {
   getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, listScrapEntries,
-  subscribeToChanges, getBranches, listProducts, listAllInventoryQty, listHrPositions,
-} from './js/api.js?v=20260922f';
-import { branchColor } from './js/branchColors.js?v=20260922f';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260922f';
+  subscribeToChanges, getBranches, listProducts, listAllInventoryQty, listHrPositions, setEmployeePassword,
+} from './js/api.js?v=20260922g';
+import { branchColor } from './js/branchColors.js?v=20260922g';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260922g';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 36) -- replaces this leaderboard's
 // old per-column header-click sort with the one shared control used everywhere else.
@@ -211,6 +211,10 @@ if (employee) {
   } else {
     let people = [];
     let selectedId = null;
+    // Which employee's Set Password panel is currently open, or null -- reset
+    // whenever the selected employee changes, so it never lingers open on the wrong
+    // person after switching (Ren, 2026-09-22).
+    let showPasswordFormFor = null;
 
     // overrides holds an EXPLICIT {checked, levels} only for (employee, task) pairs
     // Ren has actually set here -- absence means "not overridden," so the pill picker
@@ -457,10 +461,23 @@ if (employee) {
                       '<select data-position-for="' + selected.id + '" style="padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' + positionOptions(selected.position) + '</select>' +
                     '</span>' +
                     '<button type="button" class="btn small" id="ac-save-all" title="Confirm every task below as verified, using whatever levels are currently shown (defaults or your own overrides)">Save All</button>' +
+                    '<button type="button" class="btn small secondary" id="ac-set-password" title="Set or change this employee\'s ID+password login">Set Password</button>' +
                   '</span>'
                 : '<span class="muted" style="font-size:12px;">' + esc(selected.position || '— None —') + '</span>') +
             '</div>' +
             (canEdit ? '<p class="muted" style="margin-bottom:0;">Changing Position here takes effect immediately — several tasks below (and pages like Branches, Transactions, Branch Capital) key off it directly. "Save All" locks in whatever\'s currently shown for every task below as verified, in one click, instead of clicking each pill.</p>' : '') +
+            (canEdit && showPasswordFormFor === selected.id
+              ? '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;">' +
+                  '<p class="muted" style="margin-top:0;">Signs in with ID <b>' + esc(selected.raw.employee_code || '— not set —') + '</b> and this password' +
+                  (selected.raw.employee_code ? '' : ' — <b>set an Employee Code in HR — 201 File first</b>, then come back here') + '.</p>' +
+                  '<form id="ac-password-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+                    '<div class="field"><label>New Password *</label><input type="password" name="password" minlength="6" required autocomplete="new-password"></div>' +
+                    '<div class="field"><label>Confirm Password *</label><input type="password" name="confirm" minlength="6" required autocomplete="new-password"></div>' +
+                    '<button class="btn small" type="submit"' + (selected.raw.employee_code ? '' : ' disabled') + '>Save Password</button>' +
+                    '<button class="btn small secondary" type="button" id="ac-password-cancel">Cancel</button>' +
+                  '</form>' +
+                '</div>'
+              : '') +
           '</div>' +
           taskCardsHtml;
       }
@@ -507,6 +524,7 @@ if (employee) {
 
       root.querySelectorAll('[data-select-emp]').forEach((btn) => btn.addEventListener('click', () => {
         selectedId = btn.dataset.selectEmp;
+        showPasswordFormFor = null;
         render();
       }));
 
@@ -535,6 +553,37 @@ if (employee) {
           await load();
         } finally {
           saveAllBtn.disabled = false;
+        }
+      });
+
+      const setPasswordBtn = document.getElementById('ac-set-password');
+      if (setPasswordBtn) setPasswordBtn.addEventListener('click', () => {
+        showPasswordFormFor = selectedId;
+        render();
+      });
+      const passwordCancelBtn = document.getElementById('ac-password-cancel');
+      if (passwordCancelBtn) passwordCancelBtn.addEventListener('click', () => {
+        showPasswordFormFor = null;
+        render();
+      });
+      const passwordForm = document.getElementById('ac-password-form');
+      if (passwordForm) passwordForm.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        const person = people.find((p) => p.id === selectedId);
+        if (!person) return;
+        if (f.password.value !== f.confirm.value) { toast('ac-msg', 'Passwords do not match.', true); return; }
+        if (f.password.value.length < 6) { toast('ac-msg', 'Password must be at least 6 characters.', true); return; }
+        const btn = f.querySelector('button[type=submit]');
+        btn.disabled = true;
+        try {
+          const result = await setEmployeePassword(person.id, f.password.value);
+          toast('ac-msg', (result.mode === 'created' ? 'Password set' : 'Password updated') + ' for ' + person.name + ' — signs in with ID ' + result.email.split('@')[0] + '.', false);
+          showPasswordFormFor = null;
+          render();
+        } catch (err) {
+          toast('ac-msg', String(err.message || err), true);
+          btn.disabled = false;
         }
       });
 

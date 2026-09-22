@@ -2,8 +2,8 @@
 // `supabase` directly, so the query shape lives in one place. Mirrors the old app's
 // `api(name, ...args)` helper in spirit, just split into named functions since
 // supabase-js's table/RPC calls aren't as uniformly shaped as google.script.run's.
-import { supabase } from './supabaseClient.js?v=20260922f';
-import { localDateStr } from './uiKit.js?v=20260922f';
+import { supabase } from './supabaseClient.js?v=20260922g';
+import { localDateStr } from './uiKit.js?v=20260922g';
 
 /** Resolves the signed-in employee's id for "created_by"/"paid_by"/etc attribution.
  * Goes through the current_employee() RPC (which joins employee_auth_links) rather
@@ -1308,6 +1308,25 @@ export async function getEmployeesForChecklist() {
 export async function getAccessChecklist() {
   const { data, error } = await supabase.from('access_checklist_verifications').select('employee_id, item_key, checked, levels');
   if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Sets (or creates, on first use) an employee's ID+password login -- Admin only,
+ * both here and re-checked inside the Edge Function itself (2026-09-22: "I AM THE
+ * ONE TO ADD PASSWORD FOR THEM"). This has to go through an Edge Function, not a
+ * plain RPC -- creating/updating another user's Supabase Auth password needs the
+ * service-role key, which the browser can never hold. Returns { mode: 'created' |
+ * 'updated', email } so the caller can say exactly what happened. */
+export async function setEmployeePassword(employeeId, newPassword) {
+  const { data, error } = await supabase.functions.invoke('set-employee-password', {
+    body: { employeeId, newPassword },
+  });
+  if (error) {
+    // supabase-js only gives a generic "non-2xx status" message here -- the real
+    // reason is in the response body, which context.json() below recovers.
+    const detail = await error.context?.json?.().catch(() => null);
+    throw new Error((detail && detail.error) || error.message);
+  }
   return data;
 }
 
