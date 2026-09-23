@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bills — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260923b">
+<link rel="stylesheet" href="css/styles.css?v=20260923c">
 </head>
 <body>
 <main>
@@ -13,9 +13,9 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260923b';
-import { listBills, createBill, setBillStatus, updateBill, deleteBill, uploadBillAttachment, getBillAttachmentUrl, removeBillAttachment, subscribeToChanges } from './js/api.js?v=20260923b';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js?v=20260923b';
+import { initShell, toast, esc } from './js/shell.js?v=20260923c';
+import { listBills, createBill, setBillStatus, updateBill, deleteBill, uploadBillAttachment, getBillAttachmentUrl, removeBillAttachment, subscribeToChanges } from './js/api.js?v=20260923c';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js?v=20260923c';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 36) -- replaces this page's old
 // per-column header-click sort, invisible once its table collapses to header-less
@@ -38,7 +38,11 @@ const employee = await initShell('bills');
 if (employee) {
   const root = document.getElementById('bills-root');
 
-  if (employee.role !== 'Admin' && !employee.bills_access) {
+  // bills.access (position_permissions) is a second, newer path onto the same page --
+  // the older employees.bills_access flag stays for individually-granted people. Both
+  // now checked (Ren, 2026-09-23: Supervisor already had bills.access granted here,
+  // but this page never checked it -- has_bills_access() on the server already did).
+  if (employee.role !== 'Admin' && !employee.bills_access && !employee.permissions.includes('bills.access')) {
     root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Bills tracking is restricted to Admin or accounts granted Bills access.</p></div></div>';
   } else {
     const canDelete = ['Admin', 'Manager'].includes(employee.role);
