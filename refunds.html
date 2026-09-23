@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Refunds — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260923a">
+<link rel="stylesheet" href="css/styles.css?v=20260923b">
 </head>
 <body>
 <main>
@@ -82,9 +82,9 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260923a';
-import { listRefunds, createRefund, uploadRefundRequestPhoto, setRefundStatus, deleteRefund, addRefundAttachment, removeRefundAttachment, getRefundAttachmentUrl, subscribeToChanges } from './js/api.js?v=20260923a';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260923a';
+import { initShell, toast, esc } from './js/shell.js?v=20260923b';
+import { listRefunds, createRefund, uploadRefundRequestPhoto, setRefundStatus, deleteRefund, addRefundAttachment, removeRefundAttachment, getRefundAttachmentUrl, subscribeToChanges } from './js/api.js?v=20260923b';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260923b';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 16: Payment History) -- one
 // shared Sort control replaces the old per-column header-click sort below, which
@@ -117,12 +117,15 @@ const dupWarn = (r, dupKeys, text) => dupKeys.has(dupKey(r))
   ? '<span style="color:var(--warn);font-weight:bold;" title="Possible duplicate: same Order ID + name appears more than once">' + text + ' ⚠</span>' : text;
 
 // Approval group: Admin/Manager/Branch Supervisor (role), Operations Supervisor/
-// Inventory Supervisor/Admin Assistant (position), or the per-employee
-// refund_approval_access flag -- mirrors has_refund_approval_access(). The same
-// position-manager group can delete a refund / remove a wrong attachment
+// Inventory Supervisor/Admin Assistant (position), the per-employee
+// refund_approval_access flag, or anyone individually granted refunds.approve (e.g.
+// Inventory Staff, Ren 2026-09-23) -- mirrors has_refund_approval_access() exactly,
+// which the refunds table's own RLS policy already enforces server-side (this was
+// the only piece missing -- the grant existed but nothing on this page checked it).
+// The same position-manager group can delete a refund / remove a wrong attachment
 // (can_edit_refund()).
 const POSITION_MANAGERS = ['Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
-const canApprove = (emp) => ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || POSITION_MANAGERS.includes(emp.position) || !!emp.refund_approval_access;
+const canApprove = (emp) => ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || POSITION_MANAGERS.includes(emp.position) || !!emp.refund_approval_access || emp.permissions.includes('refunds.approve');
 const canEditRefund = (emp) => ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || POSITION_MANAGERS.includes(emp.position);
 
 const employee = await initShell('refunds');
