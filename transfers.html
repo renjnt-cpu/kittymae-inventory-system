@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Transfers — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260923c">
+<link rel="stylesheet" href="css/styles.css?v=20260923d">
 </head>
 <body>
 <main>
@@ -74,13 +74,13 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260923c';
+import { initShell, toast, esc } from './js/shell.js?v=20260923d';
 import {
   getBranches, listTransfers, createTransferRequest, editTransferRequest, approveTransfer, startPreparingTransfer,
   shipTransfer, receiveTransfer, rejectTransfer, cancelTransfer, deleteTransfer, subscribeToChanges, searchProducts,
-} from './js/api.js?v=20260923c';
-import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260923c';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byDate } from './js/uiKit.js?v=20260923c';
+} from './js/api.js?v=20260923d';
+import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260923d';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byDate } from './js/uiKit.js?v=20260923d';
 
 const STATUS_BADGE = {
   Draft: 'pending', Requested: 'pending', Approved: 'pending', Preparing: 'pending',
