@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HR — 201 File — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260923c">
+<link rel="stylesheet" href="css/styles.css?v=20260923d">
 </head>
 <body>
 <main>
@@ -13,11 +13,12 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260923c';
+import { initShell, toast, esc } from './js/shell.js?v=20260923d';
 import {
   listAllEmployee201Files, upsertEmployee201File, createEmployee, getBranches, updateEmployeeHireDate,
   listEmployee201Documents, uploadEmployee201Document, getEmployee201DocumentUrl, deleteEmployee201Document, listHrPositions,
-} from './js/api.js?v=20260923c';
+  setEmployeePassword,
+} from './js/api.js?v=20260923d';
 
 // Roles mirror employees.role's own CHECK constraint exactly (Admin/Manager
 // picked here are rare via this form -- almost every new hire is Staff or Branch
@@ -84,6 +85,13 @@ if (employee) {
   // everywhere else while being carved back out of HR -- 201 File specifically --
   // see is_hr_or_admin() in the hr_201_file_per_employee_block migration.
   const hasAccess = (employee.role === 'Admin' || employee.position === 'HR Supervisor') && !employee.hr_201_file_blocked;
+  // Setting an ID+password login is Admin-only (both here and re-checked inside the
+  // set-employee-password Edge Function itself -- Ren, 2026-09-22: "I AM THE ONE TO
+  // ADD PASSWORD FOR THEM") -- narrower than hasAccess, which also lets HR Supervisor
+  // into this page. Never stores/shows the existing password anywhere -- this only
+  // ever writes a new one via Supabase Auth's own hashing, same as Access Checklist's
+  // identical "Set Password" control.
+  const isAdmin = employee.role === 'Admin';
 
   if (!hasAccess) {
     root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">The 201-File is restricted to HR Supervisor and Admin.</p></div></div>';
@@ -212,6 +220,35 @@ if (employee) {
       const docs = await listEmployee201Documents(row.id).catch((err) => { toast('hr-msg', String(err.message || err), true); return []; });
       cell.querySelector('td').innerHTML = editPanelHtml(row, docs);
 
+      if (isAdmin) {
+        const pwSection = cell.querySelector('#hr-pw-section-' + id);
+        const wirePasswordSection = () => {
+          const setBtn = pwSection.querySelector('[data-act="set-password"]');
+          if (setBtn) setBtn.addEventListener('click', () => { pwSection.innerHTML = passwordSectionHtml(row, true); wirePasswordSection(); });
+          const cancelBtn = pwSection.querySelector('[data-act="password-cancel"]');
+          if (cancelBtn) cancelBtn.addEventListener('click', () => { pwSection.innerHTML = passwordSectionHtml(row, false); wirePasswordSection(); });
+          const pwForm = pwSection.querySelector('.hr-password-form');
+          if (pwForm) pwForm.addEventListener('submit', async (ev) => {
+            ev.preventDefault();
+            const pf = ev.target;
+            if (pf.password.value !== pf.confirm.value) { toast('hr-msg', 'Passwords do not match.', true); return; }
+            if (pf.password.value.length < 6) { toast('hr-msg', 'Password must be at least 6 characters.', true); return; }
+            const btn = pf.querySelector('button[type=submit]');
+            btn.disabled = true;
+            try {
+              const result = await setEmployeePassword(row.id, pf.password.value);
+              toast('hr-msg', (result.mode === 'created' ? 'Password set' : 'Password updated') + ' for ' + row.full_name + ' — signs in with ID ' + result.email.split('@')[0] + '.', false);
+              pwSection.innerHTML = passwordSectionHtml(row, false);
+              wirePasswordSection();
+            } catch (err) {
+              toast('hr-msg', String(err.message || err), true);
+              btn.disabled = false;
+            }
+          });
+        };
+        wirePasswordSection();
+      }
+
       const f = cell.querySelector('.hr-edit-form');
       const deptSelect = f.querySelector('[name=department]');
       const titleList = f.querySelector('#hr-title-list-' + id);
@@ -280,10 +317,32 @@ if (employee) {
       }));
     }
 
+    // Set/change this employee's ID+password login. Write-only by design -- there is
+    // no "current password" to show, since Supabase Auth only ever stores a hash, and
+    // showing/storing the plaintext anywhere here would be the actual security hole.
+    function passwordSectionHtml(row, showForm) {
+      if (!showForm) {
+        return '<button type="button" class="btn small secondary" data-act="set-password">Set Password</button>' +
+          '<span class="muted" style="font-size:11px;margin-left:8px;">Sets/changes this employee\'s ID+password login' +
+          (row.employee_code ? ' (ID ' + esc(row.employee_code) + ')' : ' — set an Employee ID above first') + '.</span>';
+      }
+      return '<p class="muted" style="margin:0 0 6px;">Signs in with ID <b>' + esc(row.employee_code || '— not set —') + '</b> and this password' +
+          (row.employee_code ? '' : ' — set an Employee ID first') + '.</p>' +
+        '<form class="hr-password-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+          '<div class="field"><label>New Password *</label><input type="password" name="password" minlength="6" required autocomplete="new-password"></div>' +
+          '<div class="field"><label>Confirm Password *</label><input type="password" name="confirm" minlength="6" required autocomplete="new-password"></div>' +
+          '<button class="btn small" type="submit"' + (row.employee_code ? '' : ' disabled') + '>Save Password</button>' +
+          '<button class="btn small secondary" type="button" data-act="password-cancel">Cancel</button>' +
+        '</form>';
+    }
+
     function editPanelHtml(row, docs) {
       const f = row.file201 || {};
       const id = row.id;
       return '<div style="padding:10px 4px;">' +
+        (isAdmin
+          ? '<div id="hr-pw-section-' + id + '" style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #f0f0f0;">' + passwordSectionHtml(row, false) + '</div>'
+          : '') +
         '<form class="hr-edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
           '<div class="field"><label>Date Hired</label><input type="date" name="hireDate" value="' + (row.hire_date || '') + '"></div>' +
           '<div class="field"><label>First Name</label><input type="text" name="firstName" value="' + esc(f.first_name || '') + '"></div>' +
