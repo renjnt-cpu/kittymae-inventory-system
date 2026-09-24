@@ -4,19 +4,74 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LBC Monitoring — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260925d">
+<link rel="stylesheet" href="css/styles.css?v=20260925e">
 </head>
 <body>
 <main>
   <div id="lbc-msg"></div>
-  <div id="lbc-root"></div>
+  <!-- Same Form Drawer / Detail Drawer flow as POS, Pull Out Item, Refunds (Ren,
+       2026-09-25: "make it the same design of POS plus sign once click show the
+       details") -- primary action at the top, Summary tiles, Search & Filters, then
+       the records; the Add form and every shipment's full details + actions live in
+       a right-side drawer instead of always-visible on the page. -->
+  <div class="module-topbar"><div></div><div style="text-align:right;">
+    <button type="button" class="btn" id="lbc-new-btn">+ Add Shipment</button>
+  </div></div>
+  <div class="tiles" id="lbc-tiles"></div>
+  <div class="card">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="f-search" placeholder="Order ID, customer, tracking #…"></div>
+      <div class="field"><label>Status</label><select id="f-status"><option value="all">All</option></select></div>
+      <div class="field"><label>Remitted</label><select id="f-remitted"><option value="all">All</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+      <div class="field"><label>Payment Type</label><select id="f-payment-type"><option value="all">All</option></select></div>
+      <div class="field"><label>From</label><input type="date" id="f-from"></div>
+      <div class="field"><label>To</label><input type="date" id="f-to"></div>
+      <span id="lbc-sort-slot"></span>
+      <button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>
+    </div>
+  </div>
+  <div id="lbc-active"></div>
+  <div id="lbc-list"><div class="muted">Loading…</div></div>
+
+  <div class="drawer-backdrop" id="lbc-form-backdrop"></div>
+  <div class="drawer" id="lbc-form-drawer">
+    <div class="drawer-header"><h3>Add Shipment</h3><button type="button" class="drawer-close" id="lbc-form-close" aria-label="Close">✕</button></div>
+    <div class="drawer-body">
+      <p class="muted" style="margin-top:0;">A parcel shipped via LBC for an online order.</p>
+      <form id="lbc-form" style="display:flex;flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:8px;">
+        <div class="drawer-section">
+          <h4>Order</h4>
+          <div class="field"><label>Order ID *</label><input type="text" name="orderId" required></div>
+          <div class="field"><label>Customer Name *</label><input type="text" name="customerName" required></div>
+          <div class="field"><label>Branch</label><select name="branchId" id="lbc-form-branch"></select></div>
+        </div>
+        <div class="drawer-section">
+          <h4>Shipment</h4>
+          <div class="field"><label>Tracking Number</label><input type="text" name="trackingNumber"></div>
+          <div class="field"><label>Ship Date</label><input type="date" name="shipDate"></div>
+          <div class="field"><label>Payment Type</label><select name="paymentType" id="lbc-form-payment-type"></select></div>
+          <div class="field"><label>COD Amount (PHP)</label><input type="number" name="codAmount" step="0.01" min="0"></div>
+          <div class="field"><label>Notes</label><input type="text" name="notes"></div>
+        </div>
+      </form>
+    </div>
+    <div class="drawer-footer">
+      <button class="btn" type="submit" form="lbc-form" id="lbc-submit-btn">Add Shipment</button>
+      <button type="button" class="btn secondary" id="lbc-form-cancel">Cancel</button>
+    </div>
+  </div>
+  <div class="drawer-backdrop" id="lbc-detail-backdrop"></div>
+  <div class="drawer" id="lbc-detail-drawer">
+    <div class="drawer-header"><div><h3 id="lbc-detail-title">Shipment Details</h3><div class="muted" id="lbc-detail-sub"></div></div><button type="button" class="drawer-close" id="lbc-detail-close" aria-label="Close">✕</button></div>
+    <div class="drawer-body" id="lbc-detail-body"></div>
+  </div>
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260925d';
-import { getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, deleteLbcShipment, subscribeToChanges } from './js/api.js?v=20260925d';
-import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260925d';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260925d';
+import { initShell, toast, esc } from './js/shell.js?v=20260925e';
+import { getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, deleteLbcShipment, subscribeToChanges } from './js/api.js?v=20260925e';
+import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260925e';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260925e';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 14: LBC Monitoring is explicitly
 // named in the spec).
@@ -37,66 +92,52 @@ const STATUS_OPTIONS = (selected) => STATUSES.map((s) => '<option' + (s === sele
 // already used in Pancake's own order notes (fully paid, nothing to collect on delivery).
 const PAYMENT_TYPES = ['COD', 'SF PAID'];
 const PAYMENT_TYPE_OPTIONS = (selected) => '<option value="">—</option>' + PAYMENT_TYPES.map((p) => '<option' + (p === selected ? ' selected' : '') + '>' + p + '</option>').join('');
+const tile = (num, label) => '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>';
 
 const employee = await initShell('lbc');
 if (employee) {
-  const root = document.getElementById('lbc-root');
-
   const hasAccess = ['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) ||
     employee.position === 'Admin Assistant' || (employee.extra_page_access || []).includes('lbc');
 
   if (!hasAccess) {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">LBC Monitoring is restricted to Admin, Manager, Branch Supervisor, Admin Assistant, or individually granted accounts.</p></div></div>';
+    document.querySelector('main').innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">LBC Monitoring is restricted to Admin, Manager, Branch Supervisor, Admin Assistant, or individually granted accounts.</p></div></div>';
   } else {
     const canDelete = ['Admin', 'Manager'].includes(employee.role);
     const branches = await getBranches();
     const branchOptions = (selected) => '<option value="">—</option>' + branches.map((b) =>
       '<option value="' + b.id + '"' + (b.id === selected ? ' selected' : '') + ' style="' + branchOptionStyle(b.id, branches) + '">' + esc(b.name) + '</option>'
     ).join('');
+    document.getElementById('lbc-form-branch').innerHTML = branchOptions();
+    document.getElementById('lbc-form-payment-type').innerHTML = PAYMENT_TYPE_OPTIONS();
+    document.getElementById('f-status').innerHTML += STATUS_OPTIONS();
+    document.getElementById('f-payment-type').innerHTML += PAYMENT_TYPES.map((p) => '<option>' + p + '</option>').join('');
     const sort = { field: 'ship_date', dir: 'desc' };
+    document.getElementById('lbc-sort-slot').outerHTML = sortControlHtml(LBC_SORT_FIELDS, sort, 'lbc-sort-field', 'lbc-sort-dir');
+    wireSortControl('lbc-sort-field', 'lbc-sort-dir', sort, render);
 
-    root.innerHTML =
-      '<div class="layout-2col">' +
-        '<div class="layout-2col-side">' +
-          '<div class="card">' +
-            '<h3>Add Shipment</h3>' +
-            '<p class="muted" style="margin-top:-4px;">A COD parcel shipped via LBC for an online order.</p>' +
-            '<form id="lbc-form" style="flex-direction:column;align-items:stretch;flex-wrap:nowrap;">' +
-              '<div class="field"><label>Order ID *</label><input type="text" name="orderId" required></div>' +
-              '<div class="field"><label>Customer Name *</label><input type="text" name="customerName" required></div>' +
-              '<div class="field"><label>Tracking Number</label><input type="text" name="trackingNumber"></div>' +
-              '<div class="field"><label>Branch</label><select name="branchId">' + branchOptions() + '</select></div>' +
-              '<div class="field"><label>Ship Date</label><input type="date" name="shipDate" value="' + localDateStr() + '"></div>' +
-              '<div class="field"><label>Payment Type</label><select name="paymentType">' + PAYMENT_TYPE_OPTIONS() + '</select></div>' +
-              '<div class="field"><label>COD Amount (PHP)</label><input type="number" name="codAmount" step="0.01" min="0"></div>' +
-              '<div class="field"><label>Notes</label><input type="text" name="notes"></div>' +
-              '<button class="btn" type="submit">Add Shipment</button>' +
-            '</form>' +
-          '</div>' +
-        '</div>' +
-        '<div class="layout-2col-main">' +
-          '<div class="tiles" id="lbc-tiles"></div>' +
-          '<div class="card">' +
-            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
-              '<div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="f-search" placeholder="Order ID, customer, tracking #…"></div>' +
-              '<div class="field"><label>Status</label><select id="f-status"><option value="all">All</option>' + STATUS_OPTIONS() + '</select></div>' +
-              '<div class="field"><label>Remitted</label><select id="f-remitted"><option value="all">All</option><option value="yes">Yes</option><option value="no">No</option></select></div>' +
-              '<div class="field"><label>Payment Type</label><select id="f-payment-type"><option value="all">All</option>' + PAYMENT_TYPES.map((p) => '<option>' + p + '</option>').join('') + '</select></div>' +
-              '<div class="field"><label>From</label><input type="date" id="f-from"></div>' +
-              '<div class="field"><label>To</label><input type="date" id="f-to"></div>' +
-              sortControlHtml(LBC_SORT_FIELDS, sort, 'lbc-sort-field', 'lbc-sort-dir') +
-              '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
-            '</div>' +
-          '</div>' +
-          '<div id="lbc-list"><div class="muted">Loading…</div></div>' +
-        '</div>' +
-      '</div>';
+    // ---- form drawer ----
+    const form = document.getElementById('lbc-form');
+    form.shipDate.value = localDateStr();
+    function openFormDrawer() {
+      document.getElementById('lbc-form-backdrop').classList.add('open');
+      document.getElementById('lbc-form-drawer').classList.add('open');
+    }
+    function closeFormDrawer() {
+      document.getElementById('lbc-form-backdrop').classList.remove('open');
+      document.getElementById('lbc-form-drawer').classList.remove('open');
+    }
+    document.getElementById('lbc-new-btn').addEventListener('click', openFormDrawer);
+    document.getElementById('lbc-form-close').addEventListener('click', closeFormDrawer);
+    document.getElementById('lbc-form-cancel').addEventListener('click', closeFormDrawer);
+    document.getElementById('lbc-form-backdrop').addEventListener('click', closeFormDrawer);
 
-    document.getElementById('lbc-form').addEventListener('submit', async (ev) => {
+    form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const f = ev.target;
+      const btn = document.getElementById('lbc-submit-btn');
+      btn.disabled = true;
       try {
-        await createLbcShipment({
+        const newId = await createLbcShipment({
           orderId: f.orderId.value.trim(), customerName: f.customerName.value.trim(),
           trackingNumber: f.trackingNumber.value.trim(), branchId: f.branchId.value ? Number(f.branchId.value) : null,
           shipDate: f.shipDate.value, codAmount: f.codAmount.value ? Number(f.codAmount.value) : null,
@@ -105,11 +146,41 @@ if (employee) {
         toast('lbc-msg', 'Shipment added.', false);
         f.reset();
         f.shipDate.value = localDateStr();
+        closeFormDrawer();
         await load();
+        // Same drawer system now shows the saved record right after adding it.
+        if (newId != null) { openDetailId = newId; openDetail(newId); }
       } catch (err) {
         toast('lbc-msg', String(err.message || err), true);
+      } finally {
+        btn.disabled = false;
       }
     });
+
+    // ---- detail drawer ----
+    function closeDetailDrawer() {
+      document.getElementById('lbc-detail-backdrop').classList.remove('open');
+      document.getElementById('lbc-detail-drawer').classList.remove('open');
+    }
+    document.getElementById('lbc-detail-close').addEventListener('click', closeDetailDrawer);
+    document.getElementById('lbc-detail-backdrop').addEventListener('click', closeDetailDrawer);
+    let openDetailId = null;
+    function openDetail(id) {
+      const r = allRows.find((x) => String(x.id) === String(id));
+      if (!r) return;
+      document.getElementById('lbc-detail-title').textContent = r.order_id + ' — ' + r.customer_name;
+      document.getElementById('lbc-detail-sub').textContent = r.status + (r.tracking_number ? ' · ' + r.tracking_number : '');
+      const body = document.getElementById('lbc-detail-body');
+      body.innerHTML = renderDetailBody(r);
+      wireDetailBody(body, r);
+      document.getElementById('lbc-detail-backdrop').classList.add('open');
+      document.getElementById('lbc-detail-drawer').classList.add('open');
+    }
+    function refreshDetailIfOpen(id) {
+      if (!document.getElementById('lbc-detail-drawer').classList.contains('open')) return;
+      if (!allRows.find((x) => String(x.id) === String(id))) { closeDetailDrawer(); return; }
+      openDetail(id);
+    }
 
     let allRows = [];
     await load();
@@ -130,129 +201,126 @@ if (employee) {
       document.getElementById('f-to').value = '';
       render();
     });
-    wireSortControl('lbc-sort-field', 'lbc-sort-dir', sort, render);
 
     async function load() {
       const list = document.getElementById('lbc-list');
-      list.innerHTML = '<div class="muted">Loading…</div>';
       try {
         allRows = await listLbcShipments();
         render();
+        if (openDetailId != null) refreshDetailIfOpen(openDetailId);
       } catch (err) {
         list.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
       }
     }
 
-    function tile(num, label) { return '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>'; }
+    function currentFilters() {
+      return {
+        q: document.getElementById('f-search').value.trim().toLowerCase(),
+        status: document.getElementById('f-status').value,
+        remitted: document.getElementById('f-remitted').value,
+        paymentType: document.getElementById('f-payment-type').value,
+        from: document.getElementById('f-from').value,
+        to: document.getElementById('f-to').value,
+      };
+    }
 
     function render() {
+      const f = currentFilters();
       let rows = allRows;
-      const fSearch = document.getElementById('f-search').value.trim().toLowerCase();
-      const fStatus = document.getElementById('f-status').value;
-      const fRemitted = document.getElementById('f-remitted').value;
-      const fPaymentType = document.getElementById('f-payment-type').value;
-      const fFrom = document.getElementById('f-from').value;
-      const fTo = document.getElementById('f-to').value;
-      if (fSearch) rows = rows.filter((r) =>
-        r.order_id.toLowerCase().includes(fSearch) ||
-        r.customer_name.toLowerCase().includes(fSearch) ||
-        (r.tracking_number || '').toLowerCase().includes(fSearch));
-      if (fStatus !== 'all') rows = rows.filter((r) => r.status === fStatus);
-      if (fPaymentType !== 'all') rows = rows.filter((r) => r.payment_type === fPaymentType);
-      if (fRemitted !== 'all') rows = rows.filter((r) => r.remitted === (fRemitted === 'yes'));
-      if (fFrom) rows = rows.filter((r) => r.ship_date >= fFrom);
-      if (fTo) rows = rows.filter((r) => r.ship_date <= fTo);
+      if (f.q) rows = rows.filter((r) =>
+        r.order_id.toLowerCase().includes(f.q) || r.customer_name.toLowerCase().includes(f.q) || (r.tracking_number || '').toLowerCase().includes(f.q));
+      if (f.status !== 'all') rows = rows.filter((r) => r.status === f.status);
+      if (f.paymentType !== 'all') rows = rows.filter((r) => r.payment_type === f.paymentType);
+      if (f.remitted !== 'all') rows = rows.filter((r) => r.remitted === (f.remitted === 'yes'));
+      if (f.from) rows = rows.filter((r) => r.ship_date >= f.from);
+      if (f.to) rows = rows.filter((r) => r.ship_date <= f.to);
+      const hasFilters = !!(f.q || f.status !== 'all' || f.paymentType !== 'all' || f.remitted !== 'all' || f.from || f.to);
 
       const counts = STATUSES.reduce((acc, s) => { acc[s] = rows.filter((r) => r.status === s).length; return acc; }, {});
       const outstanding = rows.filter((r) => r.status === 'Delivered' && !r.remitted).reduce((s, r) => s + Number(r.cod_amount || 0), 0);
       document.getElementById('lbc-tiles').innerHTML =
         tile(counts['Shipped'], 'Shipped') + tile(counts['In Transit'], 'In Transit') + tile(counts['Delivered'], 'Delivered') +
         tile(counts['Returned to Sender'], 'Returned') + tile(money(outstanding), 'COD Not Yet Remitted');
+      const activeEl = document.getElementById('lbc-active');
+      activeEl.innerHTML = activeFiltersHtml([
+        { label: 'Search', value: esc(f.q) }, { label: 'Status', value: esc(f.status) }, { label: 'Payment Type', value: esc(f.paymentType) },
+        { label: 'Remitted', value: f.remitted === 'all' ? '' : (f.remitted === 'yes' ? 'Yes' : 'No') },
+        { label: 'From', value: esc(f.from) }, { label: 'To', value: esc(f.to) },
+      ], 'f-clear');
+      wireProxyButtons(activeEl);
 
+      const rowsSorted = applySort(rows, sort, LBC_SORT_COMPARATORS);
       const list = document.getElementById('lbc-list');
-      if (!rows.length) { list.innerHTML = '<p class="muted">No shipments for this filter.</p>'; return; }
+      if (!rowsSorted.length) {
+        list.innerHTML = emptyStateHtml({ message: hasFilters ? 'No shipments match these filters.' : 'No shipments yet.', hasFilters, clearId: 'f-clear', createLabel: '+ Add Shipment', createId: 'lbc-new-btn' });
+        wireProxyButtons(list);
+        return;
+      }
 
-      // Every field shows directly in the row -- no click-to-expand -- matching the
-      // rest of the app. Edit opens an inline form in the hidden row below (same
-      // mechanic as Bills), quick status/remit buttons handle the common case.
-      // Filtering already picked `rows`; sort only reorders them (section 11).
-      rows = applySort(rows, sort, LBC_SORT_COMPARATORS);
       let totalCod = 0, totalRemitted = 0;
-      const rowsHtml = rows.map((r) => {
+      const rowsHtml = rowsSorted.map((r) => {
         totalCod += Number(r.cod_amount || 0);
         if (r.remitted) totalRemitted += Number(r.cod_amount || 0);
-        const nextStatus = { Shipped: 'In Transit', 'In Transit': 'Delivered' }[r.status];
         return '<tr' + (r.status === 'Returned to Sender' ? ' style="background:#fdecea;"' : '') + '>' +
           '<td data-label="Order ID / Customer">' + esc(r.order_id) + '<div class="muted" style="font-size:10px;">' + esc(r.customer_name) + '</div></td>' +
           '<td data-label="Tracking # / Branch" style="font-size:11px;">' + esc(r.tracking_number || '—') + '<div class="muted">' + (r.branches ? branchBadge(esc, r.branches.name, r.branch_id, branches) : '') + '</div></td>' +
           '<td data-label="Ship Date">' + (r.ship_date || '—') + '</td>' +
-          '<td data-label="COD Amount">' + money(r.cod_amount) +
-            (r.payment_type ? '<div class="muted" style="font-size:10px;">' + esc(r.payment_type) + '</div>' : '') + '</td>' +
+          '<td data-label="COD Amount">' + money(r.cod_amount) + (r.payment_type ? '<div class="muted" style="font-size:10px;">' + esc(r.payment_type) + '</div>' : '') + '</td>' +
           '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
-          '<td data-label="Remitted">' + (r.status === 'Delivered'
-              ? '<span class="badge ' + (r.remitted ? 'ok' : 'low') + '">' + (r.remitted ? 'Remitted' : 'Not yet') + '</span>' +
-                (r.remitted && r.remittance_number ? '<div style="font-size:10px;">Ref ' + esc(r.remittance_number) + '</div>' : '') +
-                (r.remitted_date ? '<div class="muted" style="font-size:10px;">' + r.remitted_date + '</div>' : '')
-              : '<span class="muted">—</span>') +
-          '</td>' +
-          '<td data-label="Notes / By" style="font-size:11px;">' + esc(r.notes || '') + '<div class="muted" style="font-size:10px;">Added by ' + (r.creator ? esc(r.creator.full_name) : '—') + '</div></td>' +
-          '<td style="white-space:nowrap;">' +
-            (nextStatus ? '<button class="btn small" data-id="' + r.id + '" data-act="advance" data-next="' + nextStatus + '">Mark ' + nextStatus + '</button> ' : '') +
-            (r.status !== 'Returned to Sender' && r.status !== 'Delivered' ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="rts">RTS</button> ' : '') +
-            (r.status === 'Delivered' ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="toggle-remit">' + (r.remitted ? 'Unmark Remit' : 'Mark Remitted') + '</button> ' : '') +
-            '<button class="btn small secondary" data-id="' + r.id + '" data-act="edit">Edit</button> ' +
-            (canDelete ? '<button class="btn small secondary" data-id="' + r.id + '" data-act="delete">Delete</button>' : '') +
-          '</td>' +
-        '</tr>' +
-        '<tr class="edit-row" data-edit-for="' + r.id + '" style="display:none;"><td colspan="8"></td></tr>';
+          '<td data-label="Remitted">' + (r.status === 'Delivered' ? '<span class="badge ' + (r.remitted ? 'ok' : 'low') + '">' + (r.remitted ? 'Remitted' : 'Not yet') + '</span>' : '<span class="muted">—</span>') + '</td>' +
+          '<td class="full-row"><button type="button" class="btn small secondary" data-act="view-details" data-id="' + r.id + '">View Details</button></td>' +
+        '</tr>';
       }).join('');
 
-      list.innerHTML = '<div class="table-scroll"><table style="min-width:900px;">' +
-        '<thead><tr><th>Order ID / Customer</th><th>Tracking # / Branch</th><th>Ship Date</th><th>COD Amount</th><th>Status</th><th>Remitted</th><th>Notes / By</th><th></th></tr></thead>' +
+      list.innerHTML = '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
+        '<thead><tr><th>Order ID / Customer</th><th>Tracking # / Branch</th><th>Ship Date</th><th>COD Amount</th><th>Status</th><th>Remitted</th><th></th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +
         '<tfoot><tr style="font-weight:bold;background:#f7f7f7;">' +
-          '<td colspan="3">Qty: ' + rows.length + '</td>' +
+          '<td colspan="3">Qty: ' + rowsSorted.length + '</td>' +
           '<td>' + money(totalCod) + '<div class="muted" style="font-size:10px;font-weight:normal;">' + money(totalRemitted) + ' remitted</div></td>' +
-          '<td colspan="4"></td>' +
+          '<td colspan="3"></td>' +
         '</tr></tfoot>' +
         '</table></div>';
 
-      list.querySelectorAll('[data-act]').forEach((btn) => btn.addEventListener('click', async () => {
-        const id = btn.dataset.id;
-        try {
-          if (btn.dataset.act === 'advance') { await setLbcStatus(id, btn.dataset.next); toast('lbc-msg', 'Updated.', false); await load(); }
-          else if (btn.dataset.act === 'rts') { await setLbcStatus(id, 'Returned to Sender'); toast('lbc-msg', 'Marked returned to sender.', false); await load(); }
-          else if (btn.dataset.act === 'toggle-remit') {
-            const r = rows.find((x) => String(x.id) === String(id));
-            if (r.remitted) {
-              if (!confirm('Unmark this shipment as remitted? This clears its remittance number too.')) return;
-              await setLbcRemitted(id, null);
-            } else {
-              const remittanceNumber = prompt('Remittance Number from LBC for tracking # ' + (r.tracking_number || '(none on file)') + ':', '');
-              if (remittanceNumber === null) return; // cancelled
-              if (!remittanceNumber.trim()) { toast('lbc-msg', 'A remittance number is required to mark this remitted.', true); return; }
-              await setLbcRemitted(id, remittanceNumber.trim());
-            }
-            toast('lbc-msg', 'Updated.', false);
-            await load();
-          }
-          else if (btn.dataset.act === 'delete') { if (!confirm('Delete this shipment?')) return; await deleteLbcShipment(id); toast('lbc-msg', 'Deleted.', false); await load(); }
-          else if (btn.dataset.act === 'edit') openEdit(id, rows);
-        } catch (err) {
-          toast('lbc-msg', String(err.message || err), true);
-        }
-      }));
+      list.querySelectorAll('[data-act="view-details"]').forEach((btn) => btn.addEventListener('click', () => { openDetailId = btn.dataset.id; openDetail(openDetailId); }));
     }
 
-    function openEdit(id, rows) {
-      const r = rows.find((x) => String(x.id) === String(id));
-      const cell = document.querySelector('tr[data-edit-for="' + id + '"]');
-      const isOpen = cell.style.display !== 'none';
-      document.querySelectorAll('#lbc-list .edit-row').forEach((row) => { row.style.display = 'none'; row.querySelector('td').innerHTML = ''; });
-      if (isOpen) return;
-      cell.style.display = '';
-      cell.querySelector('td').innerHTML =
-        '<form class="edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+    // ---- detail drawer body ----
+    const kv = (label, value) => value ? '<div class="drawer-kv"><span>' + label + '</span><b>' + value + '</b></div>' : '';
+    function renderDetailBody(r) {
+      const nextStatus = { Shipped: 'In Transit', 'In Transit': 'Delivered' }[r.status];
+      return '<div class="drawer-section"><h4>Order</h4>' +
+        '<div class="drawer-kv"><span>Order ID</span><b>' + esc(r.order_id) + '</b></div>' +
+        '<div class="drawer-kv"><span>Customer</span><b>' + esc(r.customer_name) + '</b></div>' +
+        '<div class="drawer-kv"><span>Branch</span><b>' + (r.branches ? branchBadge(esc, r.branches.name, r.branch_id, branches) : '—') + '</b></div>' +
+      '</div>' +
+      '<div class="drawer-section"><h4>Shipment</h4>' +
+        '<div class="drawer-kv"><span>Tracking #</span><b>' + esc(r.tracking_number || '—') + '</b></div>' +
+        '<div class="drawer-kv"><span>Ship Date</span><b>' + (r.ship_date || '—') + '</b></div>' +
+        '<div class="drawer-kv"><span>Payment Type</span><b>' + esc(r.payment_type || '—') + '</b></div>' +
+        '<div class="drawer-kv"><span>COD Amount</span><b>' + money(r.cod_amount) + '</b></div>' +
+        '<div class="drawer-kv"><span>Status</span><b><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></b></div>' +
+        kv('Notes', esc(r.notes || '')) +
+        '<div class="drawer-kv"><span>Added By</span><b>' + (r.creator ? esc(r.creator.full_name) : '—') + '</b></div>' +
+      '</div>' +
+      '<div class="drawer-section"><h4>Remittance</h4>' +
+        '<div class="drawer-kv"><span>Remitted</span><b><span class="badge ' + (r.remitted ? 'ok' : 'low') + '">' + (r.remitted ? 'Yes' : 'Not yet') + '</span></b></div>' +
+        (r.remitted ? '<div class="drawer-kv"><span>Remittance #</span><b>' + esc(r.remittance_number || '—') + '</b></div>' : '') +
+        (r.remitted_date ? '<div class="drawer-kv"><span>Remitted Date</span><b>' + r.remitted_date + '</b></div>' : '') +
+      '</div>' +
+      '<div class="drawer-section"><h4>Actions</h4>' +
+        (nextStatus ? '<button type="button" class="btn small" data-act="advance" data-next="' + nextStatus + '">Mark ' + nextStatus + '</button> ' : '') +
+        (r.status !== 'Returned to Sender' && r.status !== 'Delivered' ? '<button type="button" class="btn small secondary" data-act="rts">RTS</button> ' : '') +
+        (r.status === 'Delivered' ? '<button type="button" class="btn small secondary" data-act="toggle-remit">' + (r.remitted ? 'Unmark Remit' : 'Mark Remitted') + '</button> ' : '') +
+        '<button type="button" class="btn small secondary" data-act="edit-toggle">Edit</button> ' +
+        (canDelete ? '<button type="button" class="btn small secondary" data-act="delete">Delete</button>' : '') +
+      '</div>' +
+      '<div id="lbc-edit-section" style="display:none;"></div>';
+    }
+
+    function editFormHtml(r) {
+      return '<div class="drawer-section"><h4>Edit</h4>' +
+        '<form id="lbc-edit-form" style="display:flex;flex-direction:column;gap:8px;">' +
           '<div class="field"><label>Order ID</label><input type="text" name="orderId" value="' + esc(r.order_id) + '" required></div>' +
           '<div class="field"><label>Customer</label><input type="text" name="customerName" value="' + esc(r.customer_name) + '" required></div>' +
           '<div class="field"><label>Tracking #</label><input type="text" name="trackingNumber" value="' + esc(r.tracking_number || '') + '"></div>' +
@@ -261,33 +329,75 @@ if (employee) {
           '<div class="field"><label>Payment Type</label><select name="paymentType">' + PAYMENT_TYPE_OPTIONS(r.payment_type) + '</select></div>' +
           '<div class="field"><label>COD Amount</label><input type="number" name="codAmount" step="0.01" min="0" value="' + (r.cod_amount ?? '') + '"></div>' +
           '<div class="field"><label>Status</label><select name="status">' + STATUS_OPTIONS(r.status) + '</select></div>' +
-          '<div class="field"><label>Remitted?</label><select name="remitted"><option value="">No</option><option value="1"' + (r.remitted ? ' selected' : '') + '>Yes</option></select></div>' +
-          '<div class="field"><label>Remittance Number</label><input type="text" name="remittanceNumber" value="' + esc(r.remittance_number || '') + '" placeholder="LBC\'s reference for this payout"></div>' +
-          '<div class="field" style="min-width:180px;"><label>Notes</label><input type="text" name="notes" value="' + esc(r.notes || '') + '"></div>' +
-          '<button class="btn small" type="submit">Save</button> ' +
-          '<button class="btn small secondary" type="button" data-cancel="1">Cancel</button>' +
-        '</form>';
-      const form = cell.querySelector('.edit-form');
-      form.querySelector('[data-cancel]').addEventListener('click', () => { cell.style.display = 'none'; cell.querySelector('td').innerHTML = ''; });
-      form.addEventListener('submit', async (ev) => {
-        ev.preventDefault();
-        const f = ev.target;
+          '<div class="field"><label>Remittance Number</label><input type="text" name="remittanceNumber" value="' + esc(r.remittance_number || '') + '" placeholder="Leave blank = not remitted"></div>' +
+          '<div class="field"><label>Notes</label><input type="text" name="notes" value="' + esc(r.notes || '') + '"></div>' +
+          '<div style="display:flex;gap:6px;"><button class="btn small" type="submit">Save</button><button class="btn small secondary" type="button" data-act="edit-cancel">Cancel</button></div>' +
+        '</form>' +
+      '</div>';
+    }
+
+    function wireDetailBody(container, r) {
+      const done = async (msg) => { toast('lbc-msg', msg, false); await load(); };
+      const fail = (err) => toast('lbc-msg', String(err.message || err), true);
+
+      container.querySelector('[data-act="advance"]')?.addEventListener('click', async (ev) => {
+        try { await setLbcStatus(r.id, ev.target.dataset.next); await done('Updated.'); } catch (err) { fail(err); }
+      });
+      container.querySelector('[data-act="rts"]')?.addEventListener('click', async () => {
+        try { await setLbcStatus(r.id, 'Returned to Sender'); await done('Marked returned to sender.'); } catch (err) { fail(err); }
+      });
+      container.querySelector('[data-act="toggle-remit"]')?.addEventListener('click', async () => {
         try {
-          await updateLbcShipment(id, {
-            orderId: f.orderId.value.trim(), customerName: f.customerName.value.trim(),
-            trackingNumber: f.trackingNumber.value.trim(), branchId: f.branchId.value ? Number(f.branchId.value) : null,
-            shipDate: f.shipDate.value || null, codAmount: f.codAmount.value ? Number(f.codAmount.value) : null,
-            paymentType: f.paymentType.value,
-            status: f.status.value, remitted: !!f.remitted.value,
-            remittedDate: f.remitted.value ? (r.remitted_date || localDateStr()) : null,
-            remittanceNumber: f.remittanceNumber.value.trim(),
-            notes: f.notes.value.trim(),
-          });
-          toast('lbc-msg', 'Shipment updated.', false);
-          await load();
-        } catch (err) {
-          toast('lbc-msg', String(err.message || err), true);
-        }
+          if (r.remitted) {
+            if (!confirm('Unmark this shipment as remitted? This clears its remittance number too.')) return;
+            await setLbcRemitted(r.id, null);
+          } else {
+            const remittanceNumber = prompt('Remittance Number from LBC for tracking # ' + (r.tracking_number || '(none on file)') + ':', '');
+            if (remittanceNumber === null) return; // cancelled
+            if (!remittanceNumber.trim()) { toast('lbc-msg', 'A remittance number is required to mark this remitted.', true); return; }
+            await setLbcRemitted(r.id, remittanceNumber.trim());
+          }
+          await done('Updated.');
+        } catch (err) { fail(err); }
+      });
+      container.querySelector('[data-act="delete"]')?.addEventListener('click', async () => {
+        if (!confirm('Delete this shipment?')) return;
+        try { await deleteLbcShipment(r.id); closeDetailDrawer(); await done('Deleted.'); } catch (err) { fail(err); }
+      });
+      container.querySelector('[data-act="edit-toggle"]')?.addEventListener('click', () => {
+        const section = container.querySelector('#lbc-edit-section');
+        section.innerHTML = editFormHtml(r);
+        section.style.display = '';
+        section.querySelector('[data-act="edit-cancel"]').addEventListener('click', () => { section.style.display = 'none'; section.innerHTML = ''; });
+        section.querySelector('#lbc-edit-form').addEventListener('submit', async (ev) => {
+          ev.preventDefault();
+          const f = ev.target;
+          // Remitted is no longer its own field to keep in sync -- a Remittance Number
+          // present IS what "remitted" means (Ren, 2026-09-25: "once input the
+          // remittance number considered as remitted"), same rule the quick Mark
+          // Remitted prompt already follows.
+          const remittanceNumber = f.remittanceNumber.value.trim();
+          const saveBtn = f.querySelector('button[type=submit]');
+          saveBtn.disabled = true;
+          try {
+            await updateLbcShipment(r.id, {
+              orderId: f.orderId.value.trim(), customerName: f.customerName.value.trim(),
+              trackingNumber: f.trackingNumber.value.trim(), branchId: f.branchId.value ? Number(f.branchId.value) : null,
+              shipDate: f.shipDate.value || null, codAmount: f.codAmount.value ? Number(f.codAmount.value) : null,
+              paymentType: f.paymentType.value,
+              status: f.status.value, remitted: !!remittanceNumber,
+              remittedDate: remittanceNumber ? (r.remitted_date || localDateStr()) : null,
+              remittanceNumber,
+              notes: f.notes.value.trim(),
+            });
+            toast('lbc-msg', 'Shipment updated.', false);
+            await load();
+            refreshDetailIfOpen(r.id);
+          } catch (err) {
+            fail(err);
+            saveBtn.disabled = false;
+          }
+        });
       });
     }
   }
