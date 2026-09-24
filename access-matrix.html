@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Position Access Matrix — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260923l">
+<link rel="stylesheet" href="css/styles.css?v=20260923m">
 <style>
   /* Ren's spec, 2026-09-22: HR-201-driven Position Access Matrix. Deliberately NOT a
      giant position×permission grid with rotated column headers (that's exactly what
@@ -57,14 +57,14 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260923l';
+import { initShell, toast, esc } from './js/shell.js?v=20260923m';
 import {
   getPermissionMatrix, setPositionPermission, getEmployeesForChecklist,
   listEmployeePermissionOverrides, setEmployeePermissionOverride, removeEmployeePermissionOverride,
   listAccessChangeLog, listHrPositions, createHrPosition, renameHrPosition,
   setHrPositionAutomaticAccess, setHrPositionActive, getRoleEmployeeCounts,
-} from './js/api.js?v=20260923l';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260923l';
+} from './js/api.js?v=20260923m';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260923m';
 
 // Roles are a fixed system enum (employees_role_check), not HR 201 data -- unlike
 // positions, there's nothing to load dynamically here (spec section 1 is specifically
@@ -91,7 +91,9 @@ if (employee) {
     let overrides = [];
     let log = [];
     let selectedColumnKey = null; // 'ROLE:Admin' or 'POSITION:<name>'
-    const sort = { field: 'name', dir: 'asc' };
+    // Descending default (Ren, 2026-09-24: "always show the direction in descending
+    // way") -- matches every other sortable list in the app.
+    const sort = { field: 'name', dir: 'desc' };
     const filters = { search: '', category: 'all', status: 'active' };
 
     function columnLabel(key) { return key.startsWith('ROLE:') ? key.slice(5) + ' (role)' : key.slice(9); }

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Asset &amp; Supplies Custodian — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260923l">
+<link rel="stylesheet" href="css/styles.css?v=20260923m">
 </head>
 <body>
 <main>
@@ -13,10 +13,10 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260923l';
-import { getBranches, listActiveEmployees, listAssetCustodianItems, createAssetCustodianItem, updateAssetCustodianItem, deleteAssetCustodianItem, subscribeToChanges } from './js/api.js?v=20260923l';
-import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260923l';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js?v=20260923l';
+import { initShell, toast, esc } from './js/shell.js?v=20260923m';
+import { getBranches, listActiveEmployees, listAssetCustodianItems, createAssetCustodianItem, updateAssetCustodianItem, deleteAssetCustodianItem, subscribeToChanges } from './js/api.js?v=20260923m';
+import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260923m';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate } from './js/uiKit.js?v=20260923m';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 14: Monitoring).
 const AC_SORT_FIELDS = [
@@ -50,7 +50,9 @@ if (employee) {
     const custodianOptions = (selected) => '<option value="">Unassigned</option>' + employees.map((e) =>
       '<option value="' + e.id + '"' + (e.id === selected ? ' selected' : '') + '>' + esc(e.full_name) + '</option>'
     ).join('');
-    const sort = { field: 'item_name', dir: 'asc' };
+    // Descending default (Ren, 2026-09-24: "always show the direction in descending
+    // way") -- matches every other sortable list in the app.
+    const sort = { field: 'item_name', dir: 'desc' };
 
     // Not layout-2col -- a 300px sidebar next to this particular table left too
     // little of the page's 1100px main width for 10 columns to read comfortably

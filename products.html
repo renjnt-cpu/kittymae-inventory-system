@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SKU Catalog — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260923l">
+<link rel="stylesheet" href="css/styles.css?v=20260923m">
 </head>
 <body>
 <main>
@@ -13,13 +13,13 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260923l';
+import { initShell, toast, esc } from './js/shell.js?v=20260923m';
 import {
   listProducts, updateProduct, getBranches, listAllInventoryQty, subscribeToChanges,
   requestProductEdit, listProductEditRequests, approveProductEdit, rejectProductEdit,
   setProductStatus, listProductLastChanges,
-} from './js/api.js?v=20260923l';
-import { branchColor } from './js/branchColors.js?v=20260923l';
+} from './js/api.js?v=20260923m';
+import { branchColor } from './js/branchColors.js?v=20260923m';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g';
@@ -81,7 +81,9 @@ if (employee) {
           '<option value="category">Category</option><option value="price">Price</option><option value="total_pcs">Total Pcs (All Branches)</option>' +
           '<optgroup label="Pcs at Branch">' + branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('') + '</optgroup>' +
         '</select></div>' +
-        '<div class="field"><label>Direction</label><select id="f-sort-dir"><option value="asc" selected>Ascending</option><option value="desc">Descending</option></select></div>' +
+        // Descending default (Ren, 2026-09-24: "for SKU always show the direction in
+        // descending way") -- matches every other sortable list in the app.
+        '<div class="field"><label>Direction</label><select id="f-sort-dir"><option value="asc">Ascending</option><option value="desc" selected>Descending</option></select></div>' +
         '<button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>' +
       '</div>' +
     '</div>' +
@@ -157,7 +159,7 @@ if (employee) {
     document.getElementById('f-status').value = 'all';
     document.getElementById('f-category').value = 'all';
     document.getElementById('f-sort-branch').value = 'sku';
-    document.getElementById('f-sort-dir').value = 'asc';
+    document.getElementById('f-sort-dir').value = 'desc';
     filterBranchId = null;
     loadProducts();
   });
