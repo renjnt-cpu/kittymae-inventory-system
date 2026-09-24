@@ -1,12 +1,12 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20260923o';
-import { listMyPermissions } from './api.js?v=20260923o';
-import { initActivityFeed } from './activityFeed.js?v=20260923o';
-import { localDateStr } from './uiKit.js?v=20260923o';
-import { showBirthdayBanner } from './birthdayBanner.js?v=20260923o';
-import { initAdminChat } from './adminChat.js?v=20260923o';
+import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20260923p';
+import { listMyPermissions } from './api.js?v=20260923p';
+import { initActivityFeed } from './activityFeed.js?v=20260923p';
+import { localDateStr } from './uiKit.js?v=20260923p';
+import { showBirthdayBanner } from './birthdayBanner.js?v=20260923p';
+import { initAdminChat } from './adminChat.js?v=20260923p';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -80,6 +80,7 @@ export async function initShell(activePage) {
   const ALL_PAGE_DEFS = {
     dashboard: { label: 'Dashboard', href: 'dashboard.html' },
     branches: { label: 'Branches', href: 'branches.html' },
+    'online-orders': { label: 'Online Orders', href: 'online-orders.html' },
     products: { label: 'SKU Catalog', href: 'products.html' },
     'item-monitoring': { label: 'Item Monitoring', href: 'item-monitoring.html' },
     transfers: { label: 'Transfers', href: 'transfers.html' },
@@ -107,6 +108,9 @@ export async function initShell(activePage) {
       // for this position (no branch_id, not in POSITION_MANAGERS), so canAddHere()/
       // canWriteHere() already resolve to false for her; this just lets her find the page.
       pages.push({ id: 'branches', ...ALL_PAGE_DEFS.branches });
+      // Same audience as Branches -- Online Orders used to be a sub-tab there
+      // (Ren, 2026-09-24: consolidated into its own page under Sales instead).
+      pages.push({ id: 'online-orders', ...ALL_PAGE_DEFS['online-orders'] });
     }
     pages.push(
       { id: 'products', ...ALL_PAGE_DEFS.products },
@@ -173,7 +177,7 @@ export async function initShell(activePage) {
   // must have a home in exactly one group.
   const NAV_GROUPS = [
     { label: 'Overview', ids: ['dashboard'] },
-    { label: 'Sales', ids: ['branches', 'refunds'] },
+    { label: 'Sales', ids: ['branches', 'online-orders', 'refunds'] },
     { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers', 'pull-out'] },
     { label: 'Operations', ids: ['lbc', 'assets'] },
     { label: 'Finance', ids: ['bills', 'transactions'] },

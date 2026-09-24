@@ -2,8 +2,8 @@
 // `supabase` directly, so the query shape lives in one place. Mirrors the old app's
 // `api(name, ...args)` helper in spirit, just split into named functions since
 // supabase-js's table/RPC calls aren't as uniformly shaped as google.script.run's.
-import { supabase } from './supabaseClient.js?v=20260923o';
-import { localDateStr } from './uiKit.js?v=20260923o';
+import { supabase } from './supabaseClient.js?v=20260923p';
+import { localDateStr } from './uiKit.js?v=20260923p';
 
 /** Caps the core ledger list queries (Sales, Layaway, Scrap, Subasta) so a tab load
  * fetches recent history instead of the entire table unconditionally -- these had no
@@ -1679,6 +1679,19 @@ export async function listOrderHistoryForItem({ sku, itemName }) {
   const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return data;
+}
+
+/** The raw Pancake webhook payload for one order (78_order_item_status_raw_payload.sql)
+ * -- a multi-KB JSONB blob per row, deliberately left out of ORDER_ITEM_STATUS_COLUMNS
+ * so the main board query (up to ORDER_ITEM_STATUS_ROW_CAP rows at once) never has to
+ * pull it; fetched one row at a time, only when a staffer actually expands that row's
+ * Packaging Details (Ren, 2026-09-24: "list down all the details under packaging in
+ * pancake") -- shipping address, warehouse, full item list, and payment breakdown all
+ * live inside this JSON rather than as their own columns. */
+export async function getOrderItemPackaging(id) {
+  const { data, error } = await supabase.from('order_item_status').select('raw_payload').eq('id', id).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? data.raw_payload : null;
 }
 
 /** Just the status, for the quick inline dropdown on each row -- doesn't require

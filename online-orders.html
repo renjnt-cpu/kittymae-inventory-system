@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Online Orders — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css?v=20260923p">
+</head>
+<body>
+<main>
+  <div id="ol-msg"></div>
+  <div id="ol-root"></div>
+</main>
+
+<script type="module">
+// Online Orders -- company-wide monitoring board for Pancake-synced orders, one
+// module under the Sales nav group. Used to be split three ways (a per-branch tab on
+// each app's Branches page, plus a second copy of this same board on the POS's
+// Record Movement page) -- consolidated here, ERP-only (Ren, 2026-09-24: "remove
+// online order in all branch in the POS move online order in the ERP only make it in
+// one module or category under sales"). Rows come from the pancake-webhook Edge
+// Function (live) and the one-time pancake-backfill pull of Pancake's order history;
+// monitoring only, no manual Add -- status can be corrected by hand if Pancake's own
+// value is off.
+import { initShell, toast, esc } from './js/shell.js?v=20260923p';
+import {
+  getBranches, listOrderItemStatuses, listOrderHistoryForItem, getOrderItemStatusCounts,
+  getOrderItemPackaging, ORDER_ITEM_STATUS_ROW_CAP, setOrderItemStatus, deleteOrderItemStatus,
+  listDeliveredOrders, subscribeToChanges,
+} from './js/api.js?v=20260923p';
+import { branchBadge } from './js/branchColors.js?v=20260923p';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260923p';
+
+const OL_SORT_FIELDS = [
+  { key: 'default', label: 'Default (most recent)' }, { key: 'item_name', label: 'Item' }, { key: 'qty', label: 'Qty' },
+  { key: 'branch', label: 'Branch' }, { key: 'status', label: 'Status' }, { key: 'order_reference', label: 'Order / Customer' }, { key: 'notes', label: 'Notes / By' },
+];
+const OL_SORT_COMPARATORS = {
+  item_name: byText('item_name'), qty: byNumber('qty'), status: byText('status'),
+  order_reference: byText('order_reference'), notes: byText('notes'),
+  branch: (a, b) => String(a.branches?.name || '').localeCompare(String(b.branches?.name || '')),
+};
+
+// Delivered is a terminal status, always excluded from the working board above -- there
+// are 40,000+ historical rows after the Pancake backfill, most of them long-delivered,
+// so Ren asked to only ever show Delivered from this date onwards rather than the full
+// history.
+const DELIVERED_FROM_DATE = '2026-09-01';
+
+// Confirmed Pancake status_name -> tab mapping (screenshotted against Pancake's own
+// dashboard, cross-checked doc_counts) -- kept here since this is now the one place
+// this board lives.
+const PANCAKE_STATUS_TABS = [
+  { label: 'New', keys: ['new'] },
+  { label: 'Pending Confirmation', keys: ['pending'] },
+  { label: 'Awaiting Stock', keys: ['waitting'] },
+  { label: 'Ordered', keys: ['ordered'] },
+  { label: 'Confirmed', keys: ['confirmed'] },
+  { label: 'Awaiting Print', keys: ['wait_print'] },
+  { label: 'Printed', keys: ['printed'] },
+  { label: 'Packing', keys: ['packing'] },
+];
+const PANCAKE_MAPPED_KEYS = new Set(PANCAKE_STATUS_TABS.flatMap((t) => t.keys));
+
+function prettyStatus(raw) {
+  return String(raw || '').split('_').map((w) => w ? w[0].toUpperCase() + w.slice(1) : w).join(' ') || 'Unknown';
+}
+function statusBadgeClass(raw) {
+  const s = String(raw || '').toLowerCase();
+  if (s.includes('cancel') || s.includes('return') || s.includes('fail')) return 'low';
+  if (s.includes('ship') || s.includes('deliver') || s.includes('complet') || s.includes('done')) return 'ok';
+  if (s.includes('wait') || s.includes('pending') || s.includes('new') || s.includes('submit')) return 'pending';
+  return 'transit';
+}
+function historyKey(r) {
+  const sku = String(r.sku || '').toLowerCase();
+  if (sku && !sku.startsWith('pancake-item-')) return sku;
+  return String(r.item_name || '').trim().toLowerCase();
+}
+const fmtDate = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+
+// Pacific Mall (2) and APM Mall (4) -- view only for everyone but Admin, per Ren's
+// request (93_order_item_status_branch_admin_only.sql enforces the same rule server-
+// side via RLS; this just keeps the UI from showing a control that would fail).
+const ADMIN_ONLY_EDIT_BRANCHES = [2, 4];
+
+/** Packaging Details (Ren, 2026-09-24: "list down all the details under packaging in
+ * pancake") -- parses the raw Pancake order payload into the fields someone actually
+ * packing/shipping this order needs: who and where to ship to, which Pancake
+ * warehouse it ships from, every item in the order (not just this row's one line --
+ * an order can bundle several), and the payment breakdown. Defensive against missing
+ * fields throughout since this is a third-party payload, not our own schema, and the
+ * ~2 rows (of 44,625) predating the webhook's raw_payload capture have none at all. */
+function renderPackaging(payload) {
+  if (!payload) return '<div class="msg error" style="margin:8px 4px;">No packaging details captured for this order.</div>';
+  const ship = payload.shipping_address || {};
+  const shipName = ship.full_name || payload.bill_full_name || '—';
+  const shipPhone = ship.phone_number || payload.bill_phone_number || '—';
+  const shipAddr = ship.full_address || ship.address || '—';
+  const warehouse = (payload.warehouse_info && payload.warehouse_info.name) || '—';
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  const tags = (Array.isArray(payload.tags) ? payload.tags : []).map((t) => t && t.name).filter(Boolean);
+  const pageName = (payload.page && payload.page.name) || '';
+  const source = payload.order_sources_name || '—';
+
+  const itemsHtml = !items.length ? '' :
+    '<div><div class="muted" style="font-size:11px;margin-bottom:4px;">ITEMS IN THIS ORDER (' + items.length + ')</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;">' +
+        items.map((it) => {
+          const vi = it.variation_info || {};
+          const img = Array.isArray(vi.images) && vi.images[0] ? vi.images[0] : null;
+          return '<div style="display:flex;gap:8px;align-items:center;">' +
+            (img ? '<img src="' + esc(img) + '" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #eee;flex-shrink:0;">' : '') +
+            '<div style="font-size:12px;"><b>' + esc(vi.name || '—') + '</b>' + (vi.detail ? ' — ' + esc(vi.detail) : '') + ' <span class="muted">× ' + (it.quantity ?? '—') + '</span></div>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</div>';
+
+  return '<div style="padding:10px 4px;display:flex;flex-direction:column;gap:12px;">' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">' +
+      '<div><div class="muted" style="font-size:11px;">SHIP TO</div><div style="font-size:13px;font-weight:600;">' + esc(shipName) + '</div><div style="font-size:12px;">' + esc(shipPhone) + '</div><div style="font-size:12px;">' + esc(shipAddr) + '</div></div>' +
+      '<div><div class="muted" style="font-size:11px;">SHIP FROM (PANCAKE WAREHOUSE)</div><div style="font-size:13px;">' + esc(warehouse) + '</div></div>' +
+      '<div><div class="muted" style="font-size:11px;">PAYMENT</div><div style="font-size:12px;">Prepaid: <b>' + money(payload.prepaid) + '</b></div><div style="font-size:12px;">COD: <b>' + money(payload.cod) + '</b></div><div style="font-size:12px;">Total: <b>' + money(payload.total_price) + '</b></div></div>' +
+      '<div><div class="muted" style="font-size:11px;">SOURCE</div><div style="font-size:12px;">' + esc(source) + (pageName ? ' · ' + esc(pageName) : '') + '</div>' +
+        (tags.length ? '<div style="margin-top:4px;">' + tags.map((t) => '<span class="badge">' + esc(t) + '</span>').join(' ') + '</div>' : '') +
+      '</div>' +
+    '</div>' +
+    (payload.note ? '<div><div class="muted" style="font-size:11px;">ORDER NOTE</div><div style="font-size:12px;white-space:pre-wrap;">' + esc(payload.note) + '</div></div>' : '') +
+    itemsHtml +
+    (payload.order_link ? '<div><a href="' + esc(payload.order_link) + '" target="_blank" rel="noopener" class="btn small secondary">Open in Pancake ↗</a></div>' : '') +
+  '</div>';
+}
+
+const GATE_ROLES = ['Admin', 'Manager', 'Branch Supervisor'];
+const GATE_POSITIONS = ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant'];
+
+const employee = await initShell('online-orders');
+if (employee) {
+  const canView = GATE_ROLES.includes(employee.role) || GATE_POSITIONS.includes(employee.position);
+  const root = document.getElementById('ol-root');
+  if (!canView) {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Ask an Admin if you need to see this.</p></div></div>';
+  } else {
+    const isAdmin = employee.role === 'Admin';
+    const branches = await getBranches();
+    const sort = { field: 'default', dir: 'desc' };
+
+    root.innerHTML =
+      '<h2>Online Orders</h2>' +
+      '<p class="muted" style="margin-top:-4px;">Monitoring only — synced live from Pancake across every branch. Status can be corrected by hand below if Pancake\'s own value is off.</p>' +
+      '<div class="tiles" id="ol-tiles"></div>' +
+      '<div class="card" style="margin-bottom:14px;">' +
+        '<h3 style="margin-top:0;">Search &amp; Filter</h3>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+          '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="ol-search" placeholder="Item, SKU, order #, customer, or notes…"></div>' +
+          '<div class="field"><label>Branch</label><select id="ol-f-branch"><option value="">All Branches</option>' +
+            branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('') + '</select></div>' +
+          '<div class="field"><label>From</label><input type="date" id="ol-f-from"></div>' +
+          '<div class="field"><label>To</label><input type="date" id="ol-f-to"></div>' +
+          sortControlHtml(OL_SORT_FIELDS, sort, 'ol-sort-field', 'ol-sort-dir') +
+          '<button type="button" class="btn small secondary" id="ol-f-clear">Clear Filters</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="ol-active"></div>' +
+      '<div id="ol-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>' +
+      '<div id="ol-list" style="margin-top:10px;"><div class="muted">Loading…</div></div>';
+
+    let orderItems = [];
+    let statusCounts = { all: 0 };
+    let statusFilter = 'all';
+    let search = '';
+    let branchFilter = null;
+    let fFrom = '';
+    let fTo = '';
+    let searchTimer = null;
+
+    function tabKeysFor(filterId) {
+      if (filterId === 'all') return null;
+      const mapped = PANCAKE_STATUS_TABS.find((t) => t.label === filterId);
+      return mapped ? mapped.keys : [filterId];
+    }
+
+    function matchesSearch(r, term) {
+      const t = term.toLowerCase();
+      return (r.item_name || '').toLowerCase().includes(t) || (r.sku || '').toLowerCase().includes(t) ||
+        (r.order_reference || '').toLowerCase().includes(t) || (r.customer_name || '').toLowerCase().includes(t) ||
+        (r.notes || '').toLowerCase().includes(t);
+    }
+
+    async function load() {
+      try {
+        if (statusFilter === 'delivered') {
+          const effectiveFrom = fFrom && fFrom > DELIVERED_FROM_DATE ? fFrom : DELIVERED_FROM_DATE;
+          let items = await listDeliveredOrders({ branchId: branchFilter, fromDate: effectiveFrom, toDate: fTo || null });
+          if (search) items = items.filter((r) => matchesSearch(r, search));
+          orderItems = items;
+          render();
+          return;
+        }
+        const [items, counts] = await Promise.all([
+          listOrderItemStatuses({ statusKeys: tabKeysFor(statusFilter), search, branchId: branchFilter, fromDate: fFrom || null, toDate: fTo || null }),
+          getOrderItemStatusCounts(branchFilter),
+        ]);
+        orderItems = items;
+        statusCounts = counts;
+        render();
+      } catch (err) {
+        document.getElementById('ol-list').innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
+      }
+    }
+
+    document.getElementById('ol-search').addEventListener('input', (ev) => {
+      search = ev.target.value.trim();
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(load, 300);
+    });
+    document.getElementById('ol-f-branch').addEventListener('change', (ev) => { branchFilter = ev.target.value ? Number(ev.target.value) : null; load(); });
+    document.getElementById('ol-f-from').addEventListener('change', (ev) => { fFrom = ev.target.value; load(); });
+    document.getElementById('ol-f-to').addEventListener('change', (ev) => { fTo = ev.target.value; load(); });
+    document.getElementById('ol-f-clear').addEventListener('click', () => {
+      document.getElementById('ol-search').value = '';
+      document.getElementById('ol-f-branch').value = '';
+      document.getElementById('ol-f-from').value = '';
+      document.getElementById('ol-f-to').value = '';
+      search = ''; branchFilter = null; fFrom = ''; fTo = ''; statusFilter = 'all';
+      load();
+    });
+    wireSortControl('ol-sort-field', 'ol-sort-dir', sort, render);
+
+    let realtimeReloadTimer = null;
+    subscribeToChanges('order_item_status', () => {
+      clearTimeout(realtimeReloadTimer);
+      realtimeReloadTimer = setTimeout(load, 800);
+    });
+
+    load();
+
+    function render() {
+      const distinctStatuses = Object.keys(statusCounts).filter((s) => s !== 'all').sort();
+      const leftoverStatuses = distinctStatuses.filter((s) => !PANCAKE_MAPPED_KEYS.has(s));
+
+      const tabs = document.getElementById('ol-tabs');
+      const countFor = (keys) => keys === null ? statusCounts.all :
+        keys.reduce((sum, k) => sum + (statusCounts[k] || 0), 0);
+      const tabBtn = (id, label, keys) =>
+        '<button type="button" class="btn small' + (statusFilter === id ? '' : ' secondary') + '" data-ol-tab="' + esc(id) + '">' +
+          esc(label) + ' <span class="muted" style="font-weight:normal;">' + countFor(keys) + '</span></button>';
+      const deliveredBtn = '<button type="button" class="btn small' + (statusFilter === 'delivered' ? '' : ' secondary') + '" data-ol-tab="delivered">Delivered <span class="muted" style="font-weight:normal;">(Sep 2026+)</span></button>';
+      tabs.innerHTML = tabBtn('all', 'All', null) +
+        PANCAKE_STATUS_TABS.map((t) => tabBtn(t.label, t.label, t.keys)).join('') +
+        leftoverStatuses.map((s) => tabBtn(s, prettyStatus(s), [s])).join('') +
+        deliveredBtn;
+      tabs.querySelectorAll('[data-ol-tab]').forEach((btn) => btn.addEventListener('click', () => {
+        statusFilter = btn.dataset.olTab;
+        load();
+      }));
+
+      let rows = orderItems;
+      const list = document.getElementById('ol-list');
+      const truncated = rows.length >= ORDER_ITEM_STATUS_ROW_CAP;
+      const tile = (num, label) => '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>';
+      document.getElementById('ol-tiles').innerHTML =
+        tile(rows.length + (truncated ? '+' : ''), 'Items' + (search ? ' (filtered)' : '')) +
+        tile(new Set(rows.map((r) => r.order_reference).filter(Boolean)).size + (truncated ? '+' : ''), 'Orders') +
+        tile(rows.reduce((s, r) => s + Number(r.qty || 0), 0) + (truncated ? '+' : ''), 'Qty Subtotal');
+      const activeEl = document.getElementById('ol-active');
+      activeEl.innerHTML = activeFiltersHtml([
+        { label: 'Search', value: esc(search) },
+        { label: 'Branch', value: branchFilter != null ? esc((branches.find((b) => b.id === branchFilter) || {}).name || '') : '' },
+        { label: 'From', value: esc(fFrom) }, { label: 'To', value: esc(fTo) },
+        { label: 'Status', value: statusFilter === 'all' ? '' : esc(statusFilter === 'delivered' ? 'Delivered' : prettyStatus(statusFilter)) },
+      ], 'ol-f-clear');
+      wireProxyButtons(activeEl);
+      if (!rows.length) {
+        list.innerHTML = emptyStateHtml({
+          message: statusFilter === 'delivered'
+            ? 'No delivered orders from September 2026 onwards' + (search ? ' matching "' + esc(search) + '"' : '') + '.'
+            : 'No online orders match this search/filter.',
+          hasFilters: !!(search || branchFilter != null || fFrom || fTo || statusFilter !== 'all'), clearId: 'ol-f-clear',
+        });
+        wireProxyButtons(list);
+        return;
+      }
+
+      rows = applySort(rows, sort, OL_SORT_COMPARATORS);
+
+      const statusOptionsFor = (current) => {
+        const opts = distinctStatuses.includes(current) ? distinctStatuses : [...distinctStatuses, current].sort();
+        return opts.map((s) => '<option value="' + esc(s) + '"' + (s === current ? ' selected' : '') + '>' + esc(prettyStatus(s)) + '</option>').join('');
+      };
+      const subtotalLine = truncated ? '<p class="muted" style="margin:0 0 6px;color:#b45309;">Showing the ' + ORDER_ITEM_STATUS_ROW_CAP + ' most recent; search to narrow further.</p>' : '';
+
+      const topCounts = new Map();
+      rows.forEach((r) => {
+        const key = historyKey(r);
+        const entry = topCounts.get(key) || {
+          item_name: r.item_name,
+          sku: (r.sku && !r.sku.toLowerCase().startsWith('pancake-item-')) ? r.sku : null,
+          orders: 0, qty: 0,
+        };
+        entry.orders += 1;
+        entry.qty += Number(r.qty || 0);
+        topCounts.set(key, entry);
+      });
+      const top5 = [...topCounts.values()].sort((a, b) => b.orders - a.orders).slice(0, 5);
+      const filtered = statusFilter !== 'all' || search || branchFilter != null;
+      const top5Line = top5.length ? (
+        '<div style="background:#f6f6f6;border-radius:8px;padding:10px 14px;margin-bottom:10px;">' +
+          '<div style="font-weight:600;font-size:12px;margin-bottom:6px;">Top ' + top5.length + ' Products — Most Orders' +
+            (filtered ? ' <span class="muted" style="font-weight:normal;">(current filter)</span>' : '') +
+            (truncated ? ' <span class="muted" style="font-weight:normal;">(from the ' + ORDER_ITEM_STATUS_ROW_CAP + ' most recent)</span>' : '') + '</div>' +
+          '<ol style="margin:0;padding-left:18px;font-size:12px;">' +
+            top5.map((t) => '<li>' + esc(t.item_name) + (t.sku ? ' <span class="muted">(' + esc(t.sku) + ')</span>' : '') +
+              ' — <strong>' + t.orders + '</strong> order' + (t.orders === 1 ? '' : 's') + ' <span class="muted">· Qty ' + t.qty + '</span></li>').join('') +
+          '</ol>' +
+        '</div>'
+      ) : '';
+
+      const editable = (r) => isAdmin || !ADMIN_ONLY_EDIT_BRANCHES.includes(r.branch_id);
+      list.innerHTML = top5Line + subtotalLine +
+        '<div class="table-scroll table-2col"><table><thead><tr>' +
+          '<th>Item</th><th>Qty</th><th>Branch</th><th>Status</th><th>Order / Customer</th><th>Notes / By</th><th></th>' +
+        '</tr></thead><tbody>' +
+        rows.map((r) => {
+          const rowEditable = editable(r);
+          return '<tr>' +
+            '<td data-label="Item" class="full-row">' +
+              '<button type="button" class="exp-row-btn" data-history-toggle="' + r.id + '" data-history-sku="' + esc(r.sku || '') + '" data-history-name="' + esc(r.item_name) + '" aria-expanded="false">' +
+                '<span class="exp-arrow" aria-hidden="true">▸</span>' +
+                '<strong style="text-decoration:underline;text-decoration-style:dotted;">' + esc(r.item_name) + '</strong>' +
+              '</button>' +
+              (r.sku ? '<div class="muted" style="font-size:11px;">' + esc(r.sku) + '</div>' : '') +
+            '</td>' +
+            '<td data-label="Qty">' + r.qty + '</td>' +
+            '<td data-label="Branch">' + (r.branches ? branchBadge(esc, r.branches.name, r.branch_id, branches) : '—') + '</td>' +
+            '<td data-label="Status">' +
+              (rowEditable
+                ? '<select data-status-for="' + r.id + '" class="badge ' + statusBadgeClass(r.status) + '" style="border:none;font:inherit;">' + statusOptionsFor(r.status) + '</select>'
+                : '<span class="badge ' + statusBadgeClass(r.status) + '" title="View only for this branch — only Admin can change status here.">' + esc(prettyStatus(r.status)) + '</span>') +
+            '</td>' +
+            '<td data-label="Order / Customer" class="full-row" style="font-size:11px;">' + esc(r.order_reference || '—') + (r.customer_name ? '<div class="muted">' + esc(r.customer_name) + '</div>' : '') + '</td>' +
+            '<td data-label="Notes / By" class="full-row" style="font-size:11px;">' + esc(r.notes || '') +
+              (r.creator ? '<div class="muted" style="font-size:10px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
+            '</td>' +
+            '<td class="full-row" style="white-space:nowrap;">' +
+              '<button type="button" class="btn small secondary" data-packaging-toggle="' + r.id + '" aria-expanded="false">📦 Packaging</button> ' +
+              (rowEditable ? '<button class="btn small secondary" type="button" data-delete-id="' + r.id + '">Delete</button>' : '') +
+            '</td>' +
+          '</tr>' +
+          '<tr class="history-row" data-history-for="' + r.id + '" style="display:none;"><td colspan="7" class="full-row"></td></tr>';
+        }).join('') +
+        '</tbody></table></div>';
+
+      list.querySelectorAll('[data-status-for]').forEach((sel) => sel.addEventListener('change', async () => {
+        const id = sel.dataset.statusFor;
+        sel.disabled = true;
+        try {
+          await setOrderItemStatus(id, sel.value);
+          toast('ol-msg', 'Status updated.', false);
+          await load();
+        } catch (err) {
+          toast('ol-msg', String(err.message || err), true);
+          sel.disabled = false;
+        }
+      }));
+      list.querySelectorAll('[data-delete-id]').forEach((btn) => btn.addEventListener('click', async () => {
+        if (!confirm('Delete this item?')) return;
+        try {
+          await deleteOrderItemStatus(btn.dataset.deleteId);
+          toast('ol-msg', 'Deleted.', false);
+          await load();
+        } catch (err) {
+          toast('ol-msg', String(err.message || err), true);
+        }
+      }));
+      list.querySelectorAll('[data-history-toggle]').forEach((btn) => btn.addEventListener('click', () => {
+        toggleExpand(btn.dataset.historyToggle, 'history', { sku: btn.dataset.historySku, itemName: btn.dataset.historyName });
+      }));
+      list.querySelectorAll('[data-packaging-toggle]').forEach((btn) => btn.addEventListener('click', () => {
+        toggleExpand(btn.dataset.packagingToggle, 'packaging');
+      }));
+    }
+
+    // One shared expand row per line item, holding EITHER the item's cross-order
+    // history OR its Packaging Details, whichever was clicked last -- an accordion
+    // across every row and both kinds at once (opening one always closes any other).
+    async function toggleExpand(id, kind, meta) {
+      const row = document.querySelector('tr[data-history-for="' + id + '"]');
+      const alreadyThisKind = row.style.display !== 'none' && row.dataset.expandKind === kind;
+      document.querySelectorAll('.history-row').forEach((r) => { r.style.display = 'none'; r.querySelector('td').innerHTML = ''; delete r.dataset.expandKind; });
+      document.querySelectorAll('[data-history-toggle], [data-packaging-toggle]').forEach((btn) => btn.setAttribute('aria-expanded', 'false'));
+      if (alreadyThisKind) return;
+      row.dataset.expandKind = kind;
+      row.style.display = '';
+      const td = row.querySelector('td');
+      if (kind === 'history') {
+        document.querySelector('[data-history-toggle="' + id + '"]')?.setAttribute('aria-expanded', 'true');
+        td.innerHTML = '<div class="muted" style="padding:8px 4px;">Loading history…</div>';
+        let matches;
+        try {
+          matches = await listOrderHistoryForItem({ sku: meta.sku, itemName: meta.itemName });
+        } catch (err) {
+          td.innerHTML = '<div class="msg error" style="margin:8px 4px;">' + esc(err.message || err) + '</div>';
+          return;
+        }
+        td.innerHTML =
+          '<div style="padding:8px 4px;">' +
+            '<div class="muted" style="font-size:11px;margin-bottom:6px;">' + matches.length + ' order' + (matches.length === 1 ? '' : 's') + ' for this item, across every status and branch</div>' +
+            '<div class="table-scroll table-2col"><table><thead><tr><th>Order / Customer</th><th>Branch</th><th>Status</th><th>Qty</th><th>Notes</th><th>Date</th></tr></thead><tbody>' +
+            matches.map((m) =>
+              '<tr>' +
+                '<td data-label="Order / Customer" class="full-row">' + esc(m.order_reference || '—') + (m.customer_name ? '<div class="muted" style="font-size:11px;">' + esc(m.customer_name) + '</div>' : '') + '</td>' +
+                '<td data-label="Branch">' + (m.branches ? branchBadge(esc, m.branches.name, m.branch_id, branches) : '—') + '</td>' +
+                '<td data-label="Status"><span class="badge ' + statusBadgeClass(m.status) + '">' + esc(prettyStatus(m.status)) + '</span></td>' +
+                '<td data-label="Qty">' + m.qty + '</td>' +
+                '<td data-label="Notes" class="full-row" style="font-size:11px;">' + esc(m.notes || '—') + '</td>' +
+                '<td data-label="Date" style="font-size:11px;white-space:nowrap;">' + fmtDate(m.created_at) + '</td>' +
+              '</tr>'
+            ).join('') +
+            '</tbody></table></div>' +
+          '</div>';
+      } else {
+        document.querySelector('[data-packaging-toggle="' + id + '"]')?.setAttribute('aria-expanded', 'true');
+        td.innerHTML = '<div class="muted" style="padding:8px 4px;">Loading packaging details…</div>';
+        let payload;
+        try {
+          payload = await getOrderItemPackaging(id);
+        } catch (err) {
+          td.innerHTML = '<div class="msg error" style="margin:8px 4px;">' + esc(err.message || err) + '</div>';
+          return;
+        }
+        td.innerHTML = renderPackaging(payload);
+      }
+    }
+  }
+}
+</script>
+</body>
+</html>
