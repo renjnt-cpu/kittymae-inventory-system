@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Access Checklist — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260923n">
+<link rel="stylesheet" href="css/styles.css?v=20260923o">
 <style>
   .ac-item { padding:10px 0; border-bottom:1px solid #f0f0f0; }
   .ac-item:last-child { border-bottom:none; }
@@ -18,6 +18,11 @@
   .lvl-pill.active.encode { background:#eaf6ec; color:var(--ok); border-color:#eaf6ec; }
   .lvl-pill.active.edit { background:#fff4e0; color:#a15c00; border-color:#fff4e0; }
   .lvl-pill.active.approver { background:#f0e9fb; color:#6a3fa0; border-color:#f0e9fb; }
+  /* Inventory Value by Branch's category filter -- own accent (not a level pill) so
+     it doesn't read as one of the five access-level states above. */
+  .cat-pill { border:1px solid #e2e2e2; background:#fff; color:var(--muted); padding:4px 12px; border-radius:14px; font-size:12px; cursor:pointer; font:inherit; }
+  .cat-pill:hover { border-color:#ccc; }
+  .cat-pill.active { background:var(--rose); color:var(--ink); border-color:var(--rose); }
 
   .ac-layout { display:flex; gap:16px; align-items:flex-start; }
   .ac-emp-list { flex:0 0 260px; max-height:calc(100vh - 220px); overflow-y:auto; padding:6px; }
@@ -41,13 +46,13 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260923n';
+import { initShell, toast, esc } from './js/shell.js?v=20260923o';
 import {
   getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, listScrapEntries,
   subscribeToChanges, getBranches, listProducts, listAllInventoryQty, listHrPositions, setEmployeePassword,
-} from './js/api.js?v=20260923n';
-import { branchColor } from './js/branchColors.js?v=20260923n';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260923n';
+} from './js/api.js?v=20260923o';
+import { branchColor } from './js/branchColors.js?v=20260923o';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260923o';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 36) -- replaces this leaderboard's
 // old per-column header-click sort with the one shared control used everywhere else.
@@ -233,6 +238,24 @@ if (employee) {
     let branches = [];
     let invByBranch = {}; // { branchId: { pcs, amount } }
     let invGrandTotal = { pcs: 0, amount: 0 };
+    // Category filter (Ren, 2026-09-24: "add category make it multiple click") -- a
+    // multi-select pill row, same click-to-toggle interaction as the level pills above,
+    // just its own accent color so the two aren't confused. Empty set = every category
+    // (the original, unfiltered behavior); populated fresh each load from whatever
+    // categories actually exist on an Active SKU right now.
+    let invCategories = [];
+    let invCategoryFilter = new Set();
+    // Sort for the branch tiles (Ren, 2026-09-24: "sort by branch") -- same shared
+    // control as every other sortable list in the app, descending by default.
+    const invSort = { field: 'branch', dir: 'desc' };
+    const INV_SORT_FIELDS = [
+      { key: 'branch', label: 'Branch' }, { key: 'pcs', label: 'Total Pcs' }, { key: 'amount', label: 'Total Value' },
+    ];
+    const INV_SORT_COMPARATORS = {
+      branch: (a, b) => a.name.localeCompare(b.name),
+      pcs: (a, b) => (invByBranch[a.id] || { pcs: 0 }).pcs - (invByBranch[b.id] || { pcs: 0 }).pcs,
+      amount: (a, b) => (invByBranch[a.id] || { amount: 0 }).amount - (invByBranch[b.id] || { amount: 0 }).amount,
+    };
 
     // Scrap Encoding Activity leaderboard -- who's actually encoding Scrap entries,
     // ranked, with a time range. Kept as JS state (not read from the DOM at render
@@ -246,35 +269,56 @@ if (employee) {
     // (Entries Encoded) or 'total' (Total amount).
     const scrapLbSort = { field: 'count', dir: 'desc' };
 
+    // Raw fetch results cached so toggling a category pill (recomputeInventoryValue)
+    // doesn't need a fresh network round-trip -- only loadInventoryValue() itself
+    // (called on initial load and on a realtime products/inventory change) re-fetches.
+    let invProductsCache = [];
+    let invQtyRowsCache = [];
+
     async function loadInventoryValue() {
       const box = document.getElementById('ac-inventory-value-tiles');
       try {
         if (!branches.length) branches = await getBranches();
         const [products, qtyRows] = await Promise.all([listProducts({ status: 'Active' }), listAllInventoryQty()]);
-        const priceBySku = {};
-        products.forEach((p) => { priceBySku[p.sku] = p.system_selling_price; });
-
-        invByBranch = {};
-        branches.forEach((b) => { invByBranch[b.id] = { pcs: 0, amount: 0 }; });
-        invGrandTotal = { pcs: 0, amount: 0 };
-        qtyRows.forEach((r) => {
-          // A row for a Discontinued or otherwise-missing SKU shouldn't count toward
-          // an "Active SKUs only" total -- priceBySku only has Active SKUs in it, so a
-          // lookup miss means this row isn't one of them.
-          if (!(r.sku in priceBySku)) return;
-          const bucket = invByBranch[r.branch_id];
-          if (!bucket) return; // a branch not in getBranches() (shouldn't happen, but don't crash on it)
-          const qty = Number(r.qty_available || 0);
-          const amount = qty * Number(priceBySku[r.sku] || 0);
-          bucket.pcs += qty;
-          bucket.amount += amount;
-          invGrandTotal.pcs += qty;
-          invGrandTotal.amount += amount;
-        });
+        invProductsCache = products;
+        invQtyRowsCache = qtyRows;
       } catch (err) {
         if (box) box.innerHTML = '<div class="msg error">' + esc(err.message || err) + '</div>';
         return;
       }
+      recomputeInventoryValue();
+    }
+
+    // Re-derives invByBranch/invGrandTotal from the already-fetched products/qty rows
+    // -- called on load AND whenever the category filter changes, without re-fetching.
+    function recomputeInventoryValue() {
+      const skuInfo = {};
+      invProductsCache.forEach((p) => { skuInfo[p.sku] = { price: p.system_selling_price, category: p.category || 'Uncategorized' }; });
+      invCategories = [...new Set(invProductsCache.map((p) => p.category || 'Uncategorized'))].sort();
+      // Drop a category from the filter set if it no longer exists (e.g. every SKU in
+      // it got discontinued) -- an empty result set would otherwise look like a bug.
+      invCategoryFilter.forEach((c) => { if (!invCategories.includes(c)) invCategoryFilter.delete(c); });
+
+      invByBranch = {};
+      branches.forEach((b) => { invByBranch[b.id] = { pcs: 0, amount: 0 }; });
+      invGrandTotal = { pcs: 0, amount: 0 };
+      invQtyRowsCache.forEach((r) => {
+        // A row for a Discontinued or otherwise-missing SKU shouldn't count toward
+        // an "Active SKUs only" total -- skuInfo only has Active SKUs in it, so a
+        // lookup miss means this row isn't one of them.
+        const info = skuInfo[r.sku];
+        if (!info) return;
+        // Empty filter = every category (unfiltered, the original behavior).
+        if (invCategoryFilter.size > 0 && !invCategoryFilter.has(info.category)) return;
+        const bucket = invByBranch[r.branch_id];
+        if (!bucket) return; // a branch not in getBranches() (shouldn't happen, but don't crash on it)
+        const qty = Number(r.qty_available || 0);
+        const amount = qty * Number(info.price || 0);
+        bucket.pcs += qty;
+        bucket.amount += amount;
+        invGrandTotal.pcs += qty;
+        invGrandTotal.amount += amount;
+      });
       renderInventoryValue();
     }
 
@@ -283,7 +327,8 @@ if (employee) {
       if (!box) return;
       const totalTile = '<div class="tile"><div class="num">' + invGrandTotal.pcs.toLocaleString('en-PH') + '</div><div class="lbl">Total Pcs (All Branches)</div>' +
         '<div style="font-size:12px;font-weight:600;margin-top:4px;">' + money(invGrandTotal.amount) + '</div></div>';
-      const branchTiles = branches.map((b) => {
+      const sortedBranches = applySort(branches, invSort, INV_SORT_COMPARATORS);
+      const branchTiles = sortedBranches.map((b) => {
         const v = invByBranch[b.id] || { pcs: 0, amount: 0 };
         const c = branchColor(b.id, branches);
         return '<div class="tile" style="background:' + c.bg + ';">' +
@@ -292,7 +337,33 @@ if (employee) {
           '<div style="font-size:12px;font-weight:600;margin-top:4px;color:' + c.text + ';">' + money(v.amount) + '</div>' +
         '</div>';
       }).join('');
-      box.innerHTML = totalTile + branchTiles;
+
+      // Multi-select category filter, click to toggle any combination on/off -- none
+      // active shows every category (Ren, 2026-09-24: "add category make it multiple
+      // click and sort by branch"). Rebuilt every render since invCategories is data,
+      // same as the .lvl-pill rows elsewhere on this page.
+      const catPillsHtml = !invCategories.length ? '' :
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">' +
+          '<span class="muted" style="font-size:12px;">Category:</span>' +
+          invCategories.map((c) => '<button type="button" class="cat-pill' + (invCategoryFilter.has(c) ? ' active' : '') + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>').join('') +
+          (invCategoryFilter.size > 0 ? '<button type="button" class="btn small secondary" id="inv-cat-clear">Clear</button>' : '') +
+        '</div>';
+
+      box.innerHTML =
+        catPillsHtml +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">' +
+          sortControlHtml(INV_SORT_FIELDS, invSort, 'inv-sort-field', 'inv-sort-dir') +
+        '</div>' +
+        '<div class="tiles">' + totalTile + branchTiles + '</div>';
+
+      box.querySelectorAll('[data-cat]').forEach((btn) => btn.addEventListener('click', () => {
+        const c = btn.dataset.cat;
+        if (invCategoryFilter.has(c)) invCategoryFilter.delete(c); else invCategoryFilter.add(c);
+        recomputeInventoryValue();
+      }));
+      const catClearBtn = document.getElementById('inv-cat-clear');
+      if (catClearBtn) catClearBtn.addEventListener('click', () => { invCategoryFilter.clear(); recomputeInventoryValue(); });
+      wireSortControl('inv-sort-field', 'inv-sort-dir', invSort, renderInventoryValue);
     }
 
     async function loadScrapEntries() {
@@ -490,7 +561,7 @@ if (employee) {
         '<div class="card">' +
           '<h3 style="margin:0 0 2px;">Inventory Value by Branch</h3>' +
           '<p class="muted" style="margin-top:-2px;">Total pieces and total retail value (system selling price × pcs on hand) per branch, Active SKUs only — same numbers as SKU Catalog\'s own tiles.</p>' +
-          '<div class="tiles" id="ac-inventory-value-tiles"><div class="muted">Loading…</div></div>' +
+          '<div id="ac-inventory-value-tiles"><div class="muted">Loading…</div></div>' +
         '</div>' +
         '<div class="card">' +
           '<h3 style="margin:0 0 2px;">Scrap Encoding Activity</h3>' +
