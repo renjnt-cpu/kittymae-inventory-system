@@ -96,6 +96,11 @@ if (employee) {
         '<label style="font-size:13px;font-weight:600;margin-top:10px;">Items *</label>' +
         '<div id="fp-items"></div>' +
         '<button type="button" class="btn small secondary" id="fp-add-item" style="align-self:flex-start;margin:-4px 0 10px;">+ Add another item</button>' +
+        // Ren, 2026-09-24: "before they click the record purchase it shows the
+        // summary above it update everytime add item" -- a live preview of the same
+        // Total Pcs/Total Purchased shown on the Factory Purchases list below,
+        // recalculated on every item added/removed/edited so it's never stale.
+        '<div class="card" id="fp-form-summary" style="background:#f7f5f0;margin:0 0 10px;padding:10px 14px;display:flex;gap:24px;flex-wrap:wrap;"></div>' +
         '<button class="btn" type="submit" style="align-self:flex-start;">Record Purchase</button>' +
       '</form>' +
     '</div>' : '') +
@@ -282,6 +287,20 @@ if (employee) {
       if (p.system_selling_price != null) row.querySelector('.fp-item-pancake-price').value = p.system_selling_price;
       if (p.gross_weight_g != null) row.querySelector('.fp-item-grams').value = p.gross_weight_g;
       fpRecalcRow(row);
+      updateFpSummary();
+    }
+
+    /** Live preview of the same Total Pcs/Total Purchased shown on the Factory
+     * Purchases list -- reads whatever's currently in the form (readFpItemRows()
+     * already skips a row with no SKU typed in yet), so it's exactly what would be
+     * recorded if Record Purchase were clicked right now. */
+    function updateFpSummary() {
+      const items = readFpItemRows();
+      const totalQty = items.reduce((s, it) => s + (it.qty || 0), 0);
+      const totalPurchased = items.reduce((s, it) => s + (it.purchasedAmount || 0), 0);
+      document.getElementById('fp-form-summary').innerHTML =
+        '<div><div class="muted" style="font-size:11px;">Total Pcs (' + items.length + ' ' + (items.length === 1 ? 'item' : 'items') + ')</div><b style="font-size:14px;">' + totalQty.toLocaleString('en-PH') + '</b></div>' +
+        '<div><div class="muted" style="font-size:11px;">Total Purchased</div><b style="font-size:14px;">' + money(totalPurchased) + '</b></div>';
     }
 
     function attachFpRowAutocomplete(row) {
@@ -333,7 +352,7 @@ if (employee) {
       skuInput.addEventListener('blur', () => setTimeout(hide, 150));
       skuInput.addEventListener('focus', () => { if (skuSuggest.innerHTML) skuSuggest.style.display = ''; });
       ['fp-item-qty', 'fp-item-grams', 'fp-item-sup-price', 'fp-item-pancake-price'].forEach((cls) => {
-        row.querySelector('.' + cls).addEventListener('input', () => fpRecalcRow(row));
+        row.querySelector('.' + cls).addEventListener('input', () => { fpRecalcRow(row); updateFpSummary(); });
       });
     }
 
@@ -347,10 +366,12 @@ if (employee) {
       const row = wrapper.firstElementChild;
       fpItemsContainer.appendChild(row);
       attachFpRowAutocomplete(row);
+      updateFpSummary();
       row.querySelector('.fp-item-remove').addEventListener('click', () => {
         if (fpItemsContainer.querySelectorAll('.fp-item-row').length <= 1) return;
         row.remove();
         updateFpRemoveButtons();
+        updateFpSummary();
       });
       updateFpRemoveButtons();
     }
