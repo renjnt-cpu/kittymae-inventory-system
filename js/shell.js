@@ -108,8 +108,13 @@ export async function initShell(activePage) {
       // for this position (no branch_id, not in POSITION_MANAGERS), so canAddHere()/
       // canWriteHere() already resolve to false for her; this just lets her find the page.
       pages.push({ id: 'branches', ...ALL_PAGE_DEFS.branches });
-      // Same audience as Branches -- Online Orders used to be a sub-tab there
-      // (Ren, 2026-09-24: consolidated into its own page under Sales instead).
+    }
+    // Online Orders used to share Branches' audience exactly (it was a sub-tab there),
+    // but Ren, 2026-09-25 widened only this page's access ("give access to admin
+    // assistant, inventory staff, auditor, and both supervisor") without reopening
+    // Branches (POS/Layaway/Scrap/Subasta/Branch Capital) to the same group.
+    if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) ||
+      ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor'].includes(employee.position)) {
       pages.push({ id: 'online-orders', ...ALL_PAGE_DEFS['online-orders'] });
     }
     pages.push(
@@ -139,7 +144,9 @@ export async function initShell(activePage) {
     if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Personal Assistant', 'Admin Assistant'].includes(employee.position) || (employee.extra_page_access || []).includes('assets')) {
       pages.push({ id: 'assets', ...ALL_PAGE_DEFS.assets });
     }
-    if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Admin Assistant' || (employee.extra_page_access || []).includes('lbc')) {
+    if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) ||
+      ['Admin Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor'].includes(employee.position) ||
+      (employee.extra_page_access || []).includes('lbc')) {
       // COD parcels shipped via LBC for online orders -- company-wide, not per-branch.
       pages.push({ id: 'lbc', ...ALL_PAGE_DEFS.lbc });
     }

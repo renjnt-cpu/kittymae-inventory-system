@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Online Orders — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260925b">
+<link rel="stylesheet" href="css/styles.css?v=20260925c">
 </head>
 <body>
 <main>
@@ -22,14 +22,14 @@
 // Function (live) and the one-time pancake-backfill pull of Pancake's order history;
 // monitoring only, no manual Add -- status can be corrected by hand if Pancake's own
 // value is off.
-import { initShell, toast, esc } from './js/shell.js?v=20260925b';
+import { initShell, toast, esc } from './js/shell.js?v=20260925c';
 import {
   getBranches, listOrderItemStatuses, listOrderHistoryForItem, getOrderItemStatusCounts,
   getOrderItemPackaging, ORDER_ITEM_STATUS_ROW_CAP, setOrderItemStatus, deleteOrderItemStatus,
   listDeliveredOrders, subscribeToChanges,
-} from './js/api.js?v=20260925b';
-import { branchBadge } from './js/branchColors.js?v=20260925b';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260925b';
+} from './js/api.js?v=20260925c';
+import { branchBadge } from './js/branchColors.js?v=20260925c';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260925c';
 
 const OL_SORT_FIELDS = [
   { key: 'default', label: 'Default (most recent)' }, { key: 'item_name', label: 'Item' }, { key: 'qty', label: 'Qty' },
@@ -134,7 +134,11 @@ function renderPackaging(payload) {
 }
 
 const GATE_ROLES = ['Admin', 'Manager', 'Branch Supervisor'];
-const GATE_POSITIONS = ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant'];
+// Ren, 2026-09-25: "for the online orders and lbc monitoring give access to admin
+// assistant, inventory staff, auditor, and both supervisor" -- "both supervisor" is the
+// Operations Supervisor / Inventory Supervisor pair used together everywhere else in
+// this app (POSITION_MANAGERS), not the Branch Supervisor role already in GATE_ROLES.
+const GATE_POSITIONS = ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor'];
 
 const employee = await initShell('online-orders');
 if (employee) {

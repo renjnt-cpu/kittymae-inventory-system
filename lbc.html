@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LBC Monitoring — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260925f">
+<link rel="stylesheet" href="css/styles.css?v=20260925g">
 </head>
 <body>
 <main>
@@ -34,6 +34,11 @@
   <div id="lbc-list"><div class="muted">Loading…</div></div>
 
   <details class="card exp" style="margin-top:16px;">
+    <summary><span class="exp-arrow" aria-hidden="true">▸</span>SF Paid <span class="exp-count" id="lbc-sfpaid-count"></span></summary>
+    <div class="exp-body" id="lbc-sfpaid-list"></div>
+  </details>
+
+  <details class="card exp" style="margin-top:10px;">
     <summary><span class="exp-arrow" aria-hidden="true">▸</span>Remitted <span class="exp-count" id="lbc-remitted-count"></span></summary>
     <div class="exp-body" id="lbc-remitted-list"></div>
   </details>
@@ -73,10 +78,10 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260925f';
-import { getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, deleteLbcShipment, subscribeToChanges } from './js/api.js?v=20260925f';
-import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260925f';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260925f';
+import { initShell, toast, esc } from './js/shell.js?v=20260925g';
+import { getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, deleteLbcShipment, subscribeToChanges } from './js/api.js?v=20260925g';
+import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260925g';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260925g';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 14: LBC Monitoring is explicitly
 // named in the spec).
@@ -101,11 +106,16 @@ const tile = (num, label) => '<div class="tile"><div class="num">' + num + '</di
 
 const employee = await initShell('lbc');
 if (employee) {
+  // Ren, 2026-09-25: "give access to admin assistant, inventory staff, auditor, and both
+  // supervisor" -- "both supervisor" is the Operations Supervisor / Inventory Supervisor
+  // pair already used together everywhere else in this app (POSITION_MANAGERS), not the
+  // Branch Supervisor role already covered above.
+  const LBC_ACCESS_POSITIONS = ['Admin Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor'];
   const hasAccess = ['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) ||
-    employee.position === 'Admin Assistant' || (employee.extra_page_access || []).includes('lbc');
+    LBC_ACCESS_POSITIONS.includes(employee.position) || (employee.extra_page_access || []).includes('lbc');
 
   if (!hasAccess) {
-    document.querySelector('main').innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">LBC Monitoring is restricted to Admin, Manager, Branch Supervisor, Admin Assistant, or individually granted accounts.</p></div></div>';
+    document.querySelector('main').innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">LBC Monitoring is restricted to Admin, Manager, Branch Supervisor, Admin Assistant, Inventory Staff, Auditor, Operations Supervisor, Inventory Supervisor, or individually granted accounts.</p></div></div>';
   } else {
     const canDelete = ['Admin', 'Manager'].includes(employee.role);
     const branches = await getBranches();
@@ -243,7 +253,9 @@ if (employee) {
       const hasFilters = !!(f.q || f.status !== 'all' || f.paymentType !== 'all' || f.remitted !== 'all' || f.from || f.to);
 
       const counts = STATUSES.reduce((acc, s) => { acc[s] = rows.filter((r) => r.status === s).length; return acc; }, {});
-      const outstanding = rows.filter((r) => r.status === 'Delivered' && !r.remitted).reduce((s, r) => s + Number(r.cod_amount || 0), 0);
+      // SF Paid shipments have nothing to collect on delivery, so they never count toward
+      // outstanding COD (Ren, 2026-09-25: "no need to input remittance number").
+      const outstanding = rows.filter((r) => r.status === 'Delivered' && !r.remitted && r.payment_type !== 'SF PAID').reduce((s, r) => s + Number(r.cod_amount || 0), 0);
       document.getElementById('lbc-tiles').innerHTML =
         tile(counts['Shipped'], 'Shipped') + tile(counts['In Transit'], 'In Transit') + tile(counts['Delivered'], 'Delivered') +
         tile(counts['Returned to Sender'], 'Returned') + tile(money(outstanding), 'COD Not Yet Remitted');
@@ -258,17 +270,25 @@ if (employee) {
       // Remitted shipments move out of the main list into their own folder below (Ren,
       // 2026-09-25: "once remitted move it to the remitted folder"); Search already
       // matches remittance_number above, so searching one surfaces it there as proof.
-      const active = rows.filter((r) => !r.remitted);
-      const remittedRows = rows.filter((r) => r.remitted);
+      // SF Paid shipments are pulled out first, ahead of the remitted/active split --
+      // they never need a remittance number at all (Ren, 2026-09-25: "separate folder
+      // once SF paid since no need to input remittance number").
+      const sfPaidRows = rows.filter((r) => r.payment_type === 'SF PAID');
+      const remaining = rows.filter((r) => r.payment_type !== 'SF PAID');
+      const active = remaining.filter((r) => !r.remitted);
+      const remittedRows = remaining.filter((r) => r.remitted);
 
       const rowHtml = (r) => {
+        const remittedCell = r.payment_type === 'SF PAID'
+          ? '<span class="muted">N/A</span>'
+          : (r.status === 'Delivered' ? '<span class="badge ' + (r.remitted ? 'ok' : 'low') + '">' + (r.remitted ? 'Remitted' : 'Not yet') + '</span>' : '<span class="muted">—</span>');
         return '<tr' + (r.status === 'Returned to Sender' ? ' style="background:#fdecea;"' : '') + '>' +
           '<td data-label="Order ID / Customer">' + esc(r.order_id) + '<div class="muted" style="font-size:10px;">' + esc(r.customer_name) + '</div></td>' +
           '<td data-label="Tracking # / Branch" style="font-size:11px;">' + esc(r.tracking_number || '—') + '<div class="muted">' + (r.branches ? branchBadge(esc, r.branches.name, r.branch_id, branches) : '') + '</div></td>' +
           '<td data-label="Ship Date">' + (r.ship_date || '—') + '</td>' +
           '<td data-label="COD Amount">' + money(r.cod_amount) + (r.payment_type ? '<div class="muted" style="font-size:10px;">' + esc(r.payment_type) + '</div>' : '') + '</td>' +
           '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
-          '<td data-label="Remitted">' + (r.status === 'Delivered' ? '<span class="badge ' + (r.remitted ? 'ok' : 'low') + '">' + (r.remitted ? 'Remitted' : 'Not yet') + '</span>' : '<span class="muted">—</span>') + '</td>' +
+          '<td data-label="Remitted">' + remittedCell + '</td>' +
           '<td class="full-row"><button type="button" class="btn small secondary" data-act="view-details" data-id="' + r.id + '">View Details</button></td>' +
         '</tr>';
       };
@@ -292,6 +312,14 @@ if (employee) {
         ? emptyStateHtml({ message: hasFilters ? 'No shipments match these filters.' : 'No shipments yet.', hasFilters, clearId: 'f-clear', createLabel: '+ Add Shipment', createId: 'lbc-new-btn' })
         : tableHtml(activeSorted);
       wireProxyButtons(list);
+
+      const sfPaidSorted = applySort(sfPaidRows, sort, LBC_SORT_COMPARATORS);
+      document.getElementById('lbc-sfpaid-count').textContent = '(' + sfPaidSorted.length + ')';
+      const sfPaidList = document.getElementById('lbc-sfpaid-list');
+      sfPaidList.innerHTML = !sfPaidSorted.length
+        ? emptyStateHtml({ message: hasFilters ? 'No SF Paid shipments match these filters.' : 'No SF Paid shipments yet.', hasFilters, clearId: 'f-clear' })
+        : tableHtml(sfPaidSorted);
+      wireProxyButtons(sfPaidList);
 
       const remittedSorted = applySort(remittedRows, sort, LBC_SORT_COMPARATORS);
       document.getElementById('lbc-remitted-count').textContent = '(' + remittedSorted.length + ')';
@@ -323,14 +351,16 @@ if (employee) {
         '<div class="drawer-kv"><span>Added By</span><b>' + (r.creator ? esc(r.creator.full_name) : '—') + '</b></div>' +
       '</div>' +
       '<div class="drawer-section"><h4>Remittance</h4>' +
-        '<div class="drawer-kv"><span>Remitted</span><b><span class="badge ' + (r.remitted ? 'ok' : 'low') + '">' + (r.remitted ? 'Yes' : 'Not yet') + '</span></b></div>' +
-        (r.remitted ? '<div class="drawer-kv"><span>Remittance #</span><b>' + esc(r.remittance_number || '—') + '</b></div>' : '') +
-        (r.remitted_date ? '<div class="drawer-kv"><span>Remitted Date</span><b>' + r.remitted_date + '</b></div>' : '') +
+        (r.payment_type === 'SF PAID'
+          ? '<div class="drawer-kv"><span>Remitted</span><b><span class="badge ok">N/A — Shipping Fee Paid</span></b></div>'
+          : '<div class="drawer-kv"><span>Remitted</span><b><span class="badge ' + (r.remitted ? 'ok' : 'low') + '">' + (r.remitted ? 'Yes' : 'Not yet') + '</span></b></div>' +
+            (r.remitted ? '<div class="drawer-kv"><span>Remittance #</span><b>' + esc(r.remittance_number || '—') + '</b></div>' : '') +
+            (r.remitted_date ? '<div class="drawer-kv"><span>Remitted Date</span><b>' + r.remitted_date + '</b></div>' : '')) +
       '</div>' +
       '<div class="drawer-section"><h4>Actions</h4>' +
         (nextStatus ? '<button type="button" class="btn small" data-act="advance" data-next="' + nextStatus + '">Mark ' + nextStatus + '</button> ' : '') +
         (r.status !== 'Returned to Sender' && r.status !== 'Delivered' ? '<button type="button" class="btn small secondary" data-act="rts">RTS</button> ' : '') +
-        (r.status === 'Delivered' ? '<button type="button" class="btn small secondary" data-act="toggle-remit">' + (r.remitted ? 'Unmark Remit' : 'Mark Remitted') + '</button> ' : '') +
+        (r.status === 'Delivered' && r.payment_type !== 'SF PAID' ? '<button type="button" class="btn small secondary" data-act="toggle-remit">' + (r.remitted ? 'Unmark Remit' : 'Mark Remitted') + '</button> ' : '') +
         '<button type="button" class="btn small secondary" data-act="edit-toggle">Edit</button> ' +
         (canDelete ? '<button type="button" class="btn small secondary" data-act="delete">Delete</button>' : '') +
       '</div>' +
@@ -345,10 +375,10 @@ if (employee) {
           '<div class="field"><label>Tracking #</label><input type="text" name="trackingNumber" value="' + esc(r.tracking_number || '') + '"></div>' +
           '<div class="field"><label>Branch</label><select name="branchId">' + branchOptions(r.branch_id) + '</select></div>' +
           '<div class="field"><label>Ship Date</label><input type="date" name="shipDate" value="' + (r.ship_date || '') + '"></div>' +
-          '<div class="field"><label>Payment Type</label><select name="paymentType">' + PAYMENT_TYPE_OPTIONS(r.payment_type) + '</select></div>' +
+          '<div class="field"><label>Payment Type</label><select name="paymentType" id="lbc-edit-payment-type">' + PAYMENT_TYPE_OPTIONS(r.payment_type) + '</select></div>' +
           '<div class="field"><label>COD Amount</label><input type="number" name="codAmount" step="0.01" min="0" value="' + (r.cod_amount ?? '') + '"></div>' +
           '<div class="field"><label>Status</label><select name="status">' + STATUS_OPTIONS(r.status) + '</select></div>' +
-          '<div class="field"><label>Remittance Number</label><input type="text" name="remittanceNumber" value="' + esc(r.remittance_number || '') + '" placeholder="Leave blank = not remitted"></div>' +
+          '<div class="field" id="lbc-edit-remittance-field" style="' + (r.payment_type === 'SF PAID' ? 'display:none;' : '') + '"><label>Remittance Number</label><input type="text" name="remittanceNumber" value="' + esc(r.remittance_number || '') + '" placeholder="Leave blank = not remitted"></div>' +
           '<div class="field"><label>Notes</label><input type="text" name="notes" value="' + esc(r.notes || '') + '"></div>' +
           '<div style="display:flex;gap:6px;"><button class="btn small" type="submit">Save</button><button class="btn small secondary" type="button" data-act="edit-cancel">Cancel</button></div>' +
         '</form>' +
@@ -388,6 +418,13 @@ if (employee) {
         section.innerHTML = editFormHtml(r);
         section.style.display = '';
         section.querySelector('[data-act="edit-cancel"]').addEventListener('click', () => { section.style.display = 'none'; section.innerHTML = ''; });
+        // SF Paid never needs a remittance number -- hide the field live as the dropdown
+        // changes, not just on initial render (Ren, 2026-09-25).
+        section.querySelector('#lbc-edit-payment-type').addEventListener('change', (ev) => {
+          const field = section.querySelector('#lbc-edit-remittance-field');
+          field.style.display = ev.target.value === 'SF PAID' ? 'none' : '';
+          if (ev.target.value === 'SF PAID') field.querySelector('input').value = '';
+        });
         section.querySelector('#lbc-edit-form').addEventListener('submit', async (ev) => {
           ev.preventDefault();
           const f = ev.target;
