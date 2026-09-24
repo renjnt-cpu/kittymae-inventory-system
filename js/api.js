@@ -1109,11 +1109,12 @@ export async function createLbcShipment({ branchId, orderId, customerName, track
   if (error) throw new Error(error.message);
 }
 
-export async function updateLbcShipment(id, { branchId, orderId, customerName, trackingNumber, shipDate, codAmount, status, remitted, remittedDate, notes }) {
+export async function updateLbcShipment(id, { branchId, orderId, customerName, trackingNumber, shipDate, codAmount, status, remitted, remittedDate, remittanceNumber, notes }) {
   const { error } = await supabase.from('lbc_shipments').update({
     branch_id: branchId || null, order_id: orderId, customer_name: customerName,
     tracking_number: trackingNumber || null, ship_date: shipDate || null,
     cod_amount: codAmount || null, status, remitted: !!remitted, remitted_date: remittedDate || null,
+    remittance_number: remitted ? (remittanceNumber || null) : null,
     notes: notes || null, updated_at: new Date().toISOString(),
   }).eq('id', id);
   if (error) throw new Error(error.message);
@@ -1124,9 +1125,19 @@ export async function setLbcStatus(id, status) {
   if (error) throw new Error(error.message);
 }
 
-export async function setLbcRemitted(id, remitted) {
+/** Marking Remitted now captures LBC's own remittance reference number for this
+ * shipment's tracking number (Ren, 2026-09-25: "it should be input the remittance
+ * number based on the tracking number input") -- not just a Yes/No flag. Pass
+ * remittanceNumber to mark remitted with that reference; omit/pass null to unmark
+ * (clears the number and date too). */
+export async function setLbcRemitted(id, remittanceNumber) {
+  const remitted = !!remittanceNumber;
   const { error } = await supabase.from('lbc_shipments')
-    .update({ remitted, remitted_date: remitted ? localDateStr() : null, updated_at: new Date().toISOString() })
+    .update({
+      remitted, remitted_date: remitted ? localDateStr() : null,
+      remittance_number: remitted ? remittanceNumber : null,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', id);
   if (error) throw new Error(error.message);
 }
