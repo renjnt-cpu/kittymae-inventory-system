@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pull Out Item — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260923e">
+<link rel="stylesheet" href="css/styles.css?v=20260924a">
 </head>
 <body>
 <main>
@@ -80,9 +80,9 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260923e';
-import { getBranches, searchProducts, listPullOuts, createPullOut, returnPullOut, editPullOut, subscribeToChanges } from './js/api.js?v=20260923e';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260923e';
+import { initShell, toast, esc } from './js/shell.js?v=20260924a';
+import { getBranches, searchProducts, listPullOuts, createPullOut, returnPullOut, editPullOut, subscribeToChanges } from './js/api.js?v=20260924a';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260924a';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 17-ish: this list is "Record
 // Movement"-adjacent inventory monitoring) -- one Sort control governs both Currently
@@ -100,9 +100,17 @@ const PO_SORT_COMPARATORS = {
 const fmtDate = (s) => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-PH', { dateStyle: 'medium' }) : '—';
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g';
+const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const tile = (num, label) => '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>';
 const todayStr = () => localDateStr();
 const isOverdue = (r) => r.status === 'Out' && r.expected_return_date && r.expected_return_date < todayStr();
+// Same Per Gram formula as SKU Catalog/POS (products.html/posTab.js) -- an estimate
+// of what's currently off the shelf, not a real transaction amount (nothing is being
+// sold here), so it's presented as "Est. Value Out" rather than a plain total.
+const effectivePrice = (p) => !p ? null : p.pricing_mode === 'Per Gram'
+  ? (p.current_gold_rate_per_g != null && p.gross_weight_g != null ? p.current_gold_rate_per_g * p.gross_weight_g : null)
+  : p.system_selling_price;
+const lineValue = (r) => { const p = effectivePrice(r.products); return p != null ? p * r.qty : 0; };
 
 const employee = await initShell('pull-out');
 if (employee) {
@@ -212,7 +220,8 @@ if (employee) {
     const overdueCount = out.filter(isOverdue).length;
 
     document.getElementById('po-tiles').innerHTML =
-      tile(out.length, 'Currently Out') + tile(out.reduce((s, r) => s + r.qty, 0), 'Qty Out') + tile(overdueCount, 'Overdue');
+      tile(out.length, 'Currently Out') + tile(out.reduce((s, r) => s + r.qty, 0), 'Qty Out') +
+      tile(money(out.reduce((s, r) => s + lineValue(r), 0)), 'Est. Value Out') + tile(overdueCount, 'Overdue');
     const activeEl = document.getElementById('po-active');
     activeEl.innerHTML = activeFiltersHtml([{ label: 'Search', value: esc(q) }], 'po-f-clear');
     wireProxyButtons(activeEl);
@@ -248,6 +257,7 @@ if (employee) {
       '<div class="drawer-kv"><span>Item</span><b>' + esc(r.products?.item_name || '—') + '</b></div>' +
       '<div class="drawer-kv"><span>Qty</span><b>' + r.qty + '</b></div>' +
       '<div class="drawer-kv"><span>Weight</span><b>' + (r.products?.gross_weight_g != null ? weight(r.products.gross_weight_g) + (r.qty > 1 ? ' each' : '') : '—') + '</b></div>' +
+      '<div class="drawer-kv"><span>Est. Value</span><b>' + money(lineValue(r)) + '</b></div>' +
       '<div class="drawer-kv"><span>Source Branch</span><b>' + esc(r.branches?.name || branchName(r.branch_id)) + '</b></div>' +
       '<div class="drawer-kv"><span>Status</span><b><span class="badge ' + (r.status === 'Out' ? (overdue ? 'low' : 'pending') : 'ok') + '">' + esc(r.status) + (overdue ? ' · Overdue' : '') + '</span></b></div>' +
     '</div>' +

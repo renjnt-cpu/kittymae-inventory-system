@@ -458,7 +458,7 @@ export async function getTransactionHistory(sku, branchId) {
 export async function listPullOuts() {
   const { data, error } = await supabase
     .from('pull_out_records')
-    .select('*, products(item_name, gross_weight_g), branches(name)')
+    .select('*, products(item_name, gross_weight_g, system_selling_price, pricing_mode, current_gold_rate_per_g), branches(name)')
     .order('pulled_at', { ascending: false });
   if (error) throw new Error(error.message);
   return attachEmployeeNames(data, { puller: 'pulled_by', returner: 'returned_by' });
