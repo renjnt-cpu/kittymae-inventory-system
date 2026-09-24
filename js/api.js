@@ -2,8 +2,8 @@
 // `supabase` directly, so the query shape lives in one place. Mirrors the old app's
 // `api(name, ...args)` helper in spirit, just split into named functions since
 // supabase-js's table/RPC calls aren't as uniformly shaped as google.script.run's.
-import { supabase } from './supabaseClient.js?v=20260923f';
-import { localDateStr } from './uiKit.js?v=20260923f';
+import { supabase } from './supabaseClient.js?v=20260923g';
+import { localDateStr } from './uiKit.js?v=20260923g';
 
 /** Caps the core ledger list queries (Sales, Layaway, Scrap, Subasta) so a tab load
  * fetches recent history instead of the entire table unconditionally -- these had no
@@ -1190,6 +1190,15 @@ export async function updateEmployeeHireDate(employeeId, hireDate) {
 
 // ---- HR 201-File (strictly HR Supervisor + Admin -- is_hr_or_admin() in
 // 83_hr_201_file.sql) -- personal info + document uploads per employee. ----
+
+/** The one exception to "strictly HR Supervisor + Admin" above -- every employee sees
+ * the birthday banner regardless of their own HR access, so this SECURITY DEFINER
+ * function exposes just a name, nothing else from the 201 File (Ren, 2026-09-24). */
+export async function getTodaysBirthdays() {
+  const { data, error } = await supabase.rpc('get_todays_birthdays');
+  if (error) throw new Error(error.message);
+  return data;
+}
 
 /** The landscape 201-File table's main query -- the whole roster in one call, each
  * row carrying its 201-File fields already embedded (PostgREST follows the

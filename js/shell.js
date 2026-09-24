@@ -1,10 +1,11 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20260923f';
-import { listMyPermissions } from './api.js?v=20260923f';
-import { initActivityFeed } from './activityFeed.js?v=20260923f';
-import { localDateStr } from './uiKit.js?v=20260923f';
+import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20260923g';
+import { listMyPermissions } from './api.js?v=20260923g';
+import { initActivityFeed } from './activityFeed.js?v=20260923g';
+import { localDateStr } from './uiKit.js?v=20260923g';
+import { showBirthdayBanner } from './birthdayBanner.js?v=20260923g';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -284,6 +285,10 @@ export async function initShell(activePage) {
       }
     });
   });
+
+  // Fire-and-forget -- never blocks page render, and fails silently on its own
+  // (see birthdayBanner.js) if the check or storage isn't available.
+  showBirthdayBanner();
 
   return employee;
 }
