@@ -1099,21 +1099,21 @@ export async function listLbcShipments() {
   return attachEmployeeNames(data, { creator: 'created_by' });
 }
 
-export async function createLbcShipment({ branchId, orderId, customerName, trackingNumber, shipDate, codAmount, notes }) {
+export async function createLbcShipment({ branchId, orderId, customerName, trackingNumber, shipDate, codAmount, paymentType, notes }) {
   const empId = await currentEmployeeId();
   const { error } = await supabase.from('lbc_shipments').insert({
     branch_id: branchId || null, order_id: orderId, customer_name: customerName,
     tracking_number: trackingNumber || null, ship_date: shipDate || localDateStr(),
-    cod_amount: codAmount || null, notes: notes || null, created_by: empId,
+    cod_amount: codAmount || null, payment_type: paymentType || null, notes: notes || null, created_by: empId,
   });
   if (error) throw new Error(error.message);
 }
 
-export async function updateLbcShipment(id, { branchId, orderId, customerName, trackingNumber, shipDate, codAmount, status, remitted, remittedDate, remittanceNumber, notes }) {
+export async function updateLbcShipment(id, { branchId, orderId, customerName, trackingNumber, shipDate, codAmount, paymentType, status, remitted, remittedDate, remittanceNumber, notes }) {
   const { error } = await supabase.from('lbc_shipments').update({
     branch_id: branchId || null, order_id: orderId, customer_name: customerName,
     tracking_number: trackingNumber || null, ship_date: shipDate || null,
-    cod_amount: codAmount || null, status, remitted: !!remitted, remitted_date: remittedDate || null,
+    cod_amount: codAmount || null, payment_type: paymentType || null, status, remitted: !!remitted, remitted_date: remittedDate || null,
     remittance_number: remitted ? (remittanceNumber || null) : null,
     notes: notes || null, updated_at: new Date().toISOString(),
   }).eq('id', id);
