@@ -31,7 +31,7 @@ const BILL_SORT_COMPARATORS = {
 
 const STATUS_BADGE = { Unpaid: 'pending', Overdue: 'low', 'Auto-debited': 'transit', Paid: 'ok' };
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
-const CATEGORIES = ['Rent', 'Internet', 'Electricity', 'Water', 'Salaries', 'Supplies', 'Maintenance', 'Services', 'Transportation', 'Marketing', 'Government/Taxes', 'Business', 'Personal', 'Other'];
+const CATEGORIES = ['Rent', 'Internet', 'Electricity', 'Water', 'Salaries', 'Supplies', 'Maintenance', 'Services', 'Transportation', 'Marketing', 'Government/Taxes', 'Load', 'Business', 'Personal', 'Other'];
 const CATEGORY_OPTIONS = (selected) => CATEGORIES.map((c) => '<option' + (c === selected ? ' selected' : '') + '>' + c + '</option>').join('');
 
 const employee = await initShell('bills');
