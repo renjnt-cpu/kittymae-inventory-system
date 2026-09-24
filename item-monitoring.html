@@ -619,7 +619,17 @@ if (employee) {
     const rows = filterFactoryPurchases(factoryPurchases);
     if (!rows.length) { box.innerHTML = '<p class="muted">No factory purchases match this search.</p>'; return; }
 
-    box.innerHTML = '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
+    // Ren, 2026-09-24: "total the qty and total amount of every encoded" -- sums
+    // whatever's currently shown (respects the search/date-range filter above it),
+    // same convention as the Sales by Admin pivot's own date-range-scoped totals.
+    const totalQty = rows.reduce((s, p) => s + Number(p.qty || 0), 0);
+    const totalPurchased = rows.reduce((s, p) => s + Number(p.purchased_amount || 0), 0);
+    box.innerHTML =
+      '<div class="card" style="background:#f7f5f0;margin-bottom:8px;padding:10px 14px;display:flex;gap:24px;flex-wrap:wrap;">' +
+        '<div><div class="muted" style="font-size:11px;">Total Pcs (' + rows.length + ' ' + (rows.length === 1 ? 'entry' : 'entries') + ')</div><b style="font-size:14px;">' + totalQty.toLocaleString('en-PH') + '</b></div>' +
+        '<div><div class="muted" style="font-size:11px;">Total Purchased</div><b style="font-size:14px;">' + money(totalPurchased) + '</b></div>' +
+      '</div>' +
+      '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
       '<thead><tr><th>Delivered</th><th>SKU</th><th>Branch</th><th>Pcs</th><th>Sup. Price</th><th>Pancake Price</th>' +
       '<th>Grams</th><th>Total Grams</th><th>Availed Factory Gram</th><th>Current/Gram</th><th>Est. Sales</th><th>Purchased</th><th>Profit</th><th>Note</th><th>By</th><th></th></tr></thead><tbody>' +
       rows.map((p) => '<tr>' +
