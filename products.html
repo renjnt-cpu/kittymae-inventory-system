@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SKU Catalog — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260923m">
+<link rel="stylesheet" href="css/styles.css?v=20260923n">
 </head>
 <body>
 <main>
@@ -13,13 +13,13 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260923m';
+import { initShell, toast, esc } from './js/shell.js?v=20260923n';
 import {
   listProducts, updateProduct, getBranches, listAllInventoryQty, subscribeToChanges,
   requestProductEdit, listProductEditRequests, approveProductEdit, rejectProductEdit,
   setProductStatus, listProductLastChanges,
-} from './js/api.js?v=20260923m';
-import { branchColor } from './js/branchColors.js?v=20260923m';
+} from './js/api.js?v=20260923n';
+import { branchColor } from './js/branchColors.js?v=20260923n';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g';
@@ -413,7 +413,13 @@ if (employee) {
     const countNotice = '<p class="muted" style="margin:0 0 8px;">' + matchedCount.toLocaleString('en-PH') + ' SKU(s)' +
       (truncated ? ' — showing the first ' + CATALOG_RENDER_CAP + '; search, pick a category, or click a branch column to narrow further' : '') + '</p>';
 
-    const colCount = 9 + branches.length;
+    // Sorting by one specific branch decutters the table down to just that branch's
+    // column instead of all of them (Ren, 2026-09-24: "when sort by branch only branch
+    // will show") -- generic sorts (SKU, Item Name, Price, etc.) still show every
+    // branch, same as always.
+    const sortedBranchId = !genericCmp && sortKey !== 'none' ? Number(sortKey) : null;
+    const displayBranches = sortedBranchId != null ? branches.filter((b) => b.id === sortedBranchId) : branches;
+    const colCount = 9 + displayBranches.length;
     const pendingSkus = new Set(pendingEditRequests.map((r) => r.sku));
 
     function rowHtml(p) {
@@ -430,7 +436,7 @@ if (employee) {
           '<td data-label="Est. Gram">' + weight(p.gross_weight_g) + '</td>' +
           '<td data-label="Total Pcs"><b>' + totalPcs.toLocaleString('en-PH') + '</b></td>' +
           '<td data-label="Status"><span class="badge ' + (p.product_status === 'Active' ? 'ok' : 'low') + '">' + esc(p.product_status) + '</span></td>' +
-          branches.map((b) => {
+          displayBranches.map((b) => {
             const searched = branchMatch && branchMatch.id === b.id;
             const c = branchColor(b.id, branches);
             return '<td data-label="' + esc(b.name) + '" style="text-align:center;' + (searched ? 'background:' + c.bg + ';color:' + c.text + ';font-weight:800;' : '') + '">' + (qtyForSku[b.id] ?? '—') + '</td>';
@@ -447,7 +453,7 @@ if (employee) {
         '<tr class="edit-row" data-edit-for="' + esc(p.sku) + '" style="display:none;"><td colspan="' + colCount + '"></td></tr>';
     }
 
-    const branchThs = branches.map((b) => {
+    const branchThs = displayBranches.map((b) => {
       const c = branchColor(b.id, branches);
       const active = filterBranchId === b.id;
       const searched = branchMatch && branchMatch.id === b.id;
@@ -458,6 +464,7 @@ if (employee) {
     }).join('');
 
     list.innerHTML = (filterBranchId != null ? '<p class="muted" style="margin:0 0 8px;">Showing only SKUs stocked at <b>' + esc((branches.find((b) => b.id === filterBranchId) || {}).name) + '</b> — click the column again to clear.</p>' : '') +
+      (sortedBranchId != null ? '<p class="muted" style="margin:0 0 8px;">Sorted by pcs at <b>' + esc((branches.find((b) => b.id === sortedBranchId) || {}).name) + '</b> — only that branch\'s column is shown; pick a different Sort By to see every branch again.</p>' : '') +
       (branchMatch ? '<p class="muted" style="margin:0 0 8px;">🔎 Sorted by <b>' + esc(branchMatch.name) + '</b>, fewest pcs first — clear the search to sort another way.</p>' : '') +
       countNotice + '<div class="table-scroll table-mini"><table><thead><tr style="white-space:nowrap;">' +
       '<th>SKU</th><th>Product Name</th><th>Category</th><th>Sub SKU</th><th>Price</th><th>Est. Gram</th><th>Total Pcs</th><th>Status</th>' + branchThs + '<th></th>' +
