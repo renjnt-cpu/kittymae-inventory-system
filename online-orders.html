@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Online Orders — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260925a">
+<link rel="stylesheet" href="css/styles.css?v=20260925b">
 </head>
 <body>
 <main>
@@ -22,14 +22,14 @@
 // Function (live) and the one-time pancake-backfill pull of Pancake's order history;
 // monitoring only, no manual Add -- status can be corrected by hand if Pancake's own
 // value is off.
-import { initShell, toast, esc } from './js/shell.js?v=20260925a';
+import { initShell, toast, esc } from './js/shell.js?v=20260925b';
 import {
   getBranches, listOrderItemStatuses, listOrderHistoryForItem, getOrderItemStatusCounts,
   getOrderItemPackaging, ORDER_ITEM_STATUS_ROW_CAP, setOrderItemStatus, deleteOrderItemStatus,
   listDeliveredOrders, subscribeToChanges,
-} from './js/api.js?v=20260925a';
-import { branchBadge } from './js/branchColors.js?v=20260925a';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260925a';
+} from './js/api.js?v=20260925b';
+import { branchBadge } from './js/branchColors.js?v=20260925b';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260925b';
 
 const OL_SORT_FIELDS = [
   { key: 'default', label: 'Default (most recent)' }, { key: 'item_name', label: 'Item' }, { key: 'qty', label: 'Qty' },
