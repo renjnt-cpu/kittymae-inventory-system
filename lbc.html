@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LBC Monitoring — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260925g">
+<link rel="stylesheet" href="css/styles.css?v=20260925h">
 </head>
 <body>
 <main>
@@ -78,10 +78,10 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260925g';
-import { getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, deleteLbcShipment, subscribeToChanges } from './js/api.js?v=20260925g';
-import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260925g';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260925g';
+import { initShell, toast, esc } from './js/shell.js?v=20260925h';
+import { getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, setLbcPaymentType, deleteLbcShipment, subscribeToChanges } from './js/api.js?v=20260925h';
+import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260925h';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260925h';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 14: LBC Monitoring is explicitly
 // named in the spec).
@@ -278,17 +278,31 @@ if (employee) {
       const active = remaining.filter((r) => !r.remitted);
       const remittedRows = remaining.filter((r) => r.remitted);
 
+      // Inline Payment Type dropdown + Remittance # input right in the row (Ren,
+      // 2026-09-25: "include a payment type here with dropdown to be easy to click...
+      // also include remittance number to easily input the number") -- faster than
+      // opening Details/Edit for the two fields changed most often. The old "Remitted"
+      // status badge is gone from this column: the active table only ever holds
+      // not-yet-remitted rows (remitted ones already live in the folder below), so it
+      // was always "Not yet" here anyway -- a non-empty input now carries that meaning
+      // directly, matching the "entering a number = remitted" rule.
       const rowHtml = (r) => {
-        const remittedCell = r.payment_type === 'SF PAID'
+        // Always show the input once a row is actually remitted, even if status isn't
+        // Delivered (e.g. edited by hand afterward) -- otherwise a row sitting in the
+        // Remitted folder could show "--" and hide its own remittance number.
+        const remittanceCell = r.payment_type === 'SF PAID'
           ? '<span class="muted">N/A</span>'
-          : (r.status === 'Delivered' ? '<span class="badge ' + (r.remitted ? 'ok' : 'low') + '">' + (r.remitted ? 'Remitted' : 'Not yet') + '</span>' : '<span class="muted">—</span>');
+          : (r.status === 'Delivered' || r.remitted
+            ? '<input type="text" class="lbc-inline-remit-input" data-id="' + r.id + '" value="' + esc(r.remittance_number || '') + '" placeholder="Enter #…" style="width:100%;max-width:130px;font-size:12px;padding:3px 5px;">'
+            : '<span class="muted">—</span>');
         return '<tr' + (r.status === 'Returned to Sender' ? ' style="background:#fdecea;"' : '') + '>' +
           '<td data-label="Order ID / Customer">' + esc(r.order_id) + '<div class="muted" style="font-size:10px;">' + esc(r.customer_name) + '</div></td>' +
           '<td data-label="Tracking # / Branch" style="font-size:11px;">' + esc(r.tracking_number || '—') + '<div class="muted">' + (r.branches ? branchBadge(esc, r.branches.name, r.branch_id, branches) : '') + '</div></td>' +
           '<td data-label="Ship Date">' + (r.ship_date || '—') + '</td>' +
-          '<td data-label="COD Amount">' + money(r.cod_amount) + (r.payment_type ? '<div class="muted" style="font-size:10px;">' + esc(r.payment_type) + '</div>' : '') + '</td>' +
+          '<td data-label="COD Amount">' + money(r.cod_amount) + '</td>' +
+          '<td data-label="Payment Type"><select class="lbc-inline-payment-type" data-id="' + r.id + '" style="width:100%;max-width:110px;font-size:12px;padding:3px 4px;">' + PAYMENT_TYPE_OPTIONS(r.payment_type) + '</select></td>' +
           '<td data-label="Status"><span class="badge ' + (STATUS_BADGE[r.status] || 'pending') + '">' + esc(r.status) + '</span></td>' +
-          '<td data-label="Remitted">' + remittedCell + '</td>' +
+          '<td data-label="Remittance #">' + remittanceCell + '</td>' +
           '<td class="full-row"><button type="button" class="btn small secondary" data-act="view-details" data-id="' + r.id + '">View Details</button></td>' +
         '</tr>';
       };
@@ -296,12 +310,12 @@ if (employee) {
         let totalCod = 0, totalRemitted = 0;
         rowsForTable.forEach((r) => { totalCod += Number(r.cod_amount || 0); if (r.remitted) totalRemitted += Number(r.cod_amount || 0); });
         return '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
-          '<thead><tr><th>Order ID / Customer</th><th>Tracking # / Branch</th><th>Ship Date</th><th>COD Amount</th><th>Status</th><th>Remitted</th><th></th></tr></thead>' +
+          '<thead><tr><th>Order ID / Customer</th><th>Tracking # / Branch</th><th>Ship Date</th><th>COD Amount</th><th>Payment Type</th><th>Status</th><th>Remittance #</th><th></th></tr></thead>' +
           '<tbody>' + rowsForTable.map(rowHtml).join('') + '</tbody>' +
           '<tfoot><tr style="font-weight:bold;background:#f7f7f7;">' +
             '<td colspan="3">Qty: ' + rowsForTable.length + '</td>' +
             '<td>' + money(totalCod) + '<div class="muted" style="font-size:10px;font-weight:normal;">' + money(totalRemitted) + ' remitted</div></td>' +
-            '<td colspan="3"></td>' +
+            '<td colspan="4"></td>' +
           '</tr></tfoot>' +
           '</table></div>';
       };
@@ -330,6 +344,25 @@ if (employee) {
       wireProxyButtons(remittedList);
 
       document.querySelectorAll('[data-act="view-details"]').forEach((btn) => btn.addEventListener('click', () => { openDetailId = btn.dataset.id; openDetail(openDetailId); }));
+
+      document.querySelectorAll('.lbc-inline-payment-type').forEach((sel) => {
+        sel.addEventListener('change', async () => {
+          const id = sel.dataset.id;
+          sel.disabled = true;
+          try { await setLbcPaymentType(id, sel.value); toast('lbc-msg', 'Payment type updated.', false); await load(); refreshDetailIfOpen(id); }
+          catch (err) { toast('lbc-msg', String(err.message || err), true); sel.disabled = false; }
+        });
+      });
+      document.querySelectorAll('.lbc-inline-remit-input').forEach((inp) => {
+        inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); inp.blur(); } });
+        inp.addEventListener('change', async () => {
+          const id = inp.dataset.id;
+          const value = inp.value.trim();
+          inp.disabled = true;
+          try { await setLbcRemitted(id, value || null); toast('lbc-msg', value ? 'Marked remitted.' : 'Remittance number cleared.', false); await load(); refreshDetailIfOpen(id); }
+          catch (err) { toast('lbc-msg', String(err.message || err), true); inp.disabled = false; }
+        });
+      });
     }
 
     // ---- detail drawer body ----

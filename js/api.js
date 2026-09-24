@@ -1125,6 +1125,17 @@ export async function setLbcStatus(id, status) {
   if (error) throw new Error(error.message);
 }
 
+/** Quick inline Payment Type change from the list row's own dropdown (Ren, 2026-09-25:
+ * "include a payment type here with dropdown to be easy to click"). Switching to SF
+ * Paid also clears any remittance data -- SF Paid never goes through the remittance
+ * flow, so a stale number/flag from before the switch would be misleading. */
+export async function setLbcPaymentType(id, paymentType) {
+  const patch = { payment_type: paymentType || null, updated_at: new Date().toISOString() };
+  if (paymentType === 'SF PAID') { patch.remitted = false; patch.remitted_date = null; patch.remittance_number = null; }
+  const { error } = await supabase.from('lbc_shipments').update(patch).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 /** Marking Remitted now captures LBC's own remittance reference number for this
  * shipment's tracking number (Ren, 2026-09-25: "it should be input the remittance
  * number based on the tracking number input") -- not just a Yes/No flag. Pass
