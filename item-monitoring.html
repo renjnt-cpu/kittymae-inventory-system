@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Item Monitoring — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260923p">
+<link rel="stylesheet" href="css/styles.css?v=20260925a">
 </head>
 <body>
 <main>
@@ -13,14 +13,14 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260923p';
+import { initShell, toast, esc } from './js/shell.js?v=20260925a';
 import {
   getBranches, listStockByBranch, searchProducts, logCycleCount, listRecentCycleCounts,
   markCycleCountInvestigated, listLatestCycleCountBySkuBranch, listProductChangeLog,
   listFactoryPurchases, recordFactoryPurchase, deleteFactoryPurchase, subscribeToChanges,
-} from './js/api.js?v=20260923p';
-import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260923p';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260923p';
+} from './js/api.js?v=20260925a';
+import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260925a';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260925a';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 14: Monitoring) -- one Sort
 // control for the Stock by Branch board.
