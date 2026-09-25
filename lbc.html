@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LBC Monitoring — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260925n">
+<link rel="stylesheet" href="css/styles.css?v=20260925o">
 </head>
 <body>
 <main>
@@ -24,7 +24,7 @@
       <div class="field"><label>Status</label><select id="f-status"><option value="all">All</option></select></div>
       <div class="field"><label>Remitted</label><select id="f-remitted"><option value="all">All</option><option value="yes">Yes</option><option value="no">No</option></select></div>
       <div class="field"><label>Payment Type</label><select id="f-payment-type"><option value="all">All</option></select></div>
-      <div class="field"><label>From</label><input type="date" id="f-from"></div>
+      <div class="field"><label>From <span class="muted" style="font-weight:normal;">(min Sep 1, 2026)</span></label><input type="date" id="f-from"></div>
       <div class="field"><label>To</label><input type="date" id="f-to"></div>
       <span id="lbc-sort-slot"></span>
       <button type="button" class="btn small secondary" id="f-clear">Clear Filters</button>
@@ -78,10 +78,10 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260925n';
-import { getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, setLbcPaymentType, deleteLbcShipment, subscribeToChanges } from './js/api.js?v=20260925n';
-import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260925n';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260925n';
+import { initShell, toast, esc } from './js/shell.js?v=20260925o';
+import { getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, setLbcPaymentType, deleteLbcShipment, subscribeToChanges } from './js/api.js?v=20260925o';
+import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260925o';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260925o';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 14: LBC Monitoring is explicitly
 // named in the spec).
@@ -94,6 +94,11 @@ const LBC_SORT_COMPARATORS = {
   tracking_number: byText('tracking_number'), cod_amount: byNumber('cod_amount'), status: byText('status'),
 };
 
+// Ren, 2026-09-25: "only show the details starting september 1, 2026" -- a hard floor,
+// same treatment as Online Orders' own Delivered-from-Sept-2026 tab: whatever the From
+// filter is set to, results never reach earlier than this, though a later From date
+// still narrows further.
+const LBC_ACTIVE_FROM_DATE = '2026-09-01';
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const STATUSES = ['Shipped', 'In Transit', 'Delivered', 'Returned to Sender'];
 const STATUS_BADGE = { Shipped: 'pending', 'In Transit': 'transit', Delivered: 'ok', 'Returned to Sender': 'low' };
@@ -248,7 +253,8 @@ if (employee) {
       if (f.status !== 'all') rows = rows.filter((r) => r.status === f.status);
       if (f.paymentType !== 'all') rows = rows.filter((r) => r.payment_type === f.paymentType);
       if (f.remitted !== 'all') rows = rows.filter((r) => r.remitted === (f.remitted === 'yes'));
-      if (f.from) rows = rows.filter((r) => r.ship_date >= f.from);
+      const effectiveFrom = f.from && f.from > LBC_ACTIVE_FROM_DATE ? f.from : LBC_ACTIVE_FROM_DATE;
+      rows = rows.filter((r) => r.ship_date >= effectiveFrom);
       if (f.to) rows = rows.filter((r) => r.ship_date <= f.to);
       const hasFilters = !!(f.q || f.status !== 'all' || f.paymentType !== 'all' || f.remitted !== 'all' || f.from || f.to);
 
