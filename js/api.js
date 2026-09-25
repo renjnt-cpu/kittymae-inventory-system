@@ -1753,6 +1753,27 @@ export async function listPackedOrders({ fromDate, toDate } = {}) {
   return attachEmployeeNames(data, { packer: 'packed_by' });
 }
 
+/** Company-wide, for Access Checklist's "Customer Care Staff" leaderboard (Ren,
+ * 2026-09-25: "customer care staff is based in the pancake") -- who actually
+ * converted/handled the sale in Pancake itself (raw_payload.assigning_care), not who
+ * later marked it Packing in this ERP (a different, unrelated staffer, per
+ * listPackedOrders() above). Selects only that one JSON path via PostgREST's
+ * column->path syntax rather than the whole raw_payload blob, which is deliberately
+ * kept out of every other list query here for being multi-KB per row. Most historical
+ * rows have no assigning_care at all (Pancake didn't always populate it), so this
+ * pulls a wider recent window and filters the nulls out client-side. */
+export async function listOnlineOrderCareAssignments({ fromDate, toDate } = {}) {
+  let query = supabase.from('order_item_status')
+    .select('id, order_reference, qty, created_at, care:raw_payload->assigning_care')
+    .order('created_at', { ascending: false })
+    .limit(5000);
+  if (fromDate) query = query.gte('created_at', fromDate);
+  if (toDate) query = query.lte('created_at', toDate + 'T23:59:59.999');
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data || []).filter((r) => r.care && r.care.name);
+}
+
 export async function deleteOrderItemStatus(id) {
   const { error } = await supabase.from('order_item_status').delete().eq('id', id);
   if (error) throw new Error(error.message);

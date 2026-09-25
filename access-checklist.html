@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Access Checklist — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260925j">
+<link rel="stylesheet" href="css/styles.css?v=20260925k">
 <style>
   .ac-item { padding:10px 0; border-bottom:1px solid #f0f0f0; }
   .ac-item:last-child { border-bottom:none; }
@@ -46,14 +46,14 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260925j';
+import { initShell, toast, esc } from './js/shell.js?v=20260925k';
 import {
   getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, listScrapEntries,
   subscribeToChanges, getBranches, listProducts, listAllInventoryQty, listHrPositions, setEmployeePassword,
-  listSales, listPackedOrders,
-} from './js/api.js?v=20260925j';
-import { branchColor } from './js/branchColors.js?v=20260925j';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260925j';
+  listSales, listPackedOrders, listOnlineOrderCareAssignments,
+} from './js/api.js?v=20260925k';
+import { branchColor } from './js/branchColors.js?v=20260925k';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260925k';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 36) -- replaces this leaderboard's
 // old per-column header-click sort with the one shared control used everywhere else.
@@ -78,6 +78,14 @@ const PACKED_LB_SORT_FIELDS = [
   { key: 'name', label: 'Employee' }, { key: 'orders', label: 'Orders Packed' }, { key: 'qty', label: 'Qty Packed' },
 ];
 const PACKED_LB_SORT_COMPARATORS = { name: byText('name'), orders: byNumber('orders'), qty: byNumber('qty') };
+
+// Customer Care Staff -- Ren, 2026-09-25: "customer care staff is based in the
+// pancake" -- ranks who's assigned as Pancake's own assigning_care for the order
+// (who actually handled/converted the sale), not our packed_by tracking above.
+const CARE_LB_SORT_FIELDS = [
+  { key: 'name', label: 'Staff (Pancake account)' }, { key: 'orders', label: 'Orders' }, { key: 'qty', label: 'Qty' },
+];
+const CARE_LB_SORT_COMPARATORS = { name: byText('name'), orders: byNumber('orders'), qty: byNumber('qty') };
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g';
@@ -294,6 +302,9 @@ if (employee) {
     let packedEntries = [];
     let packedFrom = '', packedTo = '';
     const packedLbSort = { field: 'orders', dir: 'desc' };
+    let careEntries = [];
+    let careFrom = '', careTo = '';
+    const careLbSort = { field: 'orders', dir: 'desc' };
 
     // Raw fetch results cached so toggling a category pill (recomputeInventoryValue)
     // doesn't need a fresh network round-trip -- only loadInventoryValue() itself
@@ -547,6 +558,47 @@ if (employee) {
           '</table></div>';
     }
 
+    // Customer Care Staff -- who's assigned in Pancake (raw_payload.assigning_care),
+    // not our own packed_by. Names come straight from Pancake's own account names
+    // (e.g. "Angelyn Kittymae") -- shown as-is, not fuzzy-merged against our employee
+    // roster, since near-duplicate spellings ("NISSY " vs "Nissa Kittymae") could
+    // easily be two different real people or the same one typed inconsistently in
+    // Pancake, and misattributing sales credit either way is worse than showing the
+    // raw, honest source data.
+    async function loadCareAssignments() {
+      try { careEntries = await listOnlineOrderCareAssignments({ fromDate: careFrom || null, toDate: careTo || null }); } catch (err) { careEntries = []; }
+      renderCareLeaderboard();
+    }
+
+    function renderCareLeaderboard() {
+      const box = document.getElementById('ac-care-leaderboard');
+      if (!box) return;
+      const byName = {};
+      careEntries.forEach((r) => {
+        const name = r.care.name.trim();
+        const e = byName[name] || (byName[name] = { orderRefs: new Set(), qty: 0 });
+        e.orderRefs.add(r.order_reference);
+        e.qty += Number(r.qty || 0);
+      });
+      const unranked = Object.entries(byName).map(([name, v]) => ({ name, orders: v.orderRefs.size, qty: v.qty }));
+      const ranked = applySort(unranked, careLbSort, CARE_LB_SORT_COMPARATORS);
+      const grandOrders = new Set(careEntries.map((r) => r.order_reference)).size;
+      const grandQty = careEntries.reduce((s, r) => s + Number(r.qty || 0), 0);
+      const topIsHighlighted = careLbSort.dir === 'desc' && careLbSort.field !== 'name';
+
+      box.innerHTML = !ranked.length
+        ? '<p class="muted">No Pancake care assignments for this range.</p>'
+        : '<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Staff (Pancake account)</th><th>Orders</th><th>Qty</th></tr></thead><tbody>' +
+            ranked.map((r, i) => '<tr' + (i === 0 && topIsHighlighted ? ' style="font-weight:bold;background:#fdf6e3;"' : '') + '>' +
+              '<td data-label="Rank">' + (i + 1) + (i === 0 && topIsHighlighted ? ' 🏆' : '') + '</td>' +
+              '<td data-label="Staff (Pancake account)">' + esc(r.name) + '</td>' +
+              '<td data-label="Orders">' + r.orders + '</td>' +
+              '<td data-label="Qty">' + r.qty + '</td>' +
+            '</tr>').join('') +
+            '</tbody><tfoot><tr style="font-weight:bold;background:#f7f7f7;"><td colspan="2">Total</td><td>' + grandOrders + '</td><td>' + grandQty + '</td></tr></tfoot>' +
+          '</table></div>';
+    }
+
     async function load() {
       try {
         const [emps, rows] = await Promise.all([getEmployeesForChecklist(), getAccessChecklist()]);
@@ -563,18 +615,19 @@ if (employee) {
       render();
     }
 
-    await Promise.all([load(), loadScrapEntries(), loadInventoryValue(), loadPosEntries(), loadPackedOrders()]);
+    await Promise.all([load(), loadScrapEntries(), loadInventoryValue(), loadPosEntries(), loadPackedOrders(), loadCareAssignments()]);
     subscribeToChanges('access_checklist_verifications', load);
     subscribeToChanges('scrap_entries', loadScrapEntries);
     subscribeToChanges(['products', 'inventory'], loadInventoryValue);
     subscribeToChanges('sales_inventory_movements', loadPosEntries);
-    // order_item_status gets constant high-frequency Pancake sync traffic -- debounced,
-    // same as online-orders.html's own subscription to this table, so a resync batch
-    // doesn't fire this reload dozens of times in a row.
-    let packedReloadTimer = null;
+    // order_item_status gets constant high-frequency Pancake sync traffic -- debounced
+    // (one shared timer covers both leaderboards that read this table), same as
+    // online-orders.html's own subscription to it, so a resync batch doesn't fire
+    // these reloads dozens of times in a row.
+    let orderStatusReloadTimer = null;
     subscribeToChanges('order_item_status', () => {
-      clearTimeout(packedReloadTimer);
-      packedReloadTimer = setTimeout(loadPackedOrders, 800);
+      clearTimeout(orderStatusReloadTimer);
+      orderStatusReloadTimer = setTimeout(() => { loadPackedOrders(); loadCareAssignments(); }, 800);
     });
 
     // Effective levels for a row: an array, any combination of view/encode/edit/
@@ -713,6 +766,17 @@ if (employee) {
           '</div>' +
           '<div id="ac-packed-leaderboard"><div class="muted">Loading…</div></div>' +
         '</div>' +
+        '<div class="card">' +
+          '<h3 style="margin:0 0 2px;">Customer Care Staff</h3>' +
+          '<p class="muted" style="margin-top:-2px;">Who\'s assigned to the order in Pancake itself (assigning_care) — who actually handled/converted the sale, ranked by how many. Names are Pancake\'s own account names, shown as-is.</p>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">' +
+            '<div class="field"><label>From</label><input type="date" id="care-lb-from" value="' + careFrom + '"></div>' +
+            '<div class="field"><label>To</label><input type="date" id="care-lb-to" value="' + careTo + '"></div>' +
+            sortControlHtml(CARE_LB_SORT_FIELDS, careLbSort, 'care-lb-sort-field', 'care-lb-sort-dir') +
+            '<button type="button" class="btn small secondary" id="care-lb-clear">Recent</button>' +
+          '</div>' +
+          '<div id="ac-care-leaderboard"><div class="muted">Loading…</div></div>' +
+        '</div>' +
         '<div class="ac-layout">' +
           '<div class="card ac-emp-list">' + empListHtml + '</div>' +
           '<div class="ac-emp-main">' + mainHtml + '</div>' +
@@ -750,6 +814,17 @@ if (employee) {
         document.getElementById('packed-lb-from').value = '';
         document.getElementById('packed-lb-to').value = '';
         loadPackedOrders();
+      });
+
+      renderCareLeaderboard();
+      document.getElementById('care-lb-from').addEventListener('change', (ev) => { careFrom = ev.target.value; loadCareAssignments(); });
+      document.getElementById('care-lb-to').addEventListener('change', (ev) => { careTo = ev.target.value; loadCareAssignments(); });
+      wireSortControl('care-lb-sort-field', 'care-lb-sort-dir', careLbSort, renderCareLeaderboard);
+      document.getElementById('care-lb-clear').addEventListener('click', () => {
+        careFrom = ''; careTo = '';
+        document.getElementById('care-lb-from').value = '';
+        document.getElementById('care-lb-to').value = '';
+        loadCareAssignments();
       });
 
       root.querySelectorAll('[data-select-emp]').forEach((btn) => btn.addEventListener('click', () => {
