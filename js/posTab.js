@@ -12,10 +12,10 @@
 import {
   searchProducts, listActiveEmployees, createPosSale, listSales, listSalePayments,
   updatePosSaleItem, updatePosSalePayments, markCodCollected, deletePosSale, markSalePickedUp, subscribeToChanges,
-} from './api.js?v=20260925b';
-import { branchColor } from './branchColors.js?v=20260925b';
-import { POS_PAYMENT_METHODS } from './paymentMethods.js?v=20260925b';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, localDateStr, flagInvalid } from './uiKit.js?v=20260925b';
+} from './api.js?v=20260925c';
+import { branchColor } from './branchColors.js?v=20260925c';
+import { POS_PAYMENT_METHODS } from './paymentMethods.js?v=20260925c';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, localDateStr, flagInvalid } from './uiKit.js?v=20260925c';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 12): Sales Transactions sortable
 // across Date & Time/Order/Customer/SKU/Qty/Amount/Payment. The ledger is one row per
@@ -561,7 +561,7 @@ export async function initPosTab({ root, esc, toast, msgId, getBranchId, employe
     const panel = document.getElementById('pos-summary-panel');
     if (!groups.length) { panel.innerHTML = '<p class="muted" style="margin:0;">No transactions for this filter.</p>'; return; }
     let itemsSold = 0, lineItems = 0, grandTotal = 0, codPendingTotal = 0;
-    const skuQty = {}, skuName = {}, totalsByAdmin = {}, methodTotals = {};
+    const skuQty = {}, skuName = {}, skuAmount = {}, totalsByAdmin = {}, methodTotals = {};
     groups.forEach((g) => {
       const empId = g.items[0].employee_id;
       totalsByAdmin[empId] = (totalsByAdmin[empId] || 0);
@@ -569,6 +569,7 @@ export async function initPosTab({ root, esc, toast, msgId, getBranchId, employe
         lineItems++;
         itemsSold += r.qty;
         skuQty[r.sku] = (skuQty[r.sku] || 0) + r.qty;
+        skuAmount[r.sku] = (skuAmount[r.sku] || 0) + Number(r.unit_price || 0) * r.qty;
         skuName[r.sku] = r.products?.item_name || r.sku;
       });
       (posPaymentsByGroup[g.groupId] || []).forEach((p) => {
@@ -594,7 +595,7 @@ export async function initPosTab({ root, esc, toast, msgId, getBranchId, employe
         adminIds.map((id) => '<div class="row"><span>' + esc(employeeNameById[id] || 'Unknown') + '</span><b>' + money(totalsByAdmin[id]) + '</b></div>').join('') +
       '</div></details>' +
       '<details class="exp" style="margin-top:8px;"><summary><span class="exp-arrow" aria-hidden="true">▸</span>Top Selling Items</summary><div class="exp-body">' +
-        topSkus.map((sku, i) => '<div class="row"><span>' + (i + 1) + '. ' + esc(skuName[sku]) + ' (' + esc(sku) + ')</span><b>' + skuQty[sku] + ' pcs</b></div>').join('') +
+        topSkus.map((sku, i) => '<div class="row"><span>' + (i + 1) + '. ' + esc(skuName[sku]) + ' (' + esc(sku) + ')</span><b>' + skuQty[sku] + ' pcs · ' + money(skuAmount[sku]) + '</b></div>').join('') +
       '</div></details>' +
       '<p class="muted" style="margin:10px 0 0;font-size:11px;">Lines: ' + lineItems + ' · matches the Search/From/To/Branch filters above.</p>';
   }

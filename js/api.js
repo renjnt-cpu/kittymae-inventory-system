@@ -1624,7 +1624,7 @@ const TERMINAL_STATUSES = ['delivered', 'canceled', 'returned', 'shipped'];
 // -- never needed by the UI, so it's deliberately left out of this column list rather
 // than using select('*'), which would otherwise pull it for every one of 40,000+ rows
 // on every page load.
-const ORDER_ITEM_STATUS_COLUMNS = 'id, order_reference, sku, item_name, qty, branch_id, customer_name, status, notes, created_by, created_at, updated_at, branches(name)';
+const ORDER_ITEM_STATUS_COLUMNS = 'id, order_reference, sku, item_name, qty, branch_id, customer_name, status, notes, created_by, created_at, updated_at, packed_by, packed_at, branches(name)';
 
 // A single status like "new" alone has tens of thousands of active orders after the
 // historical Pancake backfill -- fetching everything active (even with terminal
@@ -1671,7 +1671,7 @@ export async function listOrderItemStatuses({ statusKeys = null, search = '', br
   }
   const { data, error } = await query.order('created_at', { ascending: false }).limit(ORDER_ITEM_STATUS_ROW_CAP);
   if (error) throw new Error(error.message);
-  return attachEmployeeNames(data, { creator: 'created_by' });
+  return attachEmployeeNames(data, { creator: 'created_by', packer: 'packed_by' });
 }
 
 /** Per-status counts for the tab badges -- a lightweight aggregate (see
@@ -1717,10 +1717,19 @@ export async function getOrderItemPackaging(id) {
 }
 
 /** Just the status, for the quick inline dropdown on each row -- doesn't require
- * opening the full edit form for the common case of moving an item to its next stage. */
+ * opening the full edit form for the common case of moving an item to its next stage.
+ * Whoever sets it to Packing is recorded (packed_by/packed_at) so Online Orders can
+ * show who packed each order and tally how many each staff member has done (Ren,
+ * 2026-09-25: "include also in the packing who created staff to check how many sales
+ * they have it") -- re-set on every move back into Packing, so it always reflects the
+ * most recent packer if a status ever gets corrected and re-packed. */
 export async function setOrderItemStatus(id, status) {
-  const { error } = await supabase.from('order_item_status')
-    .update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+  const patch = { status, updated_at: new Date().toISOString() };
+  if (status === 'packing') {
+    patch.packed_by = await currentEmployeeId();
+    patch.packed_at = new Date().toISOString();
+  }
+  const { error } = await supabase.from('order_item_status').update(patch).eq('id', id);
   if (error) throw new Error(error.message);
 }
 

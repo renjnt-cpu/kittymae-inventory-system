@@ -9,9 +9,9 @@
 import {
   listScrapEntries, getScrapCashBalances, createScrapEntry, deleteScrapEntry,
   uploadScrapAttachment, getScrapAttachmentUrl, convertScrapToSubasta, subscribeToChanges,
-} from './api.js?v=20260925b';
-import { PAYMENT_METHODS } from './paymentMethods.js?v=20260925b';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './uiKit.js?v=20260925b';
+} from './api.js?v=20260925c';
+import { PAYMENT_METHODS } from './paymentMethods.js?v=20260925c';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './uiKit.js?v=20260925c';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 18): Scrap sortable by Date/
 // Metal-Karat/Weight/Amount/Type/Customer.
@@ -107,6 +107,7 @@ export async function initScrapTab({ root, esc, toast, msgId, getBranchId, emplo
       '</div>' +
     '</div>' +
     '<div id="sc-active"></div>' +
+    '<div id="sc-by-admin" style="margin-bottom:14px;"></div>' +
     '<h3 style="margin:0 0 8px;">Current Balance <span class="muted" style="font-weight:normal;">— weight on hand</span></h3>' +
     '<div id="sc-balance" class="card"><div class="muted">Loading…</div></div>' +
     '<div id="sc-list"><div class="muted">Loading…</div></div>' +
@@ -326,6 +327,30 @@ export async function initScrapTab({ root, esc, toast, msgId, getBranchId, emplo
       tilesHtml += tile(money(cashRow ? cashRow.remaining_scrap_cash : 0), 'Remaining Scrap Cash');
     }
     document.getElementById('sc-tiles').innerHTML = tilesHtml;
+
+    // Sales by Admin (Ren, 2026-09-25: "add also data sales per admin in the pos same
+    // in the scrap record") -- same shape as POS's own per-admin breakdown: name,
+    // entries, weight, and total amount, over whatever's currently filtered.
+    const totalsByAdmin = {};
+    rows.forEach((r) => {
+      const empId = r.created_by;
+      const bucket = totalsByAdmin[empId] || (totalsByAdmin[empId] = { entries: 0, weight: 0, amount: 0, name: r.creator ? r.creator.full_name : 'Unknown' });
+      bucket.entries += 1;
+      bucket.weight += Number(r.weight_grams || 0);
+      bucket.amount += Number(r.total_amount || 0);
+    });
+    const adminIds = Object.keys(totalsByAdmin).sort((a, b) => totalsByAdmin[a].name.localeCompare(totalsByAdmin[b].name));
+    const byAdminBox = document.getElementById('sc-by-admin');
+    byAdminBox.innerHTML = !adminIds.length ? '' :
+      '<div class="table-scroll table-mini"><table><thead><tr><th>Admin</th><th>Entries</th><th>Total Weight</th><th>Total Amount</th></tr></thead><tbody>' +
+        adminIds.map((id) => {
+          const b = totalsByAdmin[id];
+          return '<tr><td data-label="Admin"><b>' + esc(b.name) + '</b></td>' +
+            '<td data-label="Entries">' + b.entries + '</td>' +
+            '<td data-label="Total Weight">' + weight(b.weight) + '</td>' +
+            '<td data-label="Total Amount">' + money(b.amount) + '</td></tr>';
+        }).join('') +
+      '</tbody></table></div>';
 
     const list = document.getElementById('sc-list');
     if (!rows.length) {
