@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Access Checklist — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260925b">
+<link rel="stylesheet" href="css/styles.css?v=20260925c">
 <style>
   .ac-item { padding:10px 0; border-bottom:1px solid #f0f0f0; }
   .ac-item:last-child { border-bottom:none; }
@@ -46,13 +46,14 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260925b';
+import { initShell, toast, esc } from './js/shell.js?v=20260925c';
 import {
   getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, listScrapEntries,
   subscribeToChanges, getBranches, listProducts, listAllInventoryQty, listHrPositions, setEmployeePassword,
-} from './js/api.js?v=20260925b';
-import { branchColor } from './js/branchColors.js?v=20260925b';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260925b';
+  listSales, listPackedOrders,
+} from './js/api.js?v=20260925c';
+import { branchColor } from './js/branchColors.js?v=20260925c';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260925c';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 36) -- replaces this leaderboard's
 // old per-column header-click sort with the one shared control used everywhere else.
@@ -61,6 +62,19 @@ const SCRAP_LB_SORT_FIELDS = [
   { key: 'total', label: 'Total' }, { key: 'grams', label: 'Grams Received' },
 ];
 const SCRAP_LB_SORT_COMPARATORS = { name: byText('name'), count: byNumber('count'), total: byNumber('total'), grams: byNumber('grams') };
+
+// POS Top Selling and Online Orders (Packed By) leaderboards -- Ren, 2026-09-25: "in
+// the access checklist theres no pos top selling and online orders" -- same shape as
+// the Scrap Encoding Activity leaderboard above (company-wide, ranked, own date range).
+const POS_LB_SORT_FIELDS = [
+  { key: 'item_name', label: 'Item' }, { key: 'qty', label: 'Qty Sold' }, { key: 'amount', label: 'Total Amount' },
+];
+const POS_LB_SORT_COMPARATORS = { item_name: byText('item_name'), qty: byNumber('qty'), amount: byNumber('amount') };
+
+const PACKED_LB_SORT_FIELDS = [
+  { key: 'name', label: 'Employee' }, { key: 'orders', label: 'Orders Packed' }, { key: 'qty', label: 'Qty Packed' },
+];
+const PACKED_LB_SORT_COMPARATORS = { name: byText('name'), orders: byNumber('orders'), qty: byNumber('qty') };
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g';
@@ -269,6 +283,15 @@ if (employee) {
     // (Entries Encoded) or 'total' (Total amount).
     const scrapLbSort = { field: 'count', dir: 'desc' };
 
+    // Same pattern, POS Top Selling (company-wide, ranked by item) and Online Orders
+    // Packed By (company-wide, ranked by employee).
+    let posEntries = [];
+    let posFrom = '', posTo = '';
+    const posLbSort = { field: 'qty', dir: 'desc' };
+    let packedEntries = [];
+    let packedFrom = '', packedTo = '';
+    const packedLbSort = { field: 'orders', dir: 'desc' };
+
     // Raw fetch results cached so toggling a category pill (recomputeInventoryValue)
     // doesn't need a fresh network round-trip -- only loadInventoryValue() itself
     // (called on initial load and on a realtime products/inventory change) re-fetches.
@@ -441,6 +464,79 @@ if (employee) {
         '</table></div>';
     }
 
+    // POS Top Selling -- company-wide, ranked by item (not by admin -- Sales by Admin
+    // already lives on the POS ledger's own Summary panel; this is Admin-oversight of
+    // which items actually move, same spirit as the Scrap leaderboard above).
+    async function loadPosEntries() {
+      try { posEntries = await listSales({ fromDate: posFrom || null, toDate: posTo || null }); } catch (err) { posEntries = []; }
+      renderPosLeaderboard();
+    }
+
+    function renderPosLeaderboard() {
+      const box = document.getElementById('ac-pos-leaderboard');
+      if (!box) return;
+      const bySku = {};
+      posEntries.forEach((r) => {
+        const e = bySku[r.sku] || (bySku[r.sku] = { item_name: r.products?.item_name || r.sku, qty: 0, amount: 0 });
+        e.qty += Number(r.qty || 0);
+        e.amount += Number(r.unit_price || 0) * Number(r.qty || 0);
+      });
+      const unranked = Object.entries(bySku).map(([sku, v]) => ({ sku, ...v }));
+      const ranked = applySort(unranked, posLbSort, POS_LB_SORT_COMPARATORS);
+      const grandQty = ranked.reduce((s, r) => s + r.qty, 0);
+      const grandAmount = ranked.reduce((s, r) => s + r.amount, 0);
+      const topIsHighlighted = posLbSort.dir === 'desc' && posLbSort.field !== 'item_name';
+
+      box.innerHTML = !ranked.length
+        ? '<p class="muted">No POS sales for this range.</p>'
+        : '<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Item</th><th>Qty Sold</th><th>Total Amount</th></tr></thead><tbody>' +
+            ranked.map((r, i) => '<tr' + (i === 0 && topIsHighlighted ? ' style="font-weight:bold;background:#fdf6e3;"' : '') + '>' +
+              '<td data-label="Rank">' + (i + 1) + (i === 0 && topIsHighlighted ? ' 🏆' : '') + '</td>' +
+              '<td data-label="Item">' + esc(r.item_name) + ' <span class="muted" style="font-size:11px;">(' + esc(r.sku) + ')</span></td>' +
+              '<td data-label="Qty Sold">' + r.qty + '</td>' +
+              '<td data-label="Total Amount">' + money(r.amount) + '</td>' +
+            '</tr>').join('') +
+            '</tbody><tfoot><tr style="font-weight:bold;background:#f7f7f7;"><td colspan="2">Total</td><td>' + grandQty + '</td><td>' + money(grandAmount) + '</td></tr></tfoot>' +
+          '</table></div>';
+    }
+
+    // Online Orders -- who's marking items Packing, ranked (Ren, 2026-09-25: "in the
+    // packing include who created staff to check how many sales they have it", now
+    // surfaced company-wide/all-time here rather than only the live Packing tab).
+    async function loadPackedOrders() {
+      try { packedEntries = await listPackedOrders({ fromDate: packedFrom || null, toDate: packedTo || null }); } catch (err) { packedEntries = []; }
+      renderPackedLeaderboard();
+    }
+
+    function renderPackedLeaderboard() {
+      const box = document.getElementById('ac-packed-leaderboard');
+      if (!box) return;
+      const byEmp = {};
+      packedEntries.forEach((r) => {
+        const name = (r.packer && r.packer.full_name) || 'Unknown';
+        const e = byEmp[name] || (byEmp[name] = { orderRefs: new Set(), qty: 0 });
+        e.orderRefs.add(r.order_reference);
+        e.qty += Number(r.qty || 0);
+      });
+      const unranked = Object.entries(byEmp).map(([name, v]) => ({ name, orders: v.orderRefs.size, qty: v.qty }));
+      const ranked = applySort(unranked, packedLbSort, PACKED_LB_SORT_COMPARATORS);
+      const grandOrders = new Set(packedEntries.map((r) => r.order_reference)).size;
+      const grandQty = packedEntries.reduce((s, r) => s + Number(r.qty || 0), 0);
+      const topIsHighlighted = packedLbSort.dir === 'desc' && packedLbSort.field !== 'name';
+
+      box.innerHTML = !ranked.length
+        ? '<p class="muted">No packed items for this range.</p>'
+        : '<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Employee</th><th>Orders Packed</th><th>Qty Packed</th></tr></thead><tbody>' +
+            ranked.map((r, i) => '<tr' + (i === 0 && topIsHighlighted ? ' style="font-weight:bold;background:#fdf6e3;"' : '') + '>' +
+              '<td data-label="Rank">' + (i + 1) + (i === 0 && topIsHighlighted ? ' 🏆' : '') + '</td>' +
+              '<td data-label="Employee">' + esc(r.name) + '</td>' +
+              '<td data-label="Orders Packed">' + r.orders + '</td>' +
+              '<td data-label="Qty Packed">' + r.qty + '</td>' +
+            '</tr>').join('') +
+            '</tbody><tfoot><tr style="font-weight:bold;background:#f7f7f7;"><td colspan="2">Total</td><td>' + grandOrders + '</td><td>' + grandQty + '</td></tr></tfoot>' +
+          '</table></div>';
+    }
+
     async function load() {
       try {
         const [emps, rows] = await Promise.all([getEmployeesForChecklist(), getAccessChecklist()]);
@@ -457,10 +553,19 @@ if (employee) {
       render();
     }
 
-    await Promise.all([load(), loadScrapEntries(), loadInventoryValue()]);
+    await Promise.all([load(), loadScrapEntries(), loadInventoryValue(), loadPosEntries(), loadPackedOrders()]);
     subscribeToChanges('access_checklist_verifications', load);
     subscribeToChanges('scrap_entries', loadScrapEntries);
     subscribeToChanges(['products', 'inventory'], loadInventoryValue);
+    subscribeToChanges('sales_inventory_movements', loadPosEntries);
+    // order_item_status gets constant high-frequency Pancake sync traffic -- debounced,
+    // same as online-orders.html's own subscription to this table, so a resync batch
+    // doesn't fire this reload dozens of times in a row.
+    let packedReloadTimer = null;
+    subscribeToChanges('order_item_status', () => {
+      clearTimeout(packedReloadTimer);
+      packedReloadTimer = setTimeout(loadPackedOrders, 800);
+    });
 
     // Effective levels for a row: an array, any combination of view/encode/edit/
     // approver, empty means No access -- the override if Ren has set one, otherwise
@@ -576,6 +681,28 @@ if (employee) {
           '<h4 style="margin:16px 0 2px;">Total Grams Received <span class="muted" style="font-weight:normal;">— by purity, same range as above</span></h4>' +
           '<div id="ac-scrap-grams"><div class="muted">Loading…</div></div>' +
         '</div>' +
+        '<div class="card">' +
+          '<h3 style="margin:0 0 2px;">POS Top Selling</h3>' +
+          '<p class="muted" style="margin-top:-2px;">Which items actually move at the counter, company-wide, ranked by quantity or amount for this range.</p>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">' +
+            '<div class="field"><label>From</label><input type="date" id="pos-lb-from" value="' + posFrom + '"></div>' +
+            '<div class="field"><label>To</label><input type="date" id="pos-lb-to" value="' + posTo + '"></div>' +
+            sortControlHtml(POS_LB_SORT_FIELDS, posLbSort, 'pos-lb-sort-field', 'pos-lb-sort-dir') +
+            '<button type="button" class="btn small secondary" id="pos-lb-clear">All Time</button>' +
+          '</div>' +
+          '<div id="ac-pos-leaderboard"><div class="muted">Loading…</div></div>' +
+        '</div>' +
+        '<div class="card">' +
+          '<h3 style="margin:0 0 2px;">Online Orders — Packed By</h3>' +
+          '<p class="muted" style="margin-top:-2px;">Who\'s marking Pancake orders as Packing, ranked by how many — credit stays with whoever packed it even after it\'s later Delivered.</p>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">' +
+            '<div class="field"><label>From</label><input type="date" id="packed-lb-from" value="' + packedFrom + '"></div>' +
+            '<div class="field"><label>To</label><input type="date" id="packed-lb-to" value="' + packedTo + '"></div>' +
+            sortControlHtml(PACKED_LB_SORT_FIELDS, packedLbSort, 'packed-lb-sort-field', 'packed-lb-sort-dir') +
+            '<button type="button" class="btn small secondary" id="packed-lb-clear">All Time</button>' +
+          '</div>' +
+          '<div id="ac-packed-leaderboard"><div class="muted">Loading…</div></div>' +
+        '</div>' +
         '<div class="ac-layout">' +
           '<div class="card ac-emp-list">' + empListHtml + '</div>' +
           '<div class="ac-emp-main">' + mainHtml + '</div>' +
@@ -591,6 +718,28 @@ if (employee) {
         document.getElementById('scrap-lb-from').value = '';
         document.getElementById('scrap-lb-to').value = '';
         renderScrapLeaderboard();
+      });
+
+      renderPosLeaderboard();
+      document.getElementById('pos-lb-from').addEventListener('change', (ev) => { posFrom = ev.target.value; loadPosEntries(); });
+      document.getElementById('pos-lb-to').addEventListener('change', (ev) => { posTo = ev.target.value; loadPosEntries(); });
+      wireSortControl('pos-lb-sort-field', 'pos-lb-sort-dir', posLbSort, renderPosLeaderboard);
+      document.getElementById('pos-lb-clear').addEventListener('click', () => {
+        posFrom = ''; posTo = '';
+        document.getElementById('pos-lb-from').value = '';
+        document.getElementById('pos-lb-to').value = '';
+        loadPosEntries();
+      });
+
+      renderPackedLeaderboard();
+      document.getElementById('packed-lb-from').addEventListener('change', (ev) => { packedFrom = ev.target.value; loadPackedOrders(); });
+      document.getElementById('packed-lb-to').addEventListener('change', (ev) => { packedTo = ev.target.value; loadPackedOrders(); });
+      wireSortControl('packed-lb-sort-field', 'packed-lb-sort-dir', packedLbSort, renderPackedLeaderboard);
+      document.getElementById('packed-lb-clear').addEventListener('click', () => {
+        packedFrom = ''; packedTo = '';
+        document.getElementById('packed-lb-from').value = '';
+        document.getElementById('packed-lb-to').value = '';
+        loadPackedOrders();
       });
 
       root.querySelectorAll('[data-select-emp]').forEach((btn) => btn.addEventListener('click', () => {

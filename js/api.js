@@ -1733,6 +1733,26 @@ export async function setOrderItemStatus(id, status) {
   if (error) throw new Error(error.message);
 }
 
+/** Company-wide, for Access Checklist's "Online Orders" leaderboard (Ren, 2026-09-25:
+ * "in the access checklist theres no ... online orders") -- every row anyone has ever
+ * manually moved to Packing, regardless of its status now (an order keeps its
+ * packed_by credit even after it later reaches Delivered), so this is a separate
+ * targeted query rather than reusing listOrderItemStatuses() (which excludes terminal
+ * statuses and would drop most of them). Bounded to rows that actually have a packer
+ * recorded -- a small, slow-growing subset of the full table, not all 40,000+ rows. */
+export async function listPackedOrders({ fromDate, toDate } = {}) {
+  let query = supabase.from('order_item_status')
+    .select('id, order_reference, sku, qty, packed_by, packed_at')
+    .not('packed_by', 'is', null)
+    .order('packed_at', { ascending: false })
+    .limit(2000);
+  if (fromDate) query = query.gte('packed_at', fromDate);
+  if (toDate) query = query.lte('packed_at', toDate + 'T23:59:59.999');
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return attachEmployeeNames(data, { packer: 'packed_by' });
+}
+
 export async function deleteOrderItemStatus(id) {
   const { error } = await supabase.from('order_item_status').delete().eq('id', id);
   if (error) throw new Error(error.message);
