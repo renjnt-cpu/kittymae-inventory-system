@@ -66,10 +66,13 @@ const SCRAP_LB_SORT_COMPARATORS = { name: byText('name'), count: byNumber('count
 // POS Top Selling and Online Orders (Packed By) leaderboards -- Ren, 2026-09-25: "in
 // the access checklist theres no pos top selling and online orders" -- same shape as
 // the Scrap Encoding Activity leaderboard above (company-wide, ranked, own date range).
+// POS Top Selling ranks STAFF here (Ren: "pos top selling if for all the staff not the
+// product") -- the item/product ranking already exists on Dashboard's own "Top-Selling
+// Items" table, so it isn't duplicated here.
 const POS_LB_SORT_FIELDS = [
-  { key: 'item_name', label: 'Item' }, { key: 'qty', label: 'Qty Sold' }, { key: 'amount', label: 'Total Amount' },
+  { key: 'name', label: 'Employee' }, { key: 'sales', label: 'Sales' }, { key: 'qty', label: 'Qty Sold' }, { key: 'amount', label: 'Total Amount' },
 ];
-const POS_LB_SORT_COMPARATORS = { item_name: byText('item_name'), qty: byNumber('qty'), amount: byNumber('amount') };
+const POS_LB_SORT_COMPARATORS = { name: byText('name'), sales: byNumber('sales'), qty: byNumber('qty'), amount: byNumber('amount') };
 
 const PACKED_LB_SORT_FIELDS = [
   { key: 'name', label: 'Employee' }, { key: 'orders', label: 'Orders Packed' }, { key: 'qty', label: 'Qty Packed' },
@@ -283,8 +286,8 @@ if (employee) {
     // (Entries Encoded) or 'total' (Total amount).
     const scrapLbSort = { field: 'count', dir: 'desc' };
 
-    // Same pattern, POS Top Selling (company-wide, ranked by item) and Online Orders
-    // Packed By (company-wide, ranked by employee).
+    // Same pattern, POS Top Selling (company-wide, ranked by employee) and Online
+    // Orders Packed By (company-wide, ranked by employee).
     let posEntries = [];
     let posFrom = '', posTo = '';
     const posLbSort = { field: 'qty', dir: 'desc' };
@@ -464,9 +467,10 @@ if (employee) {
         '</table></div>';
     }
 
-    // POS Top Selling -- company-wide, ranked by item (not by admin -- Sales by Admin
-    // already lives on the POS ledger's own Summary panel; this is Admin-oversight of
-    // which items actually move, same spirit as the Scrap leaderboard above).
+    // POS Top Selling -- company-wide, ranked by staff (Ren: "pos top selling if for
+    // all the staff not the product") -- who's actually processing sales at the
+    // counter, same spirit as the Scrap Encoding Activity leaderboard above. Item/
+    // product ranking lives on Dashboard's own "Top-Selling Items" table instead.
     async function loadPosEntries() {
       try { posEntries = await listSales({ fromDate: posFrom || null, toDate: posTo || null }); } catch (err) { posEntries = []; }
       renderPosLeaderboard();
@@ -475,28 +479,34 @@ if (employee) {
     function renderPosLeaderboard() {
       const box = document.getElementById('ac-pos-leaderboard');
       if (!box) return;
-      const bySku = {};
+      const employeeNameById = Object.fromEntries(people.map((p) => [p.id, p.name]));
+      const byEmp = {};
       posEntries.forEach((r) => {
-        const e = bySku[r.sku] || (bySku[r.sku] = { item_name: r.products?.item_name || r.sku, qty: 0, amount: 0 });
+        if (!r.sale_group_id) return;
+        const empId = r.employee_id;
+        const e = byEmp[empId] || (byEmp[empId] = { name: employeeNameById[empId] || 'Unknown', groupIds: new Set(), qty: 0, amount: 0 });
+        e.groupIds.add(r.sale_group_id);
         e.qty += Number(r.qty || 0);
         e.amount += Number(r.unit_price || 0) * Number(r.qty || 0);
       });
-      const unranked = Object.entries(bySku).map(([sku, v]) => ({ sku, ...v }));
+      const unranked = Object.values(byEmp).map((v) => ({ name: v.name, sales: v.groupIds.size, qty: v.qty, amount: v.amount }));
       const ranked = applySort(unranked, posLbSort, POS_LB_SORT_COMPARATORS);
+      const grandSales = new Set(posEntries.map((r) => r.sale_group_id).filter(Boolean)).size;
       const grandQty = ranked.reduce((s, r) => s + r.qty, 0);
       const grandAmount = ranked.reduce((s, r) => s + r.amount, 0);
-      const topIsHighlighted = posLbSort.dir === 'desc' && posLbSort.field !== 'item_name';
+      const topIsHighlighted = posLbSort.dir === 'desc' && posLbSort.field !== 'name';
 
       box.innerHTML = !ranked.length
         ? '<p class="muted">No POS sales for this range.</p>'
-        : '<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Item</th><th>Qty Sold</th><th>Total Amount</th></tr></thead><tbody>' +
+        : '<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Employee</th><th>Sales</th><th>Qty Sold</th><th>Total Amount</th></tr></thead><tbody>' +
             ranked.map((r, i) => '<tr' + (i === 0 && topIsHighlighted ? ' style="font-weight:bold;background:#fdf6e3;"' : '') + '>' +
               '<td data-label="Rank">' + (i + 1) + (i === 0 && topIsHighlighted ? ' 🏆' : '') + '</td>' +
-              '<td data-label="Item">' + esc(r.item_name) + ' <span class="muted" style="font-size:11px;">(' + esc(r.sku) + ')</span></td>' +
+              '<td data-label="Employee">' + esc(r.name) + '</td>' +
+              '<td data-label="Sales">' + r.sales + '</td>' +
               '<td data-label="Qty Sold">' + r.qty + '</td>' +
               '<td data-label="Total Amount">' + money(r.amount) + '</td>' +
             '</tr>').join('') +
-            '</tbody><tfoot><tr style="font-weight:bold;background:#f7f7f7;"><td colspan="2">Total</td><td>' + grandQty + '</td><td>' + money(grandAmount) + '</td></tr></tfoot>' +
+            '</tbody><tfoot><tr style="font-weight:bold;background:#f7f7f7;"><td colspan="2">Total</td><td>' + grandSales + '</td><td>' + grandQty + '</td><td>' + money(grandAmount) + '</td></tr></tfoot>' +
           '</table></div>';
     }
 
@@ -683,7 +693,7 @@ if (employee) {
         '</div>' +
         '<div class="card">' +
           '<h3 style="margin:0 0 2px;">POS Top Selling</h3>' +
-          '<p class="muted" style="margin-top:-2px;">Which items actually move at the counter, company-wide, ranked by quantity or amount for this range.</p>' +
+          '<p class="muted" style="margin-top:-2px;">Who\'s actually processing sales at the counter, company-wide, ranked by sales/quantity/amount for this range.</p>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">' +
             '<div class="field"><label>From</label><input type="date" id="pos-lb-from" value="' + posFrom + '"></div>' +
             '<div class="field"><label>To</label><input type="date" id="pos-lb-to" value="' + posTo + '"></div>' +
