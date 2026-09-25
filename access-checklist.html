@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Access Checklist — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20260925k">
+<link rel="stylesheet" href="css/styles.css?v=20260925l">
 <style>
   .ac-item { padding:10px 0; border-bottom:1px solid #f0f0f0; }
   .ac-item:last-child { border-bottom:none; }
@@ -46,14 +46,14 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260925k';
+import { initShell, toast, esc } from './js/shell.js?v=20260925l';
 import {
   getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, listScrapEntries,
   subscribeToChanges, getBranches, listProducts, listAllInventoryQty, listHrPositions, setEmployeePassword,
   listSales, listPackedOrders, listOnlineOrderCareAssignments,
-} from './js/api.js?v=20260925k';
-import { branchColor } from './js/branchColors.js?v=20260925k';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260925k';
+} from './js/api.js?v=20260925l';
+import { branchColor } from './js/branchColors.js?v=20260925l';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260925l';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 36) -- replaces this leaderboard's
 // old per-column header-click sort with the one shared control used everywhere else.
@@ -560,11 +560,15 @@ if (employee) {
 
     // Customer Care Staff -- who's assigned in Pancake (raw_payload.assigning_care),
     // not our own packed_by. Names come straight from Pancake's own account names
-    // (e.g. "Angelyn Kittymae") -- shown as-is, not fuzzy-merged against our employee
-    // roster, since near-duplicate spellings ("NISSY " vs "Nissa Kittymae") could
-    // easily be two different real people or the same one typed inconsistently in
-    // Pancake, and misattributing sales credit either way is worse than showing the
-    // raw, honest source data.
+    // (e.g. "Angelyn Kittymae"), which are otherwise shown as-is rather than
+    // fuzzy-merged automatically -- Pancake's own naming is inconsistent (casing,
+    // trailing spaces, nicknames), and guessing two spellings are the same person risks
+    // misattributing real sales credit. Specific aliases only go in this map once Ren
+    // confirms them (2026-09-25: "NISSY is Nissa, merge those two rows" -- "NISSY" and
+    // "NISSY " both normalize to the same trimmed key below).
+    const CARE_NAME_ALIASES = {
+      'NISSY': 'Nissa Kittymae',
+    };
     async function loadCareAssignments() {
       try { careEntries = await listOnlineOrderCareAssignments({ fromDate: careFrom || null, toDate: careTo || null }); } catch (err) { careEntries = []; }
       renderCareLeaderboard();
@@ -575,7 +579,8 @@ if (employee) {
       if (!box) return;
       const byName = {};
       careEntries.forEach((r) => {
-        const name = r.care.name.trim();
+        const rawName = r.care.name.trim();
+        const name = CARE_NAME_ALIASES[rawName] || rawName;
         const e = byName[name] || (byName[name] = { orderRefs: new Set(), qty: 0 });
         e.orderRefs.add(r.order_reference);
         e.qty += Number(r.qty || 0);
