@@ -1759,14 +1759,23 @@ export async function listPackedOrders({ fromDate, toDate } = {}) {
  * later marked it Packing in this ERP (a different, unrelated staffer, per
  * listPackedOrders() above). Selects only that one JSON path via PostgREST's
  * column->path syntax rather than the whole raw_payload blob, which is deliberately
- * kept out of every other list query here for being multi-KB per row. Most historical
- * rows have no assigning_care at all (Pancake didn't always populate it), so this
- * pulls a wider recent window and filters the nulls out client-side. */
+ * kept out of every other list query here for being multi-KB per row.
+ *
+ * The project's REST API caps every response at 1000 rows no matter what .limit() asks
+ * for (confirmed live -- requesting 5000 still only returned 1000), so the
+ * `raw_payload->assigning_care=not.is.null` filter matters a lot here: it spends that
+ * fixed 1000-row budget on rows that actually have an assignee instead of mostly-null
+ * recent rows (most historical orders have none at all -- Pancake didn't always
+ * populate it). That filter is still imperfect -- Pancake sometimes stores an explicit
+ * JSON `null` under an existing key rather than omitting the key, which reads as
+ * SQL "not null" even though the value is null -- so the client-side filter below stays
+ * as the real guarantee. */
 export async function listOnlineOrderCareAssignments({ fromDate, toDate } = {}) {
   let query = supabase.from('order_item_status')
     .select('id, order_reference, qty, created_at, care:raw_payload->assigning_care')
+    .not('raw_payload->assigning_care', 'is', null)
     .order('created_at', { ascending: false })
-    .limit(5000);
+    .limit(1000);
   if (fromDate) query = query.gte('created_at', fromDate);
   if (toDate) query = query.lte('created_at', toDate + 'T23:59:59.999');
   const { data, error } = await query;
