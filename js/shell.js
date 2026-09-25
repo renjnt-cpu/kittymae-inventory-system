@@ -114,7 +114,7 @@ export async function initShell(activePage) {
     // assistant, inventory staff, auditor, and both supervisor") without reopening
     // Branches (POS/Layaway/Scrap/Subasta/Branch Capital) to the same group.
     if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) ||
-      ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor'].includes(employee.position)) {
+      ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor', 'Customer Care Staff'].includes(employee.position)) {
       pages.push({ id: 'online-orders', ...ALL_PAGE_DEFS['online-orders'] });
     }
     pages.push(
