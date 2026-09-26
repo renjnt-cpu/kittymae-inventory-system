@@ -1919,23 +1919,54 @@ export async function resolveSkuMatch(id) {
  * accumulation. deduct_stock_on_packing() consults this as its third and final match
  * tier (after exact-SKU and the size-variant fallback) and deducts every listed
  * component, so EVERY future order carrying this same Pancake SKU deducts correctly
- * too, not just this one. Re-asserting this row's own current status is what re-fires
- * that trigger for it right now (Postgres fires "UPDATE OF status" whenever the column
- * is referenced in the SET list, even when the value doesn't change -- same trick used
- * earlier this session for the bulk historical remediation). */
-export async function remapSkuMatch({ id, sku, productSkus, currentStatus }) {
+ * too, not just this one. */
+export async function saveSkuAlias({ pancakeSku, productSkus }) {
   const employeeId = await currentEmployeeId();
-  const { error: deleteError } = await supabase.from('pancake_sku_aliases').delete().eq('pancake_sku', sku);
+  const { error: deleteError } = await supabase.from('pancake_sku_aliases').delete().eq('pancake_sku', pancakeSku);
   if (deleteError) throw new Error(deleteError.message);
-  const { error: aliasError } = await supabase.from('pancake_sku_aliases')
-    .insert(productSkus.map((productSku) => ({ pancake_sku: sku, product_sku: productSku, created_by: employeeId })));
-  if (aliasError) throw new Error(aliasError.message);
+  const { error } = await supabase.from('pancake_sku_aliases')
+    .insert(productSkus.map((productSku) => ({ pancake_sku: pancakeSku, product_sku: productSku, created_by: employeeId })));
+  if (error) throw new Error(error.message);
+}
+
+/** Called from the Pending SKU Match folder specifically -- saves the mapping via
+ * saveSkuAlias() above, then re-asserts this one order-item's own current status,
+ * which is what re-fires deduct_stock_on_packing() for it right now (Postgres fires
+ * "UPDATE OF status" whenever the column is referenced in the SET list, even when the
+ * value doesn't change -- same trick used earlier this session for the bulk historical
+ * remediation). */
+export async function remapSkuMatch({ id, sku, productSkus, currentStatus }) {
+  await saveSkuAlias({ pancakeSku: sku, productSkus });
   const { error } = await supabase.from('order_item_status').update({ status: currentStatus }).eq('id', id);
   if (error) throw new Error(error.message);
   // Read back what the trigger actually did (deducted, or still short on stock at
   // this branch) so the UI can say exactly what happened instead of just "saved".
   const { data } = await supabase.from('order_item_status').select('warehouse_deduction_note').eq('id', id).maybeSingle();
   return data ? data.warehouse_deduction_note : null;
+}
+
+/** Every Pancake SKU that's ever been mapped via Change Product/SKU Mappings, grouped
+ * by pancake_sku so a multi-product set shows as one row with several components
+ * instead of several separate rows (Ren, 2026-09-26: "add edit product to edit" -- a
+ * standing management view, not just the one-time picker shown when a Pending SKU
+ * Match row happens to still exist for it). */
+export async function listSkuAliases() {
+  const { data, error } = await supabase.from('pancake_sku_aliases')
+    .select('pancake_sku, product_sku, created_at, created_by, products(item_name)')
+    .order('pancake_sku').order('product_sku');
+  if (error) throw new Error(error.message);
+  const withNames = await attachEmployeeNames(data, { creator: 'created_by' });
+  const groups = new Map();
+  withNames.forEach((r) => {
+    if (!groups.has(r.pancake_sku)) groups.set(r.pancake_sku, { pancake_sku: r.pancake_sku, created_at: r.created_at, creator: r.creator, components: [] });
+    groups.get(r.pancake_sku).components.push({ sku: r.product_sku, item_name: r.products ? r.products.item_name : '' });
+  });
+  return [...groups.values()];
+}
+
+export async function deleteSkuAlias(pancakeSku) {
+  const { error } = await supabase.from('pancake_sku_aliases').delete().eq('pancake_sku', pancakeSku);
+  if (error) throw new Error(error.message);
 }
 
 // ---- Item Monitoring (89_item_monitoring_cycle_counts.sql) -- the new-system version

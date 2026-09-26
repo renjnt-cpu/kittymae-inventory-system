@@ -26,8 +26,9 @@ import { initShell, toast, esc } from './js/shell.js?v=20260926b';
 import {
   getBranches, listOrderItemStatuses, listOrderHistoryForItem, getOrderItemStatusCounts,
   getOrderItemPackaging, ORDER_ITEM_STATUS_ROW_CAP, setOrderItemStatus, deleteOrderItemStatus,
-  listDeliveredOrders, listPendingSkuMatches, resolveSkuMatch, remapSkuMatch, searchProducts, subscribeToChanges,
-} from './js/api.js?v=20260926e';
+  listDeliveredOrders, listPendingSkuMatches, resolveSkuMatch, remapSkuMatch, searchProducts,
+  listSkuAliases, saveSkuAlias, deleteSkuAlias, subscribeToChanges,
+} from './js/api.js?v=20260926f';
 import { branchBadge } from './js/branchColors.js?v=20260926b';
 import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260926b';
 
@@ -79,6 +80,72 @@ function historyKey(r) {
 }
 const fmtDate = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+
+// Shared chip-based product picker -- used both by Change Product (Pending SKU Match)
+// and Edit (SKU Mappings), since editing an existing mapping needs the exact same
+// search-and-add-multiple mechanics as creating one the first time (Ren, 2026-09-26:
+// "add edit product to edit the supervisor" -- a mapping made via Change Product
+// wasn't otherwise revisitable once its Pending SKU Match row resolved and disappeared).
+function productPickerHtml() {
+  return '<div class="pp-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>' +
+    '<input type="text" class="pp-search" autocomplete="off" placeholder="Search SKU or item name to add…" style="width:100%;">' +
+    '<div class="pp-suggest" style="display:none;position:absolute;left:4px;right:4px;z-index:20;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>';
+}
+/** container: the element holding .pp-chips/.pp-search/.pp-suggest (from
+ * productPickerHtml() above). initialSkus: pre-seeded components (Edit) or [] (a
+ * fresh Change Product). onCountChange(n): called whenever the chip list changes, so
+ * the caller can enable/disable its own Confirm/Save button. Returns { getSkus }. */
+function wireProductPicker(container, initialSkus, onCountChange) {
+  const chipsBox = container.querySelector('.pp-chips');
+  const searchInput = container.querySelector('.pp-search');
+  const suggestBox = container.querySelector('.pp-suggest');
+  let components = initialSkus.map((sku) => ({ sku }));
+  let searchTimer = null, searchToken = 0;
+  function hideSuggest() { suggestBox.style.display = 'none'; suggestBox.innerHTML = ''; }
+  function renderChips() {
+    chipsBox.innerHTML = components.map((p, i) =>
+      '<span class="badge" style="display:inline-flex;align-items:center;gap:5px;">' + esc(p.sku) +
+        '<button type="button" data-chip-remove="' + i + '" title="Remove" style="border:none;background:none;cursor:pointer;font:inherit;padding:0;line-height:1;">✕</button>' +
+      '</span>'
+    ).join('');
+    chipsBox.querySelectorAll('[data-chip-remove]').forEach((btn) => btn.addEventListener('click', () => {
+      components.splice(Number(btn.dataset.chipRemove), 1);
+      renderChips();
+    }));
+    onCountChange(components.length);
+  }
+  function add(p) {
+    if (!components.some((c) => c.sku === p.sku)) components.push({ sku: p.sku });
+    searchInput.value = '';
+    renderChips();
+    hideSuggest();
+    searchInput.focus();
+  }
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim();
+    clearTimeout(searchTimer);
+    if (!q) { hideSuggest(); return; }
+    searchTimer = setTimeout(async () => {
+      const token = ++searchToken;
+      let results;
+      try { results = await searchProducts(q); } catch (err) { return; }
+      if (token !== searchToken || !results.length) { hideSuggest(); return; }
+      suggestBox.innerHTML = results.map((p, i) =>
+        '<div data-i="' + i + '" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;">' +
+          '<strong>' + esc(p.sku) + '</strong> — ' + esc(p.item_name) +
+          (p.category || p.product_line ? '<div class="muted" style="font-size:11px;">' + esc(p.category || p.product_line) + '</div>' : '') +
+        '</div>'
+      ).join('');
+      suggestBox.style.display = '';
+      suggestBox.querySelectorAll('[data-i]').forEach((el) => {
+        el.addEventListener('mousedown', (ev) => { ev.preventDefault(); add(results[Number(el.dataset.i)]); });
+      });
+    }, 200);
+  });
+  searchInput.addEventListener('blur', () => setTimeout(hideSuggest, 150));
+  renderChips();
+  return { getSkus: () => components.map((c) => c.sku) };
+}
 
 // Pacific Mall (2) and APM Mall (4) -- view only for everyone but Admin, per Ren's
 // request (93_order_item_status_branch_admin_only.sql enforces the same rule server-
@@ -223,6 +290,17 @@ if (employee) {
           render();
           return;
         }
+        if (statusFilter === 'skumappings') {
+          let items = await listSkuAliases();
+          if (search) {
+            const t = search.toLowerCase();
+            items = items.filter((g) => g.pancake_sku.toLowerCase().includes(t) ||
+              g.components.some((c) => c.sku.toLowerCase().includes(t) || (c.item_name || '').toLowerCase().includes(t)));
+          }
+          orderItems = items;
+          render();
+          return;
+        }
         const [items, counts] = await Promise.all([
           listOrderItemStatuses({ statusKeys: tabKeysFor(statusFilter), search, branchId: branchFilter, fromDate: fFrom || null, toDate: fTo || null }),
           getOrderItemStatusCounts(branchFilter),
@@ -276,10 +354,11 @@ if (employee) {
       // Packing, Shipped, or Delivered) -- no live count here since it's not part of
       // order_item_status_counts(), same treatment as Delivered's static hint.
       const pendingSkuBtn = '<button type="button" class="btn small' + (statusFilter === 'skumatch' ? '' : ' secondary') + '" data-ol-tab="skumatch">Pending SKU Match</button>';
+      const skuMappingsBtn = '<button type="button" class="btn small' + (statusFilter === 'skumappings' ? '' : ' secondary') + '" data-ol-tab="skumappings">SKU Mappings</button>';
       tabs.innerHTML = tabBtn('all', 'All', null) +
         PANCAKE_STATUS_TABS.map((t) => tabBtn(t.label, t.label, t.keys)).join('') +
         leftoverStatuses.map((s) => tabBtn(s, prettyStatus(s), [s])).join('') +
-        deliveredBtn + pendingSkuBtn;
+        deliveredBtn + pendingSkuBtn + skuMappingsBtn;
       tabs.querySelectorAll('[data-ol-tab]').forEach((btn) => btn.addEventListener('click', () => {
         statusFilter = btn.dataset.olTab;
         load();
@@ -289,10 +368,11 @@ if (employee) {
       const list = document.getElementById('ol-list');
       const truncated = rows.length >= ORDER_ITEM_STATUS_ROW_CAP;
       const tile = (num, label) => '<div class="tile"><div class="num">' + num + '</div><div class="lbl">' + label + '</div></div>';
-      document.getElementById('ol-tiles').innerHTML =
-        tile(rows.length + (truncated ? '+' : ''), 'Items' + (search ? ' (filtered)' : '')) +
-        tile(new Set(rows.map((r) => r.order_reference).filter(Boolean)).size + (truncated ? '+' : ''), 'Orders') +
-        tile(rows.reduce((s, r) => s + Number(r.qty || 0), 0) + (truncated ? '+' : ''), 'Qty Subtotal');
+      document.getElementById('ol-tiles').innerHTML = statusFilter === 'skumappings'
+        ? tile(rows.length, 'Mapped SKUs' + (search ? ' (filtered)' : ''))
+        : tile(rows.length + (truncated ? '+' : ''), 'Items' + (search ? ' (filtered)' : '')) +
+          tile(new Set(rows.map((r) => r.order_reference).filter(Boolean)).size + (truncated ? '+' : ''), 'Orders') +
+          tile(rows.reduce((s, r) => s + Number(r.qty || 0), 0) + (truncated ? '+' : ''), 'Qty Subtotal');
       const activeEl = document.getElementById('ol-active');
       activeEl.innerHTML = activeFiltersHtml([
         { label: 'Search', value: esc(search) },
@@ -301,7 +381,7 @@ if (employee) {
         { label: 'Status', value: statusFilter === 'all' ? '' : esc(statusFilter === 'delivered' ? 'Delivered' : prettyStatus(statusFilter)) },
       ], 'ol-f-clear');
       wireProxyButtons(activeEl);
-      if (!rows.length) {
+      if (!rows.length && statusFilter !== 'skumappings') {
         list.innerHTML = emptyStateHtml({
           message: statusFilter === 'delivered'
             ? 'No delivered orders from September 2026 onwards' + (search ? ' matching "' + esc(search) + '"' : '') + '.'
@@ -394,22 +474,9 @@ if (employee) {
                 (editable(r) ? '<button class="btn small secondary" type="button" data-delete-id="' + r.id + '">Delete</button>' : '') +
               '</td>' +
             '</tr>' +
-            '<tr class="remap-row" data-remap-for="' + r.id + '" style="display:none;"><td colspan="8" class="full-row"></td></tr>'
+            '<tr class="remap-row" style="display:none;"><td colspan="8" class="full-row"></td></tr>'
           ).join('') +
           '</tbody></table></div>';
-
-        function remapWidgetHtml(r) {
-          return '<div style="padding:10px 4px;position:relative;max-width:420px;">' +
-            '<div class="muted" style="font-size:11px;margin-bottom:4px;">Map Pancake SKU <b>' + esc(r.sku || '') + '</b> to one or more real products — add more than one for a bundled/set item. Every future order carrying this same SKU deducts against all of them too.</div>' +
-            '<div class="remap-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>' +
-            '<input type="text" class="remap-search" autocomplete="off" placeholder="Search SKU or item name to add…" style="width:100%;">' +
-            '<div class="remap-suggest" style="display:none;position:absolute;left:4px;right:4px;z-index:20;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>' +
-            '<div style="margin-top:8px;display:flex;gap:6px;">' +
-              '<button type="button" class="btn small" data-remap-confirm="' + r.id + '" disabled>Confirm Mapping</button>' +
-              '<button type="button" class="btn small secondary" data-remap-cancel="' + r.id + '">Cancel</button>' +
-            '</div>' +
-          '</div>';
-        }
 
         function closeAllRemaps() {
           document.querySelectorAll('.remap-row').forEach((row) => { row.style.display = 'none'; row.querySelector('td').innerHTML = ''; });
@@ -417,71 +484,31 @@ if (employee) {
         }
 
         list.querySelectorAll('[data-remap-toggle]').forEach((btn) => btn.addEventListener('click', () => {
-          const id = btn.dataset.remapToggle;
-          const row = document.querySelector('tr[data-remap-for="' + id + '"]');
+          const row = btn.closest('tr').nextElementSibling;
           const alreadyOpen = row.style.display !== 'none';
           closeAllRemaps();
           if (alreadyOpen) return;
-          const r = rows.find((x) => String(x.id) === String(id));
+          const r = rows.find((x) => String(x.id) === String(btn.dataset.remapToggle));
           const td = row.querySelector('td');
-          td.innerHTML = remapWidgetHtml(r);
+          td.innerHTML = '<div style="padding:10px 4px;position:relative;max-width:420px;">' +
+            '<div class="muted" style="font-size:11px;margin-bottom:4px;">Map Pancake SKU <b>' + esc(r.sku || '') + '</b> to one or more real products — add more than one for a bundled/set item. Every future order carrying this same SKU deducts against all of them too.</div>' +
+            productPickerHtml() +
+            '<div style="margin-top:8px;display:flex;gap:6px;">' +
+              '<button type="button" class="btn small" data-remap-confirm disabled>Confirm Mapping</button>' +
+              '<button type="button" class="btn small secondary" data-remap-cancel>Cancel</button>' +
+            '</div>' +
+          '</div>';
           row.style.display = '';
           btn.setAttribute('aria-expanded', 'true');
 
-          const searchInput = td.querySelector('.remap-search');
-          const suggestBox = td.querySelector('.remap-suggest');
-          const chipsBox = td.querySelector('.remap-chips');
           const confirmBtn = td.querySelector('[data-remap-confirm]');
-          let components = [], searchTimer = null, searchToken = 0;
-          function hideSuggest() { suggestBox.style.display = 'none'; suggestBox.innerHTML = ''; }
-          function renderChips() {
-            chipsBox.innerHTML = components.map((p, i) =>
-              '<span class="badge" style="display:inline-flex;align-items:center;gap:5px;">' + esc(p.sku) +
-                '<button type="button" data-chip-remove="' + i + '" title="Remove" style="border:none;background:none;cursor:pointer;font:inherit;padding:0;line-height:1;">✕</button>' +
-              '</span>'
-            ).join('');
-            chipsBox.querySelectorAll('[data-chip-remove]').forEach((btn2) => btn2.addEventListener('click', () => {
-              components.splice(Number(btn2.dataset.chipRemove), 1);
-              renderChips();
-              confirmBtn.disabled = components.length === 0;
-            }));
-            confirmBtn.disabled = components.length === 0;
-          }
-          function add(p) {
-            if (!components.some((c) => c.sku === p.sku)) components.push(p);
-            searchInput.value = '';
-            renderChips();
-            hideSuggest();
-            searchInput.focus();
-          }
-          searchInput.addEventListener('input', () => {
-            const q = searchInput.value.trim();
-            clearTimeout(searchTimer);
-            if (!q) { hideSuggest(); return; }
-            searchTimer = setTimeout(async () => {
-              const token = ++searchToken;
-              let results;
-              try { results = await searchProducts(q); } catch (err) { return; }
-              if (token !== searchToken || !results.length) { hideSuggest(); return; }
-              suggestBox.innerHTML = results.map((p, i) =>
-                '<div data-i="' + i + '" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;">' +
-                  '<strong>' + esc(p.sku) + '</strong> — ' + esc(p.item_name) +
-                  (p.category || p.product_line ? '<div class="muted" style="font-size:11px;">' + esc(p.category || p.product_line) + '</div>' : '') +
-                '</div>'
-              ).join('');
-              suggestBox.style.display = '';
-              suggestBox.querySelectorAll('[data-i]').forEach((el) => {
-                el.addEventListener('mousedown', (ev) => { ev.preventDefault(); add(results[Number(el.dataset.i)]); });
-              });
-            }, 200);
-          });
-          searchInput.addEventListener('blur', () => setTimeout(hideSuggest, 150));
+          const picker = wireProductPicker(td, [], (n) => { confirmBtn.disabled = n === 0; });
           td.querySelector('[data-remap-cancel]').addEventListener('click', closeAllRemaps);
           confirmBtn.addEventListener('click', async () => {
-            if (!components.length) return;
+            const skus = picker.getSkus();
+            if (!skus.length) return;
             confirmBtn.disabled = true;
             try {
-              const skus = components.map((c) => c.sku);
               const note = await remapSkuMatch({ id: r.id, sku: r.sku, productSkus: skus, currentStatus: r.status });
               toast('ol-msg', note ? ('Mapped to ' + skus.join(', ') + ' — ' + note) : ('Mapped to ' + skus.join(', ') + '.'), false);
               await load();
@@ -512,6 +539,80 @@ if (employee) {
             await load();
           } catch (err) {
             toast('ol-msg', String(err.message || err), true);
+          }
+        }));
+        return;
+      }
+
+      if (statusFilter === 'skumappings') {
+        list.innerHTML =
+          '<p class="muted" style="margin:0 0 10px;">Every Pancake SKU mapped to real product(s) via Change Product. Future orders carrying these SKUs deduct against the mapped product(s) automatically.</p>' +
+          (!rows.length ? emptyStateHtml({ message: 'No SKU mappings yet — create one from the Pending SKU Match folder.', hasFilters: !!search, clearId: 'ol-f-clear' }) :
+          '<div class="table-scroll table-2col"><table><thead><tr>' +
+            '<th>Pancake SKU</th><th>Mapped To</th><th>Added</th><th></th>' +
+          '</tr></thead><tbody>' +
+          rows.map((g) =>
+            '<tr>' +
+              '<td data-label="Pancake SKU" style="font-family:monospace;font-size:12px;">' + esc(g.pancake_sku) + '</td>' +
+              '<td data-label="Mapped To" class="full-row">' + g.components.map((c) => '<span class="badge">' + esc(c.sku) + (c.item_name ? ' — ' + esc(c.item_name) : '') + '</span>').join(' ') + '</td>' +
+              '<td data-label="Added" style="font-size:11px;white-space:nowrap;">' + fmtDate(g.created_at) + (g.creator ? '<div class="muted">by ' + esc(g.creator.full_name) + '</div>' : '') + '</td>' +
+              '<td class="full-row" style="white-space:nowrap;">' +
+                (canResolveSkuMatch ? '<button type="button" class="btn small secondary" data-editmap-toggle="' + esc(g.pancake_sku) + '" aria-expanded="false">Edit</button> ' : '') +
+                (canResolveSkuMatch ? '<button type="button" class="btn small secondary" data-editmap-remove="' + esc(g.pancake_sku) + '">Remove Mapping</button>' : '') +
+              '</td>' +
+            '</tr>' +
+            '<tr class="editmap-row" style="display:none;"><td colspan="4" class="full-row"></td></tr>'
+          ).join('') + '</tbody></table></div>');
+
+        function closeAllEditMaps() {
+          document.querySelectorAll('.editmap-row').forEach((row) => { row.style.display = 'none'; row.querySelector('td').innerHTML = ''; });
+          document.querySelectorAll('[data-editmap-toggle]').forEach((btn) => btn.setAttribute('aria-expanded', 'false'));
+        }
+
+        list.querySelectorAll('[data-editmap-toggle]').forEach((btn) => btn.addEventListener('click', () => {
+          const row = btn.closest('tr').nextElementSibling;
+          const alreadyOpen = row.style.display !== 'none';
+          closeAllEditMaps();
+          if (alreadyOpen) return;
+          const g = rows.find((x) => x.pancake_sku === btn.dataset.editmapToggle);
+          const td = row.querySelector('td');
+          td.innerHTML = '<div style="padding:10px 4px;position:relative;max-width:420px;">' +
+            productPickerHtml() +
+            '<div style="margin-top:8px;display:flex;gap:6px;">' +
+              '<button type="button" class="btn small" data-editmap-save disabled>Save</button>' +
+              '<button type="button" class="btn small secondary" data-editmap-cancel>Cancel</button>' +
+            '</div>' +
+          '</div>';
+          row.style.display = '';
+          btn.setAttribute('aria-expanded', 'true');
+
+          const saveBtn = td.querySelector('[data-editmap-save]');
+          const picker = wireProductPicker(td, g.components.map((c) => c.sku), (n) => { saveBtn.disabled = n === 0; });
+          td.querySelector('[data-editmap-cancel]').addEventListener('click', closeAllEditMaps);
+          saveBtn.addEventListener('click', async () => {
+            const skus = picker.getSkus();
+            if (!skus.length) return;
+            saveBtn.disabled = true;
+            try {
+              await saveSkuAlias({ pancakeSku: g.pancake_sku, productSkus: skus });
+              toast('ol-msg', 'Mapping updated.', false);
+              await load();
+            } catch (err) {
+              toast('ol-msg', String(err.message || err), true);
+              saveBtn.disabled = false;
+            }
+          });
+        }));
+        list.querySelectorAll('[data-editmap-remove]').forEach((btn) => btn.addEventListener('click', async () => {
+          if (!confirm('Remove this mapping? Future orders with this Pancake SKU will go back to Pending SKU Match unless you add a new mapping.')) return;
+          btn.disabled = true;
+          try {
+            await deleteSkuAlias(btn.dataset.editmapRemove);
+            toast('ol-msg', 'Mapping removed.', false);
+            await load();
+          } catch (err) {
+            toast('ol-msg', String(err.message || err), true);
+            btn.disabled = false;
           }
         }));
         return;
