@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Online Orders — Kittymae Jewels System</title>
+<title>Online Orders — Kittymae.co — Kittymae Jewels System</title>
 <link rel="stylesheet" href="css/styles.css?v=20260926b">
 </head>
 <body>
@@ -13,21 +13,25 @@
 </main>
 
 <script type="module">
-// Online Orders -- company-wide monitoring board for Pancake-synced orders, one
-// module under the Sales nav group. Used to be split three ways (a per-branch tab on
-// each app's Branches page, plus a second copy of this same board on the POS's
-// Record Movement page) -- consolidated here, ERP-only (Ren, 2026-09-24: "remove
-// online order in all branch in the POS move online order in the ERP only make it in
-// one module or category under sales"). Rows come from the pancake-webhook Edge
-// Function (live) and the one-time pancake-backfill pull of Pancake's order history;
-// monitoring only, no manual Add -- status can be corrected by hand if Pancake's own
-// value is off.
+// Online Orders for the SECOND Pancake shop, kittymae.co (Ren, 2026-09-26: "lets go
+// for next 2nd account of pancake namely kittymae.co ... better make a new folder
+// under sales kittymae.co"). Sibling of online-orders.html, kept as its own page
+// rather than a tab/toggle on that one -- same reasoning as every other duplicated
+// small file in this app (BRANCH_ID_MAP etc.), and it keeps each shop's board simple.
+// Shares the exact same physical branches/inventory as kittymae jewels (confirmed via
+// warehouse_info.name on real orders: APM PRIME / PACIFIC MALL / WAREHOUSE, same as
+// the other shop), so deduction, branch mapping, and SKU Catalog are all identical --
+// only the Pancake shop id (and therefore which orders show up here) differs. Rows
+// come from pancake-webhook-kmco (live) and pancake-resync-kmco/pancake-refresh-
+// pending-kmco (15-minute cron safety nets); no historical backfill has been run for
+// this shop yet (~8,600 total orders here, vs kittymae jewels' 35,000+, so a full
+// backfill would be far cheaper if Ren wants one later).
 import { initShell, toast, esc } from './js/shell.js?v=20260926c';
 import {
   getBranches, listOrderItemStatuses, listOrderHistoryForItem, getOrderItemStatusCounts,
   getOrderItemPackaging, ORDER_ITEM_STATUS_ROW_CAP, setOrderItemStatus, deleteOrderItemStatus,
   listDeliveredOrders, listPendingSkuMatches, resolveSkuMatch, remapSkuMatch, searchProducts,
-  listSkuAliases, saveSkuAlias, deleteSkuAlias, subscribeToChanges,
+  listSkuAliases, saveSkuAlias, deleteSkuAlias, subscribeToChanges, KITTYMAE_CO_SHOP_ID,
 } from './js/api.js?v=20260926f';
 import { branchBadge } from './js/branchColors.js?v=20260926b';
 import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260926b';
@@ -42,15 +46,10 @@ const OL_SORT_COMPARATORS = {
   branch: (a, b) => String(a.branches?.name || '').localeCompare(String(b.branches?.name || '')),
 };
 
-// Delivered is a terminal status, always excluded from the working board above -- there
-// are 40,000+ historical rows after the Pancake backfill, most of them long-delivered,
-// so Ren asked to only ever show Delivered from this date onwards rather than the full
-// history.
+// Same reasoning as online-orders.html: never show the whole Delivered history at
+// once, just from this date onward.
 const DELIVERED_FROM_DATE = '2026-09-01';
 
-// Confirmed Pancake status_name -> tab mapping (screenshotted against Pancake's own
-// dashboard, cross-checked doc_counts) -- kept here since this is now the one place
-// this board lives.
 const PANCAKE_STATUS_TABS = [
   { label: 'New', keys: ['new'] },
   { label: 'Pending Confirmation', keys: ['pending'] },
@@ -81,20 +80,12 @@ function historyKey(r) {
 const fmtDate = (s) => s ? new Date(s).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
-// Shared chip-based product picker -- used both by Change Product (Pending SKU Match)
-// and Edit (SKU Mappings), since editing an existing mapping needs the exact same
-// search-and-add-multiple mechanics as creating one the first time (Ren, 2026-09-26:
-// "add edit product to edit the supervisor" -- a mapping made via Change Product
-// wasn't otherwise revisitable once its Pending SKU Match row resolved and disappeared).
+// Shared chip-based product picker -- identical to online-orders.html's own copy.
 function productPickerHtml() {
   return '<div class="pp-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>' +
     '<input type="text" class="pp-search" autocomplete="off" placeholder="Search SKU or item name to add…" style="width:100%;">' +
     '<div class="pp-suggest" style="display:none;position:absolute;left:4px;right:4px;z-index:20;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>';
 }
-/** container: the element holding .pp-chips/.pp-search/.pp-suggest (from
- * productPickerHtml() above). initialSkus: pre-seeded components (Edit) or [] (a
- * fresh Change Product). onCountChange(n): called whenever the chip list changes, so
- * the caller can enable/disable its own Confirm/Save button. Returns { getSkus }. */
 function wireProductPicker(container, initialSkus, onCountChange) {
   const chipsBox = container.querySelector('.pp-chips');
   const searchInput = container.querySelector('.pp-search');
@@ -147,27 +138,9 @@ function wireProductPicker(container, initialSkus, onCountChange) {
   return { getSkus: () => components.map((c) => c.sku) };
 }
 
-// Pacific Mall (2) and APM Mall (4) -- view only for everyone but Admin, per Ren's
-// request (93_order_item_status_branch_admin_only.sql enforces the same rule server-
-// side via RLS; this just keeps the UI from showing a control that would fail).
 const ADMIN_ONLY_EDIT_BRANCHES = [2, 4];
-
-// Ren, 2026-09-26: "if no matching make it pending in the system have its own folder
-// and update both supervisor to check the item. they can also delete and not deducted
-// if supervisor click it" -- "both supervisor" is the same Operations Supervisor /
-// Inventory Supervisor pair as everywhere else in this app. Everyone who can already
-// see this page can see the Pending SKU Match folder (same GATE_POSITIONS as the rest
-// of the board); only these two positions (plus Admin) get the Resolve button that
-// dismisses a row without deducting stock.
 const SKU_MATCH_SUPERVISOR_POSITIONS = ['Operations Supervisor', 'Inventory Supervisor'];
 
-/** Packaging Details (Ren, 2026-09-24: "list down all the details under packaging in
- * pancake") -- parses the raw Pancake order payload into the fields someone actually
- * packing/shipping this order needs: who and where to ship to, which Pancake
- * warehouse it ships from, every item in the order (not just this row's one line --
- * an order can bundle several), and the payment breakdown. Defensive against missing
- * fields throughout since this is a third-party payload, not our own schema, and the
- * ~2 rows (of 44,625) predating the webhook's raw_payload capture have none at all. */
 function renderPackaging(payload) {
   if (!payload) return '<div class="msg error" style="margin:8px 4px;">No packaging details captured for this order.</div>';
   const ship = payload.shipping_address || {};
@@ -209,17 +182,11 @@ function renderPackaging(payload) {
   '</div>';
 }
 
+// Same audience as kittymae jewels' Online Orders -- one shared business, same staff.
 const GATE_ROLES = ['Admin', 'Manager', 'Branch Supervisor'];
-// Ren, 2026-09-25: "for the online orders and lbc monitoring give access to admin
-// assistant, inventory staff, auditor, and both supervisor" -- "both supervisor" is the
-// Operations Supervisor / Inventory Supervisor pair used together everywhere else in
-// this app (POSITION_MANAGERS), not the Branch Supervisor role already in GATE_ROLES.
-// "Customer Care Staff" added 2026-09-25 (Ren: "for online orders theres no customer
-// care staff") -- a new HR position, since these are the staff actually packing orders
-// day to day and none of the above named them.
 const GATE_POSITIONS = ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor', 'Customer Care Staff'];
 
-const employee = await initShell('online-orders');
+const employee = await initShell('online-orders-kmco');
 if (employee) {
   const canView = GATE_ROLES.includes(employee.role) || GATE_POSITIONS.includes(employee.position);
   const root = document.getElementById('ol-root');
@@ -232,8 +199,8 @@ if (employee) {
     const sort = { field: 'default', dir: 'desc' };
 
     root.innerHTML =
-      '<h2>Online Orders</h2>' +
-      '<p class="muted" style="margin-top:-4px;">Monitoring only — synced live from Pancake across every branch. Status can be corrected by hand below if Pancake\'s own value is off.</p>' +
+      '<h2>Online Orders — Kittymae.co</h2>' +
+      '<p class="muted" style="margin-top:-4px;">Monitoring only — synced live from Pancake (kittymae.co shop) across every branch. Status can be corrected by hand below if Pancake\'s own value is off.</p>' +
       '<div class="tiles" id="ol-tiles"></div>' +
       '<div class="card" style="margin-bottom:14px;">' +
         '<h3 style="margin-top:0;">Search &amp; Filter</h3>' +
@@ -277,21 +244,21 @@ if (employee) {
       try {
         if (statusFilter === 'delivered') {
           const effectiveFrom = fFrom && fFrom > DELIVERED_FROM_DATE ? fFrom : DELIVERED_FROM_DATE;
-          let items = await listDeliveredOrders({ branchId: branchFilter, fromDate: effectiveFrom, toDate: fTo || null });
+          let items = await listDeliveredOrders({ branchId: branchFilter, fromDate: effectiveFrom, toDate: fTo || null, shopId: KITTYMAE_CO_SHOP_ID });
           if (search) items = items.filter((r) => matchesSearch(r, search));
           orderItems = items;
           render();
           return;
         }
         if (statusFilter === 'skumatch') {
-          let items = await listPendingSkuMatches({ branchId: branchFilter, fromDate: fFrom || null, toDate: fTo || null });
+          let items = await listPendingSkuMatches({ branchId: branchFilter, fromDate: fFrom || null, toDate: fTo || null, shopId: KITTYMAE_CO_SHOP_ID });
           if (search) items = items.filter((r) => matchesSearch(r, search));
           orderItems = items;
           render();
           return;
         }
         if (statusFilter === 'skumappings') {
-          let items = await listSkuAliases();
+          let items = await listSkuAliases(KITTYMAE_CO_SHOP_ID);
           if (search) {
             const t = search.toLowerCase();
             items = items.filter((g) => g.pancake_sku.toLowerCase().includes(t) ||
@@ -302,8 +269,8 @@ if (employee) {
           return;
         }
         const [items, counts] = await Promise.all([
-          listOrderItemStatuses({ statusKeys: tabKeysFor(statusFilter), search, branchId: branchFilter, fromDate: fFrom || null, toDate: fTo || null }),
-          getOrderItemStatusCounts(branchFilter),
+          listOrderItemStatuses({ statusKeys: tabKeysFor(statusFilter), search, branchId: branchFilter, fromDate: fFrom || null, toDate: fTo || null, shopId: KITTYMAE_CO_SHOP_ID }),
+          getOrderItemStatusCounts(branchFilter, KITTYMAE_CO_SHOP_ID),
         ]);
         orderItems = items;
         statusCounts = counts;
@@ -350,9 +317,6 @@ if (employee) {
         '<button type="button" class="btn small' + (statusFilter === id ? '' : ' secondary') + '" data-ol-tab="' + esc(id) + '">' +
           esc(label) + ' <span class="muted" style="font-weight:normal;">' + countFor(keys) + '</span></button>';
       const deliveredBtn = '<button type="button" class="btn small' + (statusFilter === 'delivered' ? '' : ' secondary') + '" data-ol-tab="delivered">Delivered <span class="muted" style="font-weight:normal;">(Sep 2026+)</span></button>';
-      // Cross-status like Delivered above (an unmatched-SKU order can be sitting in
-      // Packing, Shipped, or Delivered) -- no live count here since it's not part of
-      // order_item_status_counts(), same treatment as Delivered's static hint.
       const pendingSkuBtn = '<button type="button" class="btn small' + (statusFilter === 'skumatch' ? '' : ' secondary') + '" data-ol-tab="skumatch">Pending SKU Match</button>';
       const skuMappingsBtn = '<button type="button" class="btn small' + (statusFilter === 'skumappings' ? '' : ' secondary') + '" data-ol-tab="skumappings">SKU Mappings</button>';
       tabs.innerHTML = tabBtn('all', 'All', null) +
@@ -426,9 +390,6 @@ if (employee) {
         '</div>'
       ) : '';
 
-      // Per-staff packing tally (Ren, 2026-09-25: "in the packing include who created
-      // staff to check how many sales they have it") -- only meaningful on the Packing
-      // tab itself, where every visible row's packer is who currently has it in hand.
       let packedByLine = '';
       if (statusFilter === 'Packing') {
         const byPacker = new Map();
@@ -509,7 +470,7 @@ if (employee) {
             if (!skus.length) return;
             confirmBtn.disabled = true;
             try {
-              const note = await remapSkuMatch({ id: r.id, sku: r.sku, productSkus: skus, currentStatus: r.status });
+              const note = await remapSkuMatch({ id: r.id, sku: r.sku, productSkus: skus, currentStatus: r.status, shopId: KITTYMAE_CO_SHOP_ID });
               toast('ol-msg', note ? ('Mapped to ' + skus.join(', ') + ' — ' + note) : ('Mapped to ' + skus.join(', ') + '.'), false);
               await load();
             } catch (err) {
@@ -546,7 +507,7 @@ if (employee) {
 
       if (statusFilter === 'skumappings') {
         list.innerHTML =
-          '<p class="muted" style="margin:0 0 10px;">Every Pancake SKU mapped to real product(s) via Change Product. Future orders carrying these SKUs deduct against the mapped product(s) automatically.</p>' +
+          '<p class="muted" style="margin:0 0 10px;">Every kittymae.co Pancake SKU mapped to real product(s) via Change Product. Future orders carrying these SKUs deduct against the mapped product(s) automatically.</p>' +
           (!rows.length ? emptyStateHtml({ message: 'No SKU mappings yet — create one from the Pending SKU Match folder.', hasFilters: !!search, clearId: 'ol-f-clear' }) :
           '<div class="table-scroll table-2col"><table><thead><tr>' +
             '<th>Pancake SKU</th><th>Mapped To</th><th>Added</th><th></th>' +
@@ -594,7 +555,7 @@ if (employee) {
             if (!skus.length) return;
             saveBtn.disabled = true;
             try {
-              await saveSkuAlias({ pancakeSku: g.pancake_sku, productSkus: skus });
+              await saveSkuAlias({ pancakeSku: g.pancake_sku, productSkus: skus, shopId: KITTYMAE_CO_SHOP_ID });
               toast('ol-msg', 'Mapping updated.', false);
               await load();
             } catch (err) {
@@ -607,7 +568,7 @@ if (employee) {
           if (!confirm('Remove this mapping? Future orders with this Pancake SKU will go back to Pending SKU Match unless you add a new mapping.')) return;
           btn.disabled = true;
           try {
-            await deleteSkuAlias(btn.dataset.editmapRemove);
+            await deleteSkuAlias(btn.dataset.editmapRemove, KITTYMAE_CO_SHOP_ID);
             toast('ol-msg', 'Mapping removed.', false);
             await load();
           } catch (err) {
@@ -683,9 +644,6 @@ if (employee) {
       }));
     }
 
-    // One shared expand row per line item, holding EITHER the item's cross-order
-    // history OR its Packaging Details, whichever was clicked last -- an accordion
-    // across every row and both kinds at once (opening one always closes any other).
     async function toggleExpand(id, kind, meta) {
       const row = document.querySelector('tr[data-history-for="' + id + '"]');
       const alreadyThisKind = row.style.display !== 'none' && row.dataset.expandKind === kind;
@@ -707,7 +665,7 @@ if (employee) {
         }
         td.innerHTML =
           '<div style="padding:8px 4px;">' +
-            '<div class="muted" style="font-size:11px;margin-bottom:6px;">' + matches.length + ' order' + (matches.length === 1 ? '' : 's') + ' for this item, across every status and branch</div>' +
+            '<div class="muted" style="font-size:11px;margin-bottom:6px;">' + matches.length + ' order' + (matches.length === 1 ? '' : 's') + ' for this item, across every status and branch (both Pancake shops)</div>' +
             '<div class="table-scroll table-2col"><table><thead><tr><th>Order / Customer</th><th>Branch</th><th>Status</th><th>Qty</th><th>Notes</th><th>Date</th></tr></thead><tbody>' +
             matches.map((m) =>
               '<tr>' +

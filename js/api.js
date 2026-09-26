@@ -1680,6 +1680,13 @@ export async function rejectLayawayPaymentDeletion(requestId, reason) {
 // history including these.
 const TERMINAL_STATUSES = ['delivered', 'canceled', 'returned', 'shipped'];
 
+// The two Pancake shops this system tracks (Ren, 2026-09-26: "lets go for next 2nd
+// account of pancake namely kittymae.co"). KITTYMAE_JEWELS_SHOP_ID is also every
+// pre-existing order_item_status/pancake_sku_aliases row's default (set server-side),
+// so it's the fallback whenever a caller doesn't pass a shopId explicitly.
+export const KITTYMAE_JEWELS_SHOP_ID = 100015407;
+export const KITTYMAE_CO_SHOP_ID = 1328205188;
+
 // raw_payload is a multi-KB JSONB blob per row kept only for confirming Pancake's
 // status_name/field mappings from real data (see 78_order_item_status_raw_payload.sql)
 // -- never needed by the UI, so it's deliberately left out of this column list rather
@@ -1714,12 +1721,13 @@ function sanitizeForOrFilter(s) {
  * actually needs instead of the whole active dataset. branchId: null for the
  * company-wide board, or one branch's id for the Branches page's Online Orders tab
  * (92_order_item_status_branch_scope.sql). */
-export async function listOrderItemStatuses({ statusKeys = null, search = '', branchId = null, fromDate = null, toDate = null } = {}) {
+export async function listOrderItemStatuses({ statusKeys = null, search = '', branchId = null, fromDate = null, toDate = null, shopId = null } = {}) {
   let query = supabase.from('order_item_status')
     .select(ORDER_ITEM_STATUS_COLUMNS)
     .not('status', 'in', '(' + TERMINAL_STATUSES.join(',') + ')');
   if (statusKeys) query = query.in('status', statusKeys);
   if (branchId != null) query = query.eq('branch_id', branchId);
+  if (shopId != null) query = query.eq('pancake_shop_id', shopId);
   if (fromDate) query = query.gte('created_at', fromDate);
   if (toDate) query = query.lte('created_at', toDate + 'T23:59:59.999');
   const term = sanitizeForOrFilter(search || '');
@@ -1740,8 +1748,8 @@ export async function listOrderItemStatuses({ statusKeys = null, search = '', br
  * 92_order_item_status_branch_scope.sql) instead of counting a client-side array,
  * since that array is now capped/scoped to one tab at a time and would give wrong
  * counts for every OTHER tab. */
-export async function getOrderItemStatusCounts(branchId = null) {
-  const { data, error } = await supabase.rpc('order_item_status_counts', { p_branch_id: branchId });
+export async function getOrderItemStatusCounts(branchId = null, shopId = null) {
+  const { data, error } = await supabase.rpc('order_item_status_counts', { p_branch_id: branchId, p_shop_id: shopId });
   if (error) throw new Error(error.message);
   const counts = { all: 0 };
   (data || []).forEach((row) => { counts[row.status] = Number(row.cnt); counts.all += Number(row.cnt); });
@@ -1857,7 +1865,7 @@ export async function deleteOrderItemStatus(id) {
  * this one. Sorted/filtered on updated_at (when the row last changed status) since
  * there's no dedicated delivered_at column -- the closest proxy for "when it was
  * marked Delivered". */
-export async function listDeliveredOrders({ branchId, fromDate, toDate = null }) {
+export async function listDeliveredOrders({ branchId, fromDate, toDate = null, shopId = null }) {
   let query = supabase.from('order_item_status')
     .select(ORDER_ITEM_STATUS_COLUMNS)
     .eq('status', 'delivered')
@@ -1865,6 +1873,7 @@ export async function listDeliveredOrders({ branchId, fromDate, toDate = null })
     .order('updated_at', { ascending: false })
     .limit(ORDER_ITEM_STATUS_ROW_CAP);
   if (branchId != null) query = query.eq('branch_id', branchId);
+  if (shopId != null) query = query.eq('pancake_shop_id', shopId);
   if (toDate) query = query.lte('updated_at', toDate + 'T23:59:59.999');
   const { data, error } = await query;
   if (error) throw new Error(error.message);
@@ -1883,7 +1892,7 @@ const PENDING_SKU_MATCH_COLUMNS = ORDER_ITEM_STATUS_COLUMNS + ', warehouse_deduc
 /** Company-wide, across every status (unlike listOrderItemStatuses(), which excludes
  * terminal statuses) -- an order can reach Shipped/Delivered while still carrying this
  * skip note, since nothing ever retried the deduction once it left Packing. */
-export async function listPendingSkuMatches({ branchId = null, fromDate = null, toDate = null } = {}) {
+export async function listPendingSkuMatches({ branchId = null, fromDate = null, toDate = null, shopId = null } = {}) {
   let query = supabase.from('order_item_status')
     .select(PENDING_SKU_MATCH_COLUMNS)
     .eq('warehouse_deduction_note', SKU_NO_MATCH_NOTE)
@@ -1891,6 +1900,7 @@ export async function listPendingSkuMatches({ branchId = null, fromDate = null, 
     .order('created_at', { ascending: false })
     .limit(ORDER_ITEM_STATUS_ROW_CAP);
   if (branchId != null) query = query.eq('branch_id', branchId);
+  if (shopId != null) query = query.eq('pancake_shop_id', shopId);
   if (fromDate) query = query.gte('created_at', fromDate);
   if (toDate) query = query.lte('created_at', toDate + 'T23:59:59.999');
   const { data, error } = await query;
@@ -1920,12 +1930,12 @@ export async function resolveSkuMatch(id) {
  * tier (after exact-SKU and the size-variant fallback) and deducts every listed
  * component, so EVERY future order carrying this same Pancake SKU deducts correctly
  * too, not just this one. */
-export async function saveSkuAlias({ pancakeSku, productSkus }) {
+export async function saveSkuAlias({ pancakeSku, productSkus, shopId }) {
   const employeeId = await currentEmployeeId();
-  const { error: deleteError } = await supabase.from('pancake_sku_aliases').delete().eq('pancake_sku', pancakeSku);
+  const { error: deleteError } = await supabase.from('pancake_sku_aliases').delete().eq('pancake_sku', pancakeSku).eq('pancake_shop_id', shopId);
   if (deleteError) throw new Error(deleteError.message);
   const { error } = await supabase.from('pancake_sku_aliases')
-    .insert(productSkus.map((productSku) => ({ pancake_sku: pancakeSku, product_sku: productSku, created_by: employeeId })));
+    .insert(productSkus.map((productSku) => ({ pancake_sku: pancakeSku, product_sku: productSku, pancake_shop_id: shopId, created_by: employeeId })));
   if (error) throw new Error(error.message);
 }
 
@@ -1935,8 +1945,8 @@ export async function saveSkuAlias({ pancakeSku, productSkus }) {
  * "UPDATE OF status" whenever the column is referenced in the SET list, even when the
  * value doesn't change -- same trick used earlier this session for the bulk historical
  * remediation). */
-export async function remapSkuMatch({ id, sku, productSkus, currentStatus }) {
-  await saveSkuAlias({ pancakeSku: sku, productSkus });
+export async function remapSkuMatch({ id, sku, productSkus, currentStatus, shopId = KITTYMAE_JEWELS_SHOP_ID }) {
+  await saveSkuAlias({ pancakeSku: sku, productSkus, shopId });
   const { error } = await supabase.from('order_item_status').update({ status: currentStatus }).eq('id', id);
   if (error) throw new Error(error.message);
   // Read back what the trigger actually did (deducted, or still short on stock at
@@ -1950,9 +1960,10 @@ export async function remapSkuMatch({ id, sku, productSkus, currentStatus }) {
  * instead of several separate rows (Ren, 2026-09-26: "add edit product to edit" -- a
  * standing management view, not just the one-time picker shown when a Pending SKU
  * Match row happens to still exist for it). */
-export async function listSkuAliases() {
+export async function listSkuAliases(shopId = KITTYMAE_JEWELS_SHOP_ID) {
   const { data, error } = await supabase.from('pancake_sku_aliases')
     .select('pancake_sku, product_sku, created_at, created_by, products(item_name)')
+    .eq('pancake_shop_id', shopId)
     .order('pancake_sku').order('product_sku');
   if (error) throw new Error(error.message);
   const withNames = await attachEmployeeNames(data, { creator: 'created_by' });
@@ -1964,8 +1975,8 @@ export async function listSkuAliases() {
   return [...groups.values()];
 }
 
-export async function deleteSkuAlias(pancakeSku) {
-  const { error } = await supabase.from('pancake_sku_aliases').delete().eq('pancake_sku', pancakeSku);
+export async function deleteSkuAlias(pancakeSku, shopId = KITTYMAE_JEWELS_SHOP_ID) {
+  const { error } = await supabase.from('pancake_sku_aliases').delete().eq('pancake_sku', pancakeSku).eq('pancake_shop_id', shopId);
   if (error) throw new Error(error.message);
 }
 

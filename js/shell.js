@@ -81,6 +81,7 @@ export async function initShell(activePage) {
     dashboard: { label: 'Dashboard', href: 'dashboard.html' },
     branches: { label: 'Branches', href: 'branches.html' },
     'online-orders': { label: 'Online Orders', href: 'online-orders.html' },
+    'online-orders-kmco': { label: 'Online Orders — Kittymae.co', href: 'online-orders-kmco.html' },
     products: { label: 'SKU Catalog', href: 'products.html' },
     'item-monitoring': { label: 'Item Monitoring', href: 'item-monitoring.html' },
     transfers: { label: 'Transfers', href: 'transfers.html' },
@@ -116,6 +117,10 @@ export async function initShell(activePage) {
     if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) ||
       ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor', 'Customer Care Staff'].includes(employee.position)) {
       pages.push({ id: 'online-orders', ...ALL_PAGE_DEFS['online-orders'] });
+      // Second Pancake shop (Ren, 2026-09-26: "lets go for next 2nd account of pancake
+      // namely kittymae.co ... better make a new folder under sales kittymae.co") --
+      // same audience as the first Online Orders page, since it's the same business.
+      pages.push({ id: 'online-orders-kmco', ...ALL_PAGE_DEFS['online-orders-kmco'] });
     }
     pages.push(
       { id: 'products', ...ALL_PAGE_DEFS.products },
@@ -184,7 +189,7 @@ export async function initShell(activePage) {
   // must have a home in exactly one group.
   const NAV_GROUPS = [
     { label: 'Overview', ids: ['dashboard'] },
-    { label: 'Sales', ids: ['branches', 'online-orders', 'refunds'] },
+    { label: 'Sales', ids: ['branches', 'online-orders', 'online-orders-kmco', 'refunds'] },
     { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers', 'pull-out'] },
     { label: 'Operations', ids: ['lbc', 'assets'] },
     { label: 'Finance', ids: ['bills', 'transactions'] },
