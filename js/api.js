@@ -2,8 +2,8 @@
 // `supabase` directly, so the query shape lives in one place. Mirrors the old app's
 // `api(name, ...args)` helper in spirit, just split into named functions since
 // supabase-js's table/RPC calls aren't as uniformly shaped as google.script.run's.
-import { supabase } from './supabaseClient.js?v=20260926a';
-import { localDateStr } from './uiKit.js?v=20260926a';
+import { supabase } from './supabaseClient.js?v=20260926b';
+import { localDateStr } from './uiKit.js?v=20260926b';
 
 /** Caps the core ledger list queries (Sales, Layaway, Scrap, Subasta) so a tab load
  * fetches recent history instead of the entire table unconditionally -- these had no
@@ -1869,6 +1869,45 @@ export async function listDeliveredOrders({ branchId, fromDate, toDate = null })
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return attachEmployeeNames(data, { creator: 'created_by' });
+}
+
+// Rows deduct_stock_on_packing() skipped because the order's Pancake SKU never matched
+// anything in the catalog (not even via the size-variant fallback added 2026-09-26) --
+// a real catalog gap, not a stock or branch-mapping problem, so it gets its own folder
+// instead of sitting silently in whichever status tab the order happens to be in (Ren,
+// 2026-09-26: "if no matching make it pending in the system have its own folder").
+// Kept in sync by hand with the exact literal in deduct_stock_on_packing().
+const SKU_NO_MATCH_NOTE = 'Skipped: no matching SKU in the catalog.';
+const PENDING_SKU_MATCH_COLUMNS = ORDER_ITEM_STATUS_COLUMNS + ', warehouse_deduction_note, sku_match_resolved_at, sku_match_resolved_by';
+
+/** Company-wide, across every status (unlike listOrderItemStatuses(), which excludes
+ * terminal statuses) -- an order can reach Shipped/Delivered while still carrying this
+ * skip note, since nothing ever retried the deduction once it left Packing. */
+export async function listPendingSkuMatches({ branchId = null, fromDate = null, toDate = null } = {}) {
+  let query = supabase.from('order_item_status')
+    .select(PENDING_SKU_MATCH_COLUMNS)
+    .eq('warehouse_deduction_note', SKU_NO_MATCH_NOTE)
+    .is('sku_match_resolved_at', null)
+    .order('created_at', { ascending: false })
+    .limit(ORDER_ITEM_STATUS_ROW_CAP);
+  if (branchId != null) query = query.eq('branch_id', branchId);
+  if (fromDate) query = query.gte('created_at', fromDate);
+  if (toDate) query = query.lte('created_at', toDate + 'T23:59:59.999');
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return attachEmployeeNames(data, { creator: 'created_by' });
+}
+
+/** Dismisses a Pending SKU Match row without deducting stock -- e.g. it's test/garbage
+ * data from Pancake (a literal SKU like "1") or the item genuinely won't be tracked in
+ * this catalog. online-orders.html gates the button to Operations/Inventory Supervisor
+ * and Admin, same convention as this page's other per-row actions; leaves the row's
+ * real status and every other field untouched, just clears it out of this one folder. */
+export async function resolveSkuMatch(id) {
+  const { error } = await supabase.from('order_item_status')
+    .update({ sku_match_resolved_at: new Date().toISOString(), sku_match_resolved_by: await currentEmployeeId() })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 // ---- Item Monitoring (89_item_monitoring_cycle_counts.sql) -- the new-system version
