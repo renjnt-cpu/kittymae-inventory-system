@@ -1910,19 +1910,25 @@ export async function resolveSkuMatch(id) {
   if (error) throw new Error(error.message);
 }
 
-/** Permanently maps a Pancake SKU that will never itself exist in the catalog to a
- * real product (Ren, 2026-09-26: "add in the pending sku match a change product") --
- * upserted so re-mapping the same broken SKU later just overwrites the old choice.
- * deduct_stock_on_packing() consults this as its third and final match tier (after
- * exact-SKU and the size-variant fallback), so EVERY future order carrying this same
- * Pancake SKU deducts against the chosen product automatically, not just this one.
- * Re-asserting this row's own current status is what re-fires that trigger for it
- * right now (Postgres fires "UPDATE OF status" whenever the column is referenced in
- * the SET list, even when the value doesn't change -- same trick used earlier this
- * session for the bulk historical remediation). */
-export async function remapSkuMatch({ id, sku, productSku, currentStatus }) {
+/** Permanently maps a Pancake SKU that will never itself exist in the catalog to one
+ * or more real products (Ren, 2026-09-26: "add in the pending sku match a change
+ * product", then "for the set items there 2 or more product better add more product
+ * for this" -- a "SET ITEMS"-style Pancake SKU can bundle 2+ real catalog products,
+ * not just one). Replaces any existing mapping for this Pancake SKU wholesale (delete
+ * then insert) so re-editing a set's composition is a clean overwrite, not an
+ * accumulation. deduct_stock_on_packing() consults this as its third and final match
+ * tier (after exact-SKU and the size-variant fallback) and deducts every listed
+ * component, so EVERY future order carrying this same Pancake SKU deducts correctly
+ * too, not just this one. Re-asserting this row's own current status is what re-fires
+ * that trigger for it right now (Postgres fires "UPDATE OF status" whenever the column
+ * is referenced in the SET list, even when the value doesn't change -- same trick used
+ * earlier this session for the bulk historical remediation). */
+export async function remapSkuMatch({ id, sku, productSkus, currentStatus }) {
+  const employeeId = await currentEmployeeId();
+  const { error: deleteError } = await supabase.from('pancake_sku_aliases').delete().eq('pancake_sku', sku);
+  if (deleteError) throw new Error(deleteError.message);
   const { error: aliasError } = await supabase.from('pancake_sku_aliases')
-    .upsert({ pancake_sku: sku, product_sku: productSku, created_by: await currentEmployeeId() }, { onConflict: 'pancake_sku' });
+    .insert(productSkus.map((productSku) => ({ pancake_sku: sku, product_sku: productSku, created_by: employeeId })));
   if (aliasError) throw new Error(aliasError.message);
   const { error } = await supabase.from('order_item_status').update({ status: currentStatus }).eq('id', id);
   if (error) throw new Error(error.message);

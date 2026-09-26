@@ -27,7 +27,7 @@ import {
   getBranches, listOrderItemStatuses, listOrderHistoryForItem, getOrderItemStatusCounts,
   getOrderItemPackaging, ORDER_ITEM_STATUS_ROW_CAP, setOrderItemStatus, deleteOrderItemStatus,
   listDeliveredOrders, listPendingSkuMatches, resolveSkuMatch, remapSkuMatch, searchProducts, subscribeToChanges,
-} from './js/api.js?v=20260926d';
+} from './js/api.js?v=20260926e';
 import { branchBadge } from './js/branchColors.js?v=20260926b';
 import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260926b';
 
@@ -400,9 +400,9 @@ if (employee) {
 
         function remapWidgetHtml(r) {
           return '<div style="padding:10px 4px;position:relative;max-width:420px;">' +
-            '<div class="muted" style="font-size:11px;margin-bottom:4px;">Map Pancake SKU <b>' + esc(r.sku || '') + '</b> to a real product — every future order carrying this same SKU will deduct against it too.</div>' +
-            '<input type="text" class="remap-search" autocomplete="off" placeholder="Search SKU or item name…" style="width:100%;">' +
-            '<div class="remap-preview muted" style="font-size:11px;margin-top:4px;"></div>' +
+            '<div class="muted" style="font-size:11px;margin-bottom:4px;">Map Pancake SKU <b>' + esc(r.sku || '') + '</b> to one or more real products — add more than one for a bundled/set item. Every future order carrying this same SKU deducts against all of them too.</div>' +
+            '<div class="remap-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>' +
+            '<input type="text" class="remap-search" autocomplete="off" placeholder="Search SKU or item name to add…" style="width:100%;">' +
             '<div class="remap-suggest" style="display:none;position:absolute;left:4px;right:4px;z-index:20;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 10px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>' +
             '<div style="margin-top:8px;display:flex;gap:6px;">' +
               '<button type="button" class="btn small" data-remap-confirm="' + r.id + '" disabled>Confirm Mapping</button>' +
@@ -430,21 +430,31 @@ if (employee) {
 
           const searchInput = td.querySelector('.remap-search');
           const suggestBox = td.querySelector('.remap-suggest');
-          const preview = td.querySelector('.remap-preview');
+          const chipsBox = td.querySelector('.remap-chips');
           const confirmBtn = td.querySelector('[data-remap-confirm]');
-          let chosen = null, searchTimer = null, searchToken = 0;
+          let components = [], searchTimer = null, searchToken = 0;
           function hideSuggest() { suggestBox.style.display = 'none'; suggestBox.innerHTML = ''; }
-          function pick(p) {
-            chosen = p;
-            searchInput.value = p.sku;
-            preview.textContent = p.item_name + (p.category || p.product_line ? ' · ' + (p.category || p.product_line) : '');
-            confirmBtn.disabled = false;
+          function renderChips() {
+            chipsBox.innerHTML = components.map((p, i) =>
+              '<span class="badge" style="display:inline-flex;align-items:center;gap:5px;">' + esc(p.sku) +
+                '<button type="button" data-chip-remove="' + i + '" title="Remove" style="border:none;background:none;cursor:pointer;font:inherit;padding:0;line-height:1;">✕</button>' +
+              '</span>'
+            ).join('');
+            chipsBox.querySelectorAll('[data-chip-remove]').forEach((btn2) => btn2.addEventListener('click', () => {
+              components.splice(Number(btn2.dataset.chipRemove), 1);
+              renderChips();
+              confirmBtn.disabled = components.length === 0;
+            }));
+            confirmBtn.disabled = components.length === 0;
+          }
+          function add(p) {
+            if (!components.some((c) => c.sku === p.sku)) components.push(p);
+            searchInput.value = '';
+            renderChips();
             hideSuggest();
+            searchInput.focus();
           }
           searchInput.addEventListener('input', () => {
-            chosen = null;
-            confirmBtn.disabled = true;
-            preview.textContent = '';
             const q = searchInput.value.trim();
             clearTimeout(searchTimer);
             if (!q) { hideSuggest(); return; }
@@ -461,18 +471,19 @@ if (employee) {
               ).join('');
               suggestBox.style.display = '';
               suggestBox.querySelectorAll('[data-i]').forEach((el) => {
-                el.addEventListener('mousedown', (ev) => { ev.preventDefault(); pick(results[Number(el.dataset.i)]); });
+                el.addEventListener('mousedown', (ev) => { ev.preventDefault(); add(results[Number(el.dataset.i)]); });
               });
             }, 200);
           });
           searchInput.addEventListener('blur', () => setTimeout(hideSuggest, 150));
           td.querySelector('[data-remap-cancel]').addEventListener('click', closeAllRemaps);
           confirmBtn.addEventListener('click', async () => {
-            if (!chosen) return;
+            if (!components.length) return;
             confirmBtn.disabled = true;
             try {
-              const note = await remapSkuMatch({ id: r.id, sku: r.sku, productSku: chosen.sku, currentStatus: r.status });
-              toast('ol-msg', note ? ('Mapped to ' + chosen.sku + ' — ' + note) : ('Mapped to ' + chosen.sku + '.'), false);
+              const skus = components.map((c) => c.sku);
+              const note = await remapSkuMatch({ id: r.id, sku: r.sku, productSkus: skus, currentStatus: r.status });
+              toast('ol-msg', note ? ('Mapped to ' + skus.join(', ') + ' — ' + note) : ('Mapped to ' + skus.join(', ') + '.'), false);
               await load();
             } catch (err) {
               toast('ol-msg', String(err.message || err), true);
