@@ -1910,6 +1910,28 @@ export async function resolveSkuMatch(id) {
   if (error) throw new Error(error.message);
 }
 
+/** Permanently maps a Pancake SKU that will never itself exist in the catalog to a
+ * real product (Ren, 2026-09-26: "add in the pending sku match a change product") --
+ * upserted so re-mapping the same broken SKU later just overwrites the old choice.
+ * deduct_stock_on_packing() consults this as its third and final match tier (after
+ * exact-SKU and the size-variant fallback), so EVERY future order carrying this same
+ * Pancake SKU deducts against the chosen product automatically, not just this one.
+ * Re-asserting this row's own current status is what re-fires that trigger for it
+ * right now (Postgres fires "UPDATE OF status" whenever the column is referenced in
+ * the SET list, even when the value doesn't change -- same trick used earlier this
+ * session for the bulk historical remediation). */
+export async function remapSkuMatch({ id, sku, productSku, currentStatus }) {
+  const { error: aliasError } = await supabase.from('pancake_sku_aliases')
+    .upsert({ pancake_sku: sku, product_sku: productSku, created_by: await currentEmployeeId() }, { onConflict: 'pancake_sku' });
+  if (aliasError) throw new Error(aliasError.message);
+  const { error } = await supabase.from('order_item_status').update({ status: currentStatus }).eq('id', id);
+  if (error) throw new Error(error.message);
+  // Read back what the trigger actually did (deducted, or still short on stock at
+  // this branch) so the UI can say exactly what happened instead of just "saved".
+  const { data } = await supabase.from('order_item_status').select('warehouse_deduction_note').eq('id', id).maybeSingle();
+  return data ? data.warehouse_deduction_note : null;
+}
+
 // ---- Item Monitoring (89_item_monitoring_cycle_counts.sql) -- the new-system version
 // of the old sheet's "Stock by Branch" + "Cycle Count" pair. A cycle count only logs a
 // physical count and its variance; it never touches stock itself, matching the old
