@@ -22,6 +22,7 @@
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
       <div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="f-search" placeholder="Order ID, customer, tracking #, remittance #…"></div>
       <div class="field"><label>Status</label><select id="f-status"><option value="all">All</option></select></div>
+      <div class="field"><label>Shop</label><select id="f-shop"><option value="all">All</option><option value="kittymae-jewels">Kittymae Jewels</option><option value="kittymae-co">Kittymae.co</option></select></div>
       <div class="field"><label>Remitted</label><select id="f-remitted"><option value="all">All</option><option value="yes">Yes</option><option value="no">No</option></select></div>
       <div class="field"><label>Payment Type</label><select id="f-payment-type"><option value="all">All</option></select></div>
       <div class="field"><label>From <span class="muted" style="font-weight:normal;">(min Sep 1, 2026)</span></label><input type="date" id="f-from"></div>
@@ -79,7 +80,10 @@
 
 <script type="module">
 import { initShell, toast, esc } from './js/shell.js?v=20260926c';
-import { getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, setLbcPaymentType, deleteLbcShipment, subscribeToChanges } from './js/api.js?v=20260926b';
+import {
+  getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, setLbcPaymentType, deleteLbcShipment, subscribeToChanges,
+  KITTYMAE_JEWELS_SHOP_ID, KITTYMAE_CO_SHOP_ID,
+} from './js/api.js?v=20260926f';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260926b';
 import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260926b';
 
@@ -208,6 +212,7 @@ if (employee) {
 
     document.getElementById('f-search').addEventListener('input', render);
     document.getElementById('f-status').addEventListener('change', render);
+    document.getElementById('f-shop').addEventListener('change', render);
     document.getElementById('f-remitted').addEventListener('change', render);
     document.getElementById('f-payment-type').addEventListener('change', render);
     document.getElementById('f-from').addEventListener('change', render);
@@ -215,6 +220,7 @@ if (employee) {
     document.getElementById('f-clear').addEventListener('click', () => {
       document.getElementById('f-search').value = '';
       document.getElementById('f-status').value = 'all';
+      document.getElementById('f-shop').value = 'all';
       document.getElementById('f-remitted').value = 'all';
       document.getElementById('f-payment-type').value = 'all';
       document.getElementById('f-from').value = '';
@@ -237,6 +243,7 @@ if (employee) {
       return {
         q: document.getElementById('f-search').value.trim().toLowerCase(),
         status: document.getElementById('f-status').value,
+        shop: document.getElementById('f-shop').value,
         remitted: document.getElementById('f-remitted').value,
         paymentType: document.getElementById('f-payment-type').value,
         from: document.getElementById('f-from').value,
@@ -251,12 +258,17 @@ if (employee) {
         r.order_id.toLowerCase().includes(f.q) || r.customer_name.toLowerCase().includes(f.q) ||
         (r.tracking_number || '').toLowerCase().includes(f.q) || (r.remittance_number || '').toLowerCase().includes(f.q));
       if (f.status !== 'all') rows = rows.filter((r) => r.status === f.status);
+      // Kittymae Jewels also covers every manually-added shipment (no Pancake order
+      // behind it, so pancake_shop_id is null) -- it's the original/default shop, not
+      // a third bucket to add to the dropdown.
+      if (f.shop === 'kittymae-jewels') rows = rows.filter((r) => r.pancake_shop_id == null || r.pancake_shop_id === KITTYMAE_JEWELS_SHOP_ID);
+      if (f.shop === 'kittymae-co') rows = rows.filter((r) => r.pancake_shop_id === KITTYMAE_CO_SHOP_ID);
       if (f.paymentType !== 'all') rows = rows.filter((r) => r.payment_type === f.paymentType);
       if (f.remitted !== 'all') rows = rows.filter((r) => r.remitted === (f.remitted === 'yes'));
       const effectiveFrom = f.from && f.from > LBC_ACTIVE_FROM_DATE ? f.from : LBC_ACTIVE_FROM_DATE;
       rows = rows.filter((r) => r.ship_date >= effectiveFrom);
       if (f.to) rows = rows.filter((r) => r.ship_date <= f.to);
-      const hasFilters = !!(f.q || f.status !== 'all' || f.paymentType !== 'all' || f.remitted !== 'all' || f.from || f.to);
+      const hasFilters = !!(f.q || f.status !== 'all' || f.shop !== 'all' || f.paymentType !== 'all' || f.remitted !== 'all' || f.from || f.to);
 
       const counts = STATUSES.reduce((acc, s) => { acc[s] = rows.filter((r) => r.status === s).length; return acc; }, {});
       // SF Paid shipments have nothing to collect on delivery, so they never count toward
@@ -267,7 +279,9 @@ if (employee) {
         tile(counts['Returned to Sender'], 'Returned') + tile(money(outstanding), 'COD Not Yet Remitted');
       const activeEl = document.getElementById('lbc-active');
       activeEl.innerHTML = activeFiltersHtml([
-        { label: 'Search', value: esc(f.q) }, { label: 'Status', value: esc(f.status) }, { label: 'Payment Type', value: esc(f.paymentType) },
+        { label: 'Search', value: esc(f.q) }, { label: 'Status', value: esc(f.status) },
+        { label: 'Shop', value: f.shop === 'all' ? '' : (f.shop === 'kittymae-co' ? 'Kittymae.co' : 'Kittymae Jewels') },
+        { label: 'Payment Type', value: esc(f.paymentType) },
         { label: 'Remitted', value: f.remitted === 'all' ? '' : (f.remitted === 'yes' ? 'Yes' : 'No') },
         { label: 'From', value: esc(f.from) }, { label: 'To', value: esc(f.to) },
       ], 'f-clear');
