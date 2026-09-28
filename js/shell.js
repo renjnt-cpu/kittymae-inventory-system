@@ -1,12 +1,12 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20260926a';
-import { listMyPermissions } from './api.js?v=20260926a';
-import { initActivityFeed } from './activityFeed.js?v=20260926a';
-import { localDateStr } from './uiKit.js?v=20260926a';
-import { showBirthdayBanner } from './birthdayBanner.js?v=20260926a';
-import { initAdminChat } from './adminChat.js?v=20260926a';
+import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20260928a';
+import { listMyPermissions } from './api.js?v=20260928a';
+import { initActivityFeed } from './activityFeed.js?v=20260928a';
+import { localDateStr } from './uiKit.js?v=20260928a';
+import { showBirthdayBanner } from './birthdayBanner.js?v=20260928a';
+import { initAdminChat } from './adminChat.js?v=20260928a';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -94,6 +94,7 @@ export async function initShell(activePage) {
     hr: { label: 'HR — 201 File', href: 'hr.html' },
     'access-checklist': { label: 'Access Checklist', href: 'access-checklist.html' },
     'access-matrix': { label: 'Position Access Matrix', href: 'access-matrix.html' },
+    'data-backup': { label: 'Data Backup', href: 'data-backup.html' },
   };
   const pages = [];
   const scopedIds = jobTitle && ERP_SCOPED_JOB_TITLES[jobTitle];
@@ -170,6 +171,10 @@ export async function initShell(activePage) {
       // Admin see and edit what each role/position grants, and grant/revoke individual
       // overrides, instead of that living only in migration files.
       pages.push({ id: 'access-matrix', ...ALL_PAGE_DEFS['access-matrix'] });
+      // Admin-only self-serve export of dated records + their Storage photos (Ren,
+      // 2026-09-26: wanted a way to re-download this himself instead of a one-off
+      // manual export) -- Storage files aren't covered by Supabase's own daily backups.
+      pages.push({ id: 'data-backup', ...ALL_PAGE_DEFS['data-backup'] });
     }
   }
 
@@ -193,7 +198,7 @@ export async function initShell(activePage) {
     { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers', 'pull-out'] },
     { label: 'Operations', ids: ['lbc', 'assets'] },
     { label: 'Finance', ids: ['bills', 'transactions'] },
-    { label: 'People', ids: ['hr', 'access-checklist', 'access-matrix'] },
+    { label: 'People', ids: ['hr', 'access-checklist', 'access-matrix', 'data-backup'] },
   ];
   const pageById = Object.fromEntries(pages.map((p) => [p.id, p]));
   const navHtml = NAV_GROUPS.map((g) => {

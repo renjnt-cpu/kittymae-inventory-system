@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Backup — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css?v=20260928a">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+<main>
+  <div id="root"><div class="muted">Loading…</div></div>
+</main>
+
+<script type="module">
+import { initShell, esc, toast } from './js/shell.js?v=20260928a';
+import { buildBackupZip } from './js/dataBackup.js?v=20260928a';
+
+const employee = await initShell('data-backup');
+if (employee) {
+  const root = document.getElementById('root');
+  if (employee.role !== 'Admin') {
+    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Data Backup is limited to Admin.</p></div></div>';
+  } else {
+    const today = new Date().toISOString().slice(0, 10);
+    const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    root.innerHTML =
+      '<div id="backup-msg"></div>' +
+      '<div class="card">' +
+        '<h3>Data Backup</h3>' +
+        '<p class="muted" style="margin-top:-4px;">Downloads a zip with the records and photos for Bills, Scrap, Refunds, and Layaway Payments in the date range below -- including the actual attached photos, which are NOT part of Supabase\'s own automatic daily backups.</p>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
+          '<div class="field"><label>From</label><input type="date" id="backup-from" value="' + monthAgo + '"></div>' +
+          '<div class="field"><label>To</label><input type="date" id="backup-to" value="' + today + '"></div>' +
+          '<button type="button" class="btn small secondary" id="backup-all-time">All Time</button>' +
+          '<button type="button" class="btn" id="backup-go">Download Backup</button>' +
+        '</div>' +
+        '<p class="muted" id="backup-status" style="margin-bottom:0;"></p>' +
+      '</div>';
+
+    document.getElementById('backup-all-time').addEventListener('click', () => {
+      document.getElementById('backup-from').value = '';
+      document.getElementById('backup-to').value = '';
+    });
+
+    document.getElementById('backup-go').addEventListener('click', async () => {
+      const btn = document.getElementById('backup-go');
+      const status = document.getElementById('backup-status');
+      const fromDate = document.getElementById('backup-from').value;
+      const toDate = document.getElementById('backup-to').value;
+      btn.disabled = true;
+      status.textContent = 'Starting…';
+      try {
+        const result = await buildBackupZip(fromDate, toDate, (text) => { status.textContent = text; });
+        if (!result) {
+          status.textContent = '';
+          toast('backup-msg', 'No records with photos found in that date range.', true);
+        } else {
+          const url = URL.createObjectURL(result.blob);
+          const a = document.createElement('a');
+          const stamp = (fromDate || 'start') + '_to_' + (toDate || 'today');
+          a.href = url;
+          a.download = 'kittymae-backup_' + stamp + '.zip';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+          status.textContent = '';
+          toast('backup-msg', 'Downloaded: ' + result.recordCount + ' record(s), ' + result.fileCount + ' photo(s)' + (result.skipped ? ', ' + result.skipped + ' skipped' : '') + '.', false);
+        }
+      } catch (err) {
+        status.textContent = '';
+        toast('backup-msg', String(err.message || err), true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+}
+</script>
+</body>
+</html>
