@@ -10,11 +10,16 @@ import { initAdminChat } from './adminChat.js?v=20260928a';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
+// POS/Layaway/Scrap/Subasta records now link cross-app to kittymae-pos' own
+// branches.html (Ren, 2026-09-28: "remove branches in ERP since theres already in the
+// POS") -- that page is open to any authenticated employee there, so this deep link
+// always resolves regardless of who clicks it.
+const KITTYMAE_POS_BASE = 'https://renjnt-cpu.github.io/kittymae-pos/';
 const ACTIVITY_LINKS = {
-  pos_sale: 'branches.html?tab=pos&open=',
-  layaway_holds: 'branches.html?tab=layaway&open=',
-  scrap_entries: 'branches.html?tab=scrap&open=',
-  subasta_items: 'branches.html?tab=subasta',
+  pos_sale: KITTYMAE_POS_BASE + 'branches.html?tab=pos&open=',
+  layaway_holds: KITTYMAE_POS_BASE + 'branches.html?tab=layaway&open=',
+  scrap_entries: KITTYMAE_POS_BASE + 'branches.html?tab=scrap&open=',
+  subasta_items: KITTYMAE_POS_BASE + 'branches.html?tab=subasta',
   pull_out_records: 'pull-out.html?open=',
   inventory_transfers: 'transfers.html?open=',
   inventory_transactions: 'item-monitoring.html',
@@ -39,7 +44,10 @@ const ERP_BLOCKED_JOB_TITLES = [];
 // UNSCOPED_POSITIONS already lets act company-wide once they can reach the page --
 // full access to just these pages, nothing else in the sidebar, regardless of what
 // role/position/extra_page_access would otherwise grant.
-const ERP_SCOPED_JOB_TITLES = { 'Sales Admin Associate': ['item-monitoring', 'transfers', 'refunds', 'branches'] };
+// 'branches' removed from this list 2026-09-28 -- the page it pointed to no longer
+// exists in this app (Layaway access for this job title now goes through kittymae-pos'
+// own branches.html instead, open to any authenticated employee there).
+const ERP_SCOPED_JOB_TITLES = { 'Sales Admin Associate': ['item-monitoring', 'transfers', 'refunds'] };
 
 export async function initShell(activePage) {
   const session = await requireSession();
@@ -79,7 +87,6 @@ export async function initShell(activePage) {
 
   const ALL_PAGE_DEFS = {
     dashboard: { label: 'Dashboard', href: 'dashboard.html' },
-    branches: { label: 'Branches', href: 'branches.html' },
     'online-orders': { label: 'Online Orders', href: 'online-orders.html' },
     'online-orders-kmco': { label: 'Online Orders — Kittymae.co', href: 'online-orders-kmco.html' },
     products: { label: 'SKU Catalog', href: 'products.html' },
@@ -105,16 +112,11 @@ export async function initShell(activePage) {
     scopedIds.forEach((id) => pages.push({ id, ...ALL_PAGE_DEFS[id] }));
   } else {
     pages.push({ id: 'dashboard', ...ALL_PAGE_DEFS.dashboard });
-    if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant'].includes(employee.position)) {
-      // Personal Assistant is view-only here -- branches.html has no add/edit RLS grant
-      // for this position (no branch_id, not in POSITION_MANAGERS), so canAddHere()/
-      // canWriteHere() already resolve to false for her; this just lets her find the page.
-      pages.push({ id: 'branches', ...ALL_PAGE_DEFS.branches });
-    }
-    // Online Orders used to share Branches' audience exactly (it was a sub-tab there),
-    // but Ren, 2026-09-25 widened only this page's access ("give access to admin
-    // assistant, inventory staff, auditor, and both supervisor") without reopening
-    // Branches (POS/Layaway/Scrap/Subasta/Branch Capital) to the same group.
+    // Branches (POS Walk-In/Layaway/Scrap/Subasta) removed from the ERP (Ren,
+    // 2026-09-28: "remove branches in ERP since theres already in the POS") -- the
+    // kittymae-pos app's own branches.html has byte-identical functionality and, unlike
+    // this app, is open to any authenticated employee (no role/position gate at all),
+    // so nobody lost access by this removing it here.
     if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) ||
       ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor', 'Customer Care Staff'].includes(employee.position)) {
       pages.push({ id: 'online-orders', ...ALL_PAGE_DEFS['online-orders'] });
@@ -194,7 +196,7 @@ export async function initShell(activePage) {
   // must have a home in exactly one group.
   const NAV_GROUPS = [
     { label: 'Overview', ids: ['dashboard'] },
-    { label: 'Sales', ids: ['branches', 'online-orders', 'online-orders-kmco', 'refunds'] },
+    { label: 'Sales', ids: ['online-orders', 'online-orders-kmco', 'refunds'] },
     { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers', 'pull-out'] },
     { label: 'Operations', ids: ['lbc', 'assets'] },
     { label: 'Finance', ids: ['bills', 'transactions'] },
