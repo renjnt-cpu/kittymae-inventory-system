@@ -51,7 +51,13 @@ if (employee) {
   // Branch Supervisor both submit a pending request instead (request_product_edit())
   // via the exact same edit form; products_update_admin_only blocks a direct UPDATE at
   // the RLS level too, so this isn't just a UI nicety.
-  const needsApproval = !isAdmin;
+  // Ren, 2026-09-29: "let this supervisor work on this to update the product just give
+  // her access to edit and change product" -- one named person (Lianessa), not a role
+  // change, so this checks her individual extra_page_access grant rather than widening
+  // who counts as Admin. Deliberately NOT folded into isAdmin itself, since isAdmin also
+  // drives canApprove below -- she gets to edit directly, not to approve others' requests.
+  const canEditImmediately = isAdmin || (employee.extra_page_access || []).includes('products_edit');
+  const needsApproval = !canEditImmediately;
   // Ren, 2026-09-21: reversed the "only me" approval call from 3 days ago -- Branch
   // Supervisor can now also approve/reject a pending Price/Grams/etc. request, on top
   // of Admin (approve_product_edit()/reject_product_edit() enforce this server-side
