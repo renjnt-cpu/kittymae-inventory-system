@@ -167,7 +167,7 @@ export async function initShell(activePage) {
     // Phase 1 of the HR-201 migration (Ren, 2026-09-29) -- checks employee.jobTitle
     // instead of employee.position now; see the jobTitle assignment above for why.
     if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) ||
-      ['Admin Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor'].includes(employee.jobTitle) ||
+      ['Admin Assistant', 'Admin Associate', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor', 'Supervisor'].includes(employee.jobTitle) ||
       (employee.extra_page_access || []).includes('lbc')) {
       // COD parcels shipped via LBC for online orders -- company-wide, not per-branch.
       pages.push({ id: 'lbc', ...ALL_PAGE_DEFS.lbc });
