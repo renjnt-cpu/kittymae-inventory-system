@@ -161,7 +161,9 @@ const ADMIN_ONLY_EDIT_BRANCHES = [2, 4];
 // Product actions.
 // Checks employee.jobTitle (HR 201-file), not employee.position, as of 2026-09-29 --
 // Ren: "lets stick to hr 201 file that will be our basis in the future".
-const SKU_MATCH_SUPERVISOR_POSITIONS = ['Operations Supervisor', 'Inventory Supervisor'];
+// Generic "Supervisor" added 2026-09-29 (Ren: "supervisor can edit product in the
+// pending sku match"), same broadening as LBC Monitoring's own access list.
+const SKU_MATCH_SUPERVISOR_POSITIONS = ['Operations Supervisor', 'Inventory Supervisor', 'Supervisor'];
 
 /** Packaging Details (Ren, 2026-09-24: "list down all the details under packaging in
  * pancake") -- parses the raw Pancake order payload into the fields someone actually

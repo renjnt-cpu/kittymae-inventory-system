@@ -139,7 +139,9 @@ function wireProductPicker(container, initialSkus, onCountChange) {
 }
 
 const ADMIN_ONLY_EDIT_BRANCHES = [2, 4];
-const SKU_MATCH_SUPERVISOR_POSITIONS = ['Operations Supervisor', 'Inventory Supervisor'];
+// Generic "Supervisor" added 2026-09-29 (Ren: "supervisor can edit product in the
+// pending sku match"), same broadening as LBC Monitoring's own access list.
+const SKU_MATCH_SUPERVISOR_POSITIONS = ['Operations Supervisor', 'Inventory Supervisor', 'Supervisor'];
 
 function renderPackaging(payload) {
   if (!payload) return '<div class="msg error" style="margin:8px 4px;">No packaging details captured for this order.</div>';
