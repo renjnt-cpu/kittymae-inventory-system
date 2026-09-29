@@ -84,6 +84,16 @@ export async function initShell(activePage) {
     // locked out -- fail open, same spirit as the SKU autocomplete's own failed-
     // lookup handling elsewhere in this app.
   }
+  // Ren, 2026-09-29: "lets stick to hr 201 file that will be our basis in the future" --
+  // employees.position had drifted out of sync with the 201-file's own job_title for
+  // real staff (Jessica/NISSY HEART's real job is "Inventory Staff" per HR, but
+  // employees.position said "Admin Assistant"; Marjorie's employees.position was empty
+  // even though her 201-file has always said "Admin Associate"). Exposed here so every
+  // page's own position-based gate can read employee.jobTitle instead of
+  // employee.position -- migrated one feature at a time (LBC Monitoring + Online Orders
+  // first), not a blanket rename, since dozens of other RLS policies still key off the
+  // old field and need their own review before switching.
+  employee.jobTitle = jobTitle;
 
   const ALL_PAGE_DEFS = {
     dashboard: { label: 'Dashboard', href: 'dashboard.html' },
@@ -117,8 +127,10 @@ export async function initShell(activePage) {
     // kittymae-pos app's own branches.html has byte-identical functionality and, unlike
     // this app, is open to any authenticated employee (no role/position gate at all),
     // so nobody lost access by this removing it here.
+    // Phase 1 of the HR-201 migration (Ren, 2026-09-29) -- checks employee.jobTitle
+    // instead of employee.position now; see the jobTitle assignment above for why.
     if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) ||
-      ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor', 'Customer Care Staff'].includes(employee.position)) {
+      ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor', 'Customer Care Staff'].includes(employee.jobTitle)) {
       pages.push({ id: 'online-orders', ...ALL_PAGE_DEFS['online-orders'] });
       // Second Pancake shop (Ren, 2026-09-26: "lets go for next 2nd account of pancake
       // namely kittymae.co ... better make a new folder under sales kittymae.co") --
@@ -152,8 +164,10 @@ export async function initShell(activePage) {
     if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Personal Assistant', 'Admin Assistant'].includes(employee.position) || (employee.extra_page_access || []).includes('assets')) {
       pages.push({ id: 'assets', ...ALL_PAGE_DEFS.assets });
     }
+    // Phase 1 of the HR-201 migration (Ren, 2026-09-29) -- checks employee.jobTitle
+    // instead of employee.position now; see the jobTitle assignment above for why.
     if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) ||
-      ['Admin Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor'].includes(employee.position) ||
+      ['Admin Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor'].includes(employee.jobTitle) ||
       (employee.extra_page_access || []).includes('lbc')) {
       // COD parcels shipped via LBC for online orders -- company-wide, not per-branch.
       pages.push({ id: 'lbc', ...ALL_PAGE_DEFS.lbc });

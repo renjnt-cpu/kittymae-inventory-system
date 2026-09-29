@@ -26,7 +26,7 @@
 // pending-kmco (15-minute cron safety nets); no historical backfill has been run for
 // this shop yet (~8,600 total orders here, vs kittymae jewels' 35,000+, so a full
 // backfill would be far cheaper if Ren wants one later).
-import { initShell, toast, esc } from './js/shell.js?v=20260928b';
+import { initShell, toast, esc } from './js/shell.js?v=20260929a';
 import {
   getBranches, listOrderItemStatuses, listOrderHistoryForItem, getOrderItemStatusCounts,
   getOrderItemPackaging, ORDER_ITEM_STATUS_ROW_CAP, setOrderItemStatus, deleteOrderItemStatus,
@@ -183,18 +183,20 @@ function renderPackaging(payload) {
 }
 
 // Same audience as kittymae jewels' Online Orders -- one shared business, same staff.
+// Checks employee.jobTitle (HR 201-file), not employee.position, as of 2026-09-29 --
+// Ren: "lets stick to hr 201 file that will be our basis in the future".
 const GATE_ROLES = ['Admin', 'Manager', 'Branch Supervisor'];
 const GATE_POSITIONS = ['Sales Admin Associate', 'Admin Assistant', 'Personal Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor', 'Customer Care Staff'];
 
 const employee = await initShell('online-orders-kmco');
 if (employee) {
-  const canView = GATE_ROLES.includes(employee.role) || GATE_POSITIONS.includes(employee.position);
+  const canView = GATE_ROLES.includes(employee.role) || GATE_POSITIONS.includes(employee.jobTitle);
   const root = document.getElementById('ol-root');
   if (!canView) {
     root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Ask an Admin if you need to see this.</p></div></div>';
   } else {
     const isAdmin = employee.role === 'Admin';
-    const canResolveSkuMatch = isAdmin || SKU_MATCH_SUPERVISOR_POSITIONS.includes(employee.position);
+    const canResolveSkuMatch = isAdmin || SKU_MATCH_SUPERVISOR_POSITIONS.includes(employee.jobTitle);
     const branches = await getBranches();
     const sort = { field: 'default', dir: 'desc' };
 
@@ -426,7 +428,11 @@ if (employee) {
               '<td data-label="SKU" style="font-family:monospace;font-size:12px;">' + esc(r.sku || '—') + '</td>' +
               '<td data-label="Qty">' + r.qty + '</td>' +
               '<td data-label="Branch">' + (r.branches ? branchBadge(esc, r.branches.name, r.branch_id, branches) : '—') + '</td>' +
-              '<td data-label="Status"><span class="badge ' + statusBadgeClass(r.status) + '">' + esc(prettyStatus(r.status)) + '</span></td>' +
+              '<td data-label="Status">' +
+                (canResolveSkuMatch
+                  ? '<select data-status-for="' + r.id + '" class="badge ' + statusBadgeClass(r.status) + '" style="border:none;font:inherit;">' + statusOptionsFor(r.status) + '</select>'
+                  : '<span class="badge ' + statusBadgeClass(r.status) + '">' + esc(prettyStatus(r.status)) + '</span>') +
+              '</td>' +
               '<td data-label="Order / Customer" class="full-row" style="font-size:11px;">' + esc(r.order_reference || '—') + (r.customer_name ? '<div class="muted">' + esc(r.customer_name) + '</div>' : '') + '</td>' +
               '<td data-label="First Flagged" style="font-size:11px;white-space:nowrap;">' + fmtDate(r.created_at) + '</td>' +
               '<td class="full-row" style="white-space:nowrap;">' +
@@ -438,6 +444,22 @@ if (employee) {
             '<tr class="remap-row" style="display:none;"><td colspan="8" class="full-row"></td></tr>'
           ).join('') +
           '</tbody></table></div>';
+
+        // Ren, 2026-09-29: "for both online orders under pending sku match give both
+        // supervisor edit and change product" -- same inline status-correction the main
+        // board already gives editable rows, just gated to canResolveSkuMatch here.
+        list.querySelectorAll('[data-status-for]').forEach((sel) => sel.addEventListener('change', async () => {
+          const id = sel.dataset.statusFor;
+          sel.disabled = true;
+          try {
+            await setOrderItemStatus(id, sel.value);
+            toast('ol-msg', 'Status updated.', false);
+            await load();
+          } catch (err) {
+            toast('ol-msg', String(err.message || err), true);
+            sel.disabled = false;
+          }
+        }));
 
         function closeAllRemaps() {
           document.querySelectorAll('.remap-row').forEach((row) => { row.style.display = 'none'; row.querySelector('td').innerHTML = ''; });

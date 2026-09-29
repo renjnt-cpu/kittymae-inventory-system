@@ -79,7 +79,7 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260928b';
+import { initShell, toast, esc } from './js/shell.js?v=20260929a';
 import {
   getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, setLbcPaymentType, deleteLbcShipment, subscribeToChanges,
   KITTYMAE_JEWELS_SHOP_ID, KITTYMAE_CO_SHOP_ID,
@@ -119,9 +119,12 @@ if (employee) {
   // supervisor" -- "both supervisor" is the Operations Supervisor / Inventory Supervisor
   // pair already used together everywhere else in this app (POSITION_MANAGERS), not the
   // Branch Supervisor role already covered above.
+  // Checks employee.jobTitle (HR 201-file), not employee.position, as of 2026-09-29 --
+  // Ren: "lets stick to hr 201 file that will be our basis in the future". Matches the
+  // same switch in the RLS policy backing listLbcShipments() (93_lbc_phase1... migration).
   const LBC_ACCESS_POSITIONS = ['Admin Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor'];
   const hasAccess = ['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) ||
-    LBC_ACCESS_POSITIONS.includes(employee.position) || (employee.extra_page_access || []).includes('lbc');
+    LBC_ACCESS_POSITIONS.includes(employee.jobTitle) || (employee.extra_page_access || []).includes('lbc');
 
   if (!hasAccess) {
     document.querySelector('main').innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">LBC Monitoring is restricted to Admin, Manager, Branch Supervisor, Admin Assistant, Inventory Staff, Auditor, Operations Supervisor, Inventory Supervisor, or individually granted accounts.</p></div></div>';
