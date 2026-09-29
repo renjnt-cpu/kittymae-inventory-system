@@ -122,12 +122,14 @@ if (employee) {
   // Checks employee.jobTitle (HR 201-file), not employee.position, as of 2026-09-29 --
   // Ren: "lets stick to hr 201 file that will be our basis in the future". Matches the
   // same switch in the RLS policy backing listLbcShipments() (93_lbc_phase1... migration).
-  const LBC_ACCESS_POSITIONS = ['Admin Assistant', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor'];
+  // "Admin Associate" and generic "Supervisor" added 2026-09-29 (Ren: "admin associate
+  // and inventory staff and supervisor can access the lbc monitoring now").
+  const LBC_ACCESS_POSITIONS = ['Admin Assistant', 'Admin Associate', 'Inventory Staff', 'Auditor', 'Operations Supervisor', 'Inventory Supervisor', 'Supervisor'];
   const hasAccess = ['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) ||
     LBC_ACCESS_POSITIONS.includes(employee.jobTitle) || (employee.extra_page_access || []).includes('lbc');
 
   if (!hasAccess) {
-    document.querySelector('main').innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">LBC Monitoring is restricted to Admin, Manager, Branch Supervisor, Admin Assistant, Inventory Staff, Auditor, Operations Supervisor, Inventory Supervisor, or individually granted accounts.</p></div></div>';
+    document.querySelector('main').innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">LBC Monitoring is restricted to Admin, Manager, Branch Supervisor, Admin Assistant, Admin Associate, Inventory Staff, Auditor, Operations Supervisor, Inventory Supervisor, Supervisor, or individually granted accounts.</p></div></div>';
   } else {
     const canDelete = ['Admin', 'Manager'].includes(employee.role);
     const branches = await getBranches();
