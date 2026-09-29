@@ -83,9 +83,9 @@ const PACKED_LB_SORT_COMPARATORS = { name: byText('name'), orders: byNumber('ord
 // pancake" -- ranks who's assigned as Pancake's own assigning_care for the order
 // (who actually handled/converted the sale), not our packed_by tracking above.
 const CARE_LB_SORT_FIELDS = [
-  { key: 'name', label: 'Staff (Pancake account)' }, { key: 'orders', label: 'Orders' }, { key: 'qty', label: 'Qty' },
+  { key: 'name', label: 'Staff (Pancake account)' }, { key: 'orders', label: 'Orders' }, { key: 'qty', label: 'Qty' }, { key: 'amount', label: 'Total Amount' },
 ];
-const CARE_LB_SORT_COMPARATORS = { name: byText('name'), orders: byNumber('orders'), qty: byNumber('qty') };
+const CARE_LB_SORT_COMPARATORS = { name: byText('name'), orders: byNumber('orders'), qty: byNumber('qty'), amount: byNumber('amount') };
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + 'g';
@@ -581,26 +581,37 @@ if (employee) {
       careEntries.forEach((r) => {
         const rawName = r.care.name.trim();
         const name = CARE_NAME_ALIASES[rawName] || rawName;
-        const e = byName[name] || (byName[name] = { orderRefs: new Set(), qty: 0 });
+        const e = byName[name] || (byName[name] = { orderRefs: new Set(), qty: 0, amount: 0 });
+        // amount is the ORDER's total_price, not per-item -- only add it the first time
+        // this order_reference is seen for this person, same order_reference can appear
+        // once per SKU line item and would otherwise be double (or triple-) counted.
+        if (!e.orderRefs.has(r.order_reference)) e.amount += Number(r.amount || 0);
         e.orderRefs.add(r.order_reference);
         e.qty += Number(r.qty || 0);
       });
-      const unranked = Object.entries(byName).map(([name, v]) => ({ name, orders: v.orderRefs.size, qty: v.qty }));
+      const unranked = Object.entries(byName).map(([name, v]) => ({ name, orders: v.orderRefs.size, qty: v.qty, amount: v.amount }));
       const ranked = applySort(unranked, careLbSort, CARE_LB_SORT_COMPARATORS);
       const grandOrders = new Set(careEntries.map((r) => r.order_reference)).size;
       const grandQty = careEntries.reduce((s, r) => s + Number(r.qty || 0), 0);
+      const seenOrdersForAmount = new Set();
+      const grandAmount = careEntries.reduce((s, r) => {
+        if (seenOrdersForAmount.has(r.order_reference)) return s;
+        seenOrdersForAmount.add(r.order_reference);
+        return s + Number(r.amount || 0);
+      }, 0);
       const topIsHighlighted = careLbSort.dir === 'desc' && careLbSort.field !== 'name';
 
       box.innerHTML = !ranked.length
         ? '<p class="muted">No Pancake care assignments for this range.</p>'
-        : '<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Staff (Pancake account)</th><th>Orders</th><th>Qty</th></tr></thead><tbody>' +
+        : '<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Staff (Pancake account)</th><th>Orders</th><th>Qty</th><th>Total Amount</th></tr></thead><tbody>' +
             ranked.map((r, i) => '<tr' + (i === 0 && topIsHighlighted ? ' style="font-weight:bold;background:#fdf6e3;"' : '') + '>' +
               '<td data-label="Rank">' + (i + 1) + (i === 0 && topIsHighlighted ? ' 🏆' : '') + '</td>' +
               '<td data-label="Staff (Pancake account)">' + esc(r.name) + '</td>' +
               '<td data-label="Orders">' + r.orders + '</td>' +
               '<td data-label="Qty">' + r.qty + '</td>' +
+              '<td data-label="Total Amount">' + money(r.amount) + '</td>' +
             '</tr>').join('') +
-            '</tbody><tfoot><tr style="font-weight:bold;background:#f7f7f7;"><td colspan="2">Total</td><td>' + grandOrders + '</td><td>' + grandQty + '</td></tr></tfoot>' +
+            '</tbody><tfoot><tr style="font-weight:bold;background:#f7f7f7;"><td colspan="2">Total</td><td>' + grandOrders + '</td><td>' + grandQty + '</td><td>' + money(grandAmount) + '</td></tr></tfoot>' +
           '</table></div>';
     }
 

@@ -1841,7 +1841,7 @@ export async function listPackedOrders({ fromDate, toDate } = {}) {
  * as the real guarantee. */
 export async function listOnlineOrderCareAssignments({ fromDate, toDate } = {}) {
   let query = supabase.from('order_item_status')
-    .select('id, order_reference, qty, created_at, care:raw_payload->assigning_care')
+    .select('id, order_reference, qty, created_at, care:raw_payload->assigning_care, amount:raw_payload->total_price')
     .not('raw_payload->assigning_care', 'is', null)
     .order('created_at', { ascending: false })
     .limit(1000);
