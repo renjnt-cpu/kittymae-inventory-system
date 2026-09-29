@@ -13,12 +13,12 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260929b';
+import { initShell, toast, esc } from './js/shell.js?v=20260929c';
 import {
   listProducts, updateProduct, getBranches, listAllInventoryQty, subscribeToChanges,
   requestProductEdit, listProductEditRequests, approveProductEdit, rejectProductEdit,
   setProductStatus, listProductLastChanges,
-} from './js/api.js?v=20260928a';
+} from './js/api.js?v=20260928b';
 import { branchColor } from './js/branchColors.js?v=20260928a';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });

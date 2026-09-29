@@ -9,7 +9,7 @@
 import {
   listScrapEntries, getScrapCashBalances, createScrapEntry, deleteScrapEntry,
   uploadScrapAttachment, getScrapAttachmentUrl, convertScrapToSubasta, subscribeToChanges,
-} from './api.js?v=20260928a';
+} from './api.js?v=20260928b';
 import { PAYMENT_METHODS } from './paymentMethods.js?v=20260928a';
 import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './uiKit.js?v=20260928a';
 

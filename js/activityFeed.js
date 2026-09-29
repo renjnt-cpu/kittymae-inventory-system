@@ -8,7 +8,7 @@
 // Events arrive over the existing Supabase Realtime channel on activity_events; the
 // rows themselves are written by database hooks inside the same transaction as the
 // business write, so nothing can show up here that wasn't actually saved (324/325).
-import { listActivity, activityUnreadCount, markActivityRead, markAllActivityRead, subscribeToChanges, getBranches } from './api.js?v=20260928a';
+import { listActivity, activityUnreadCount, markActivityRead, markAllActivityRead, subscribeToChanges, getBranches } from './api.js?v=20260928b';
 
 const FADE_MS = { normal: 10000, important: 18000, warning: 28000, critical: null };
 const FADE_ANIM_MS = 420;
@@ -59,7 +59,7 @@ export async function initActivityFeed({ employee, headerEl, esc, links }) {
     '<div class="drawer-body">' +
       '<div class="act-filters">' +
         '<div class="field"><label>Module</label><select id="act-f-module"><option value="">All</option>' +
-          ['POS', 'Layaway', 'Scrap', 'Subasta', 'Pull Out', 'Transfers', 'Movement', 'Refunds', 'SKU Catalog'].map((m) => '<option>' + m + '</option>').join('') +
+          ['POS', 'Layaway', 'Scrap', 'Subasta', 'Pull Out', 'Transfers', 'Movement', 'Refunds', 'SKU Catalog', 'Online Orders'].map((m) => '<option>' + m + '</option>').join('') +
         '</select></div>' +
         '<div class="field"><label>Branch</label><select id="act-f-branch"><option value="">All</option>' +
           Object.keys(branchName).map((id) => '<option value="' + id + '">' + esc(branchName[id]) + '</option>').join('') +
@@ -164,6 +164,10 @@ export async function initActivityFeed({ employee, headerEl, esc, links }) {
       case 'Refunds':
         push([ev.customer_name ? esc(ev.customer_name) : null, ev.order_id ? 'Ref ' + esc(ev.order_id) : null].filter(Boolean).join(' · '));
         push([money(ev.amount), ev.new_value ? esc(ev.new_value) : null].filter(Boolean).join(' · '));
+        break;
+      case 'Online Orders':
+        push(ev.customer_name ? esc(ev.customer_name) : null);
+        push(ev.new_value ? esc(ev.new_value) : null);
         break;
       default:
         push([ev.sku ? esc(ev.sku) : null, ev.new_value ? esc(ev.new_value) : null].filter(Boolean).join(' · '));

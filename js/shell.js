@@ -2,8 +2,8 @@
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
 import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20260928a';
-import { listMyPermissions } from './api.js?v=20260928a';
-import { initActivityFeed } from './activityFeed.js?v=20260928a';
+import { listMyPermissions } from './api.js?v=20260928b';
+import { initActivityFeed } from './activityFeed.js?v=20260929a';
 import { localDateStr } from './uiKit.js?v=20260928a';
 import { showBirthdayBanner } from './birthdayBanner.js?v=20260928a';
 import { initAdminChat } from './adminChat.js?v=20260928a';
@@ -25,6 +25,7 @@ const ACTIVITY_LINKS = {
   inventory_transactions: 'item-monitoring.html',
   refunds: 'refunds.html?open=',
   products: 'products.html',
+  order_item_status: 'online-orders.html',
 };
 
 // ERP access is now also gated by 201-File Job Title, on top of role/position --

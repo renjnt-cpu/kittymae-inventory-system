@@ -1099,6 +1099,42 @@ export async function listLbcShipments() {
   return attachEmployeeNames(data, { creator: 'created_by' });
 }
 
+/** Ren, 2026-09-29: "if theres error on online orders dont let lbc monitoring input the
+ * details make it notify to the supervisor theres an error" -- lbc_shipments.order_id is
+ * free text with no FK to order_item_status, so this looks it up by value at save time.
+ * Checks BOTH Pancake shops (order_reference isn't unique across kittymae jewels/
+ * kittymae.co -- see the pancake_shop_id work) since the form has no shop field to
+ * disambiguate; a problem in EITHER shop's same-numbered order blocks the save rather
+ * than risk silently missing the real one. "Error" = any row still short of a clean
+ * deduction (Skipped: no SKU match, no stock, or no branch mapped -- not just the
+ * catalog-gap case), or the order not existing in Online Orders at all. */
+export async function checkOnlineOrderForLbc(orderId) {
+  if (!orderId) return { found: false, hasError: false, note: null };
+  const { data, error } = await supabase.from('order_item_status')
+    .select('warehouse_deduction_note, warehouse_deducted_at')
+    .eq('order_reference', orderId)
+    .limit(50);
+  if (error) throw new Error(error.message);
+  if (!data || !data.length) return { found: false, hasError: false, note: null };
+  const errorRow = data.find((r) => r.warehouse_deduction_note && r.warehouse_deduction_note.startsWith('Skipped:') && !r.warehouse_deducted_at);
+  return { found: true, hasError: !!errorRow, note: errorRow ? errorRow.warehouse_deduction_note : null };
+}
+
+/** Posts to the existing header-bell/activity-feed system (js/activityFeed.js) --
+ * 'Online Orders' was already reserved as a module category in log_activity(), just
+ * never used until now. 'critical' priority never auto-fades (see FADE_MS), so it stays
+ * visible until someone dismisses or reads it. */
+export async function notifyLbcOrderError({ orderId, customerName, note }) {
+  const { error } = await supabase.rpc('log_activity', {
+    p_module: 'Online Orders', p_action: 'LBC Entry Blocked',
+    p_title: 'LBC entry blocked: order #' + orderId + ' has an unresolved issue',
+    p_priority: 'critical', p_branch_id: null, p_record_table: 'order_item_status', p_record_id: null,
+    p_order_id: orderId, p_customer_name: customerName || null,
+    p_new_value: note || 'Order not found in Online Orders.',
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function createLbcShipment({ branchId, orderId, customerName, trackingNumber, shipDate, codAmount, paymentType, notes }) {
   const empId = await currentEmployeeId();
   const { error } = await supabase.from('lbc_shipments').insert({

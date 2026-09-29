@@ -12,7 +12,7 @@
 import {
   searchProducts, listActiveEmployees, createPosSale, listSales, listSalePayments,
   updatePosSaleItem, updatePosSalePayments, markCodCollected, deletePosSale, markSalePickedUp, subscribeToChanges,
-} from './api.js?v=20260928a';
+} from './api.js?v=20260928b';
 import { branchColor } from './branchColors.js?v=20260928a';
 import { POS_PAYMENT_METHODS } from './paymentMethods.js?v=20260928a';
 import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, localDateStr, flagInvalid } from './uiKit.js?v=20260928a';

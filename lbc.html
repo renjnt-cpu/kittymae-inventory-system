@@ -79,11 +79,11 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20260929b';
+import { initShell, toast, esc } from './js/shell.js?v=20260929c';
 import {
   getBranches, listLbcShipments, createLbcShipment, updateLbcShipment, setLbcStatus, setLbcRemitted, setLbcPaymentType, deleteLbcShipment, subscribeToChanges,
-  KITTYMAE_JEWELS_SHOP_ID, KITTYMAE_CO_SHOP_ID,
-} from './js/api.js?v=20260928a';
+  KITTYMAE_JEWELS_SHOP_ID, KITTYMAE_CO_SHOP_ID, checkOnlineOrderForLbc, notifyLbcOrderError,
+} from './js/api.js?v=20260928b';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260928a';
 import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260928a';
 
@@ -144,6 +144,28 @@ if (employee) {
     document.getElementById('lbc-sort-slot').outerHTML = sortControlHtml(LBC_SORT_FIELDS, sort, 'lbc-sort-field', 'lbc-sort-dir');
     wireSortControl('lbc-sort-field', 'lbc-sort-dir', sort, render);
 
+    // Ren, 2026-09-29: "if theres error on online orders dont let lbc monitoring input
+    // the details make it notify to the supervisor theres an error" -- shared by both
+    // the create and edit forms below. Returns true (and shows the reason + posts a
+    // critical activity-feed notice) if the save should be blocked, false if it's clear
+    // to proceed. Fails open on a lookup error (network hiccup) rather than blocking
+    // real shipment entry over an unrelated glitch.
+    async function blockIfOnlineOrderHasIssue(orderId, customerName) {
+      let check;
+      try { check = await checkOnlineOrderForLbc(orderId); } catch (err) { return false; }
+      if (!check.found) {
+        toast('lbc-msg', 'Order #' + orderId + ' was not found in Online Orders -- notified a supervisor.', true);
+        try { await notifyLbcOrderError({ orderId, customerName, note: null }); } catch (err) { /* the block itself still stands */ }
+        return true;
+      }
+      if (check.hasError) {
+        toast('lbc-msg', 'Order #' + orderId + ' has an unresolved issue in Online Orders (' + check.note + ') -- notified a supervisor.', true);
+        try { await notifyLbcOrderError({ orderId, customerName, note: check.note }); } catch (err) { /* the block itself still stands */ }
+        return true;
+      }
+      return false;
+    }
+
     // ---- form drawer ----
     const form = document.getElementById('lbc-form');
     form.shipDate.value = localDateStr();
@@ -163,11 +185,14 @@ if (employee) {
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const f = ev.target;
+      const orderId = f.orderId.value.trim();
+      const customerName = f.customerName.value.trim();
       const btn = document.getElementById('lbc-submit-btn');
       btn.disabled = true;
+      if (await blockIfOnlineOrderHasIssue(orderId, customerName)) { btn.disabled = false; return; }
       try {
         const newId = await createLbcShipment({
-          orderId: f.orderId.value.trim(), customerName: f.customerName.value.trim(),
+          orderId, customerName,
           trackingNumber: f.trackingNumber.value.trim(), branchId: f.branchId.value ? Number(f.branchId.value) : null,
           shipDate: f.shipDate.value, codAmount: f.codAmount.value ? Number(f.codAmount.value) : null,
           paymentType: f.paymentType.value, notes: f.notes.value.trim(),
@@ -491,11 +516,14 @@ if (employee) {
           // remittance number considered as remitted"), same rule the quick Mark
           // Remitted prompt already follows.
           const remittanceNumber = f.remittanceNumber.value.trim();
+          const orderId = f.orderId.value.trim();
+          const customerName = f.customerName.value.trim();
           const saveBtn = f.querySelector('button[type=submit]');
           saveBtn.disabled = true;
+          if (await blockIfOnlineOrderHasIssue(orderId, customerName)) { saveBtn.disabled = false; return; }
           try {
             await updateLbcShipment(r.id, {
-              orderId: f.orderId.value.trim(), customerName: f.customerName.value.trim(),
+              orderId, customerName,
               trackingNumber: f.trackingNumber.value.trim(), branchId: f.branchId.value ? Number(f.branchId.value) : null,
               shipDate: f.shipDate.value || null, codAmount: f.codAmount.value ? Number(f.codAmount.value) : null,
               paymentType: f.paymentType.value,
