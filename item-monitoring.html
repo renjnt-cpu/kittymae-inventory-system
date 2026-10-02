@@ -89,6 +89,13 @@ if (employee) {
     (canRecordPurchase ? '<div class="card">' +
       '<h3>Record Factory Purchase</h3>' +
       '<p class="muted" style="margin-top:-4px;">This is now the one place new stock (and, when needed, a brand-new SKU) enters the system -- it posts a real Stock In and shows up in the SKU Catalog right away. Product Name/Category are only used the first time a SKU is purchased; an existing SKU\'s catalog details are never overwritten. Add more than one item to log a whole delivery at once -- Branch, Date Delivered, and Current Per Gram are shared across every item below since a delivery normally arrives together.</p>' +
+      // Ren, 2026-10-02: "put this also in the record factory purchased before they
+      // input the record purchased it already reflect this" -- the running all-time
+      // totals from every purchase already on file (same 4 figures as the Factory
+      // Purchases list below), shown here too so it's visible the moment the page
+      // loads, before a new delivery is even typed in. Distinct from fp-form-summary
+      // right below, which only ever reflects the CURRENT in-progress draft.
+      '<div class="card" id="fp-overall-summary" style="background:#f7f5f0;margin:0 0 10px;padding:10px 14px;display:flex;gap:24px;flex-wrap:wrap;"></div>' +
       '<form id="fp-form" style="flex-direction:column;align-items:stretch;flex-wrap:nowrap;">' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
           fpBranchFieldHtml +
@@ -642,7 +649,33 @@ if (employee) {
     return out;
   }
 
+  // Shared by the overall (all-time) summary and the filtered-list summary below --
+  // same 4 figures either way, just over a different set of rows.
+  function fpSummaryTilesHtml(rows) {
+    const totalQty = rows.reduce((s, p) => s + Number(p.qty || 0), 0);
+    const totalPurchased = rows.reduce((s, p) => s + Number(p.purchased_amount || 0), 0);
+    const totalEstSales = rows.reduce((s, p) => s + Number(p.est_sales || 0), 0);
+    // Not every purchase has Grams recorded -- only counts the ones that do (Ren,
+    // 2026-09-24: "add grams also if theres").
+    const totalGrams = rows.reduce((s, p) => s + Number(p.total_grams || 0), 0);
+    return '<div><div class="muted" style="font-size:11px;">Total Pcs (' + rows.length + ' ' + (rows.length === 1 ? 'entry' : 'entries') + ')</div><b style="font-size:14px;">' + totalQty.toLocaleString('en-PH') + '</b></div>' +
+      '<div><div class="muted" style="font-size:11px;">Total Purchased</div><b style="font-size:14px;">' + money(totalPurchased) + '</b></div>' +
+      (totalGrams ? '<div><div class="muted" style="font-size:11px;">Total Grams</div><b style="font-size:14px;">' + weight(totalGrams) + '</b></div>' : '') +
+      (totalEstSales ? '<div><div class="muted" style="font-size:11px;">Total Estimated Sales</div><b style="font-size:14px;">' + money(totalEstSales) + '</b></div>' : '');
+  }
+
+  // Ren, 2026-10-02: all-time totals from every purchase on file, shown up by the
+  // Record Factory Purchase form itself -- visible on load, before anyone has typed a
+  // new delivery in. Only exists in the DOM for canRecordPurchase accounts (same gate
+  // as the form), so this no-ops for everyone else.
+  function renderFpOverallSummary() {
+    const box = document.getElementById('fp-overall-summary');
+    if (!box) return;
+    box.innerHTML = factoryPurchases.length ? fpSummaryTilesHtml(factoryPurchases) : '<p class="muted" style="margin:0;">No factory purchases recorded yet.</p>';
+  }
+
   function renderFactoryPurchases() {
+    renderFpOverallSummary();
     const box = document.getElementById('fp-list');
     if (!factoryPurchases.length) { box.innerHTML = '<p class="muted">No factory purchases recorded yet.</p>'; return; }
     const rows = filterFactoryPurchases(factoryPurchases);
@@ -651,18 +684,9 @@ if (employee) {
     // Ren, 2026-09-24: "total the qty and total amount of every encoded" -- sums
     // whatever's currently shown (respects the search/date-range filter above it),
     // same convention as the Sales by Admin pivot's own date-range-scoped totals.
-    const totalQty = rows.reduce((s, p) => s + Number(p.qty || 0), 0);
-    const totalPurchased = rows.reduce((s, p) => s + Number(p.purchased_amount || 0), 0);
-    const totalEstSales = rows.reduce((s, p) => s + Number(p.est_sales || 0), 0);
-    // Not every purchase has Grams recorded -- only counts the ones that do (Ren,
-    // 2026-09-24: "add grams also if theres").
-    const totalGrams = rows.reduce((s, p) => s + Number(p.total_grams || 0), 0);
     box.innerHTML =
       '<div class="card" style="background:#f7f5f0;margin-bottom:8px;padding:10px 14px;display:flex;gap:24px;flex-wrap:wrap;">' +
-        '<div><div class="muted" style="font-size:11px;">Total Pcs (' + rows.length + ' ' + (rows.length === 1 ? 'entry' : 'entries') + ')</div><b style="font-size:14px;">' + totalQty.toLocaleString('en-PH') + '</b></div>' +
-        '<div><div class="muted" style="font-size:11px;">Total Purchased</div><b style="font-size:14px;">' + money(totalPurchased) + '</b></div>' +
-        (totalGrams ? '<div><div class="muted" style="font-size:11px;">Total Grams</div><b style="font-size:14px;">' + weight(totalGrams) + '</b></div>' : '') +
-        (totalEstSales ? '<div><div class="muted" style="font-size:11px;">Total Estimated Sales</div><b style="font-size:14px;">' + money(totalEstSales) + '</b></div>' : '') +
+        fpSummaryTilesHtml(rows) +
       '</div>' +
       '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
       '<thead><tr><th>Delivered</th><th>SKU</th><th>Branch</th><th>Pcs</th><th>Sup. Price</th><th>Pancake Price</th>' +
