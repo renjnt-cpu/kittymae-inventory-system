@@ -111,6 +111,7 @@ const effectivePrice = (p) => !p ? null : p.pricing_mode === 'Per Gram'
   ? (p.current_gold_rate_per_g != null && p.gross_weight_g != null ? p.current_gold_rate_per_g * p.gross_weight_g : null)
   : p.system_selling_price;
 const lineValue = (r) => { const p = effectivePrice(r.products); return p != null ? p * r.qty : 0; };
+const lineGrams = (r) => (r.products?.gross_weight_g != null ? r.products.gross_weight_g * r.qty : 0);
 
 const employee = await initShell('pull-out');
 if (employee) {
@@ -221,6 +222,7 @@ if (employee) {
 
     document.getElementById('po-tiles').innerHTML =
       tile(out.length, 'Currently Out') + tile(out.reduce((s, r) => s + r.qty, 0), 'Qty Out') +
+      tile(weight(out.reduce((s, r) => s + lineGrams(r), 0)), 'Total Grams') +
       tile(money(out.reduce((s, r) => s + lineValue(r), 0)), 'Est. Value Out') + tile(overdueCount, 'Overdue');
     const activeEl = document.getElementById('po-active');
     activeEl.innerHTML = activeFiltersHtml([{ label: 'Search', value: esc(q) }], 'po-f-clear');
