@@ -21,6 +21,8 @@
   <div class="card">
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
       <div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="po-f-search" placeholder="SKU, item, branch, reason, who…"></div>
+      <div class="field"><label>From</label><input type="date" id="po-f-from"></div>
+      <div class="field"><label>To</label><input type="date" id="po-f-to"></div>
       <span id="po-sort-slot"></span>
       <button type="button" class="btn small secondary" id="po-f-clear">Clear Filters</button>
     </div>
@@ -213,9 +215,18 @@ if (employee) {
     // One search drives the tiles, both lists and the "Returned" count together
     // (MASTER UI rules 6/19/20).
     const q = document.getElementById('po-f-search').value.trim().toLowerCase();
-    const matches = (r) => !q || [r.sku, r.products?.item_name, r.branches?.name, r.reason, r.notes, r.puller?.full_name, r.returner?.full_name]
+    const from = document.getElementById('po-f-from').value;
+    const to = document.getElementById('po-f-to').value;
+    const matchesSearch = (r) => !q || [r.sku, r.products?.item_name, r.branches?.name, r.reason, r.notes, r.puller?.full_name, r.returner?.full_name]
       .some((v) => (v || '').toLowerCase().includes(q));
-    const rows = all.filter(matches);
+    // Dated by pulled_at (when it left the shelf), same field the default sort uses --
+    // not expected_return_date or returned_at.
+    const matchesDate = (r) => {
+      if (!from && !to) return true;
+      const d = localDateStr(new Date(r.pulled_at));
+      return (!from || d >= from) && (!to || d <= to);
+    };
+    const rows = all.filter((r) => matchesSearch(r) && matchesDate(r));
     const out = rows.filter((r) => r.status === 'Out');
     const returned = rows.filter((r) => r.status === 'Returned');
     const overdueCount = out.filter(isOverdue).length;
@@ -225,8 +236,11 @@ if (employee) {
       tile(weight(out.reduce((s, r) => s + lineGrams(r), 0)), 'Total Grams') +
       tile(money(out.reduce((s, r) => s + lineValue(r), 0)), 'Est. Value Out') + tile(overdueCount, 'Overdue');
     const activeEl = document.getElementById('po-active');
-    activeEl.innerHTML = activeFiltersHtml([{ label: 'Search', value: esc(q) }], 'po-f-clear');
+    activeEl.innerHTML = activeFiltersHtml([
+      { label: 'Search', value: esc(q) }, { label: 'From', value: esc(from) }, { label: 'To', value: esc(to) },
+    ], 'po-f-clear');
     wireProxyButtons(activeEl);
+    const hasFilters = !!(q || from || to);
 
     // Filtering (search) already picked `out`/`returned`; sort only reorders each for
     // display (section 11) -- same one control for both, per section 20's spirit.
@@ -234,7 +248,7 @@ if (employee) {
     const sortedReturned = applySort(returned, sort, PO_SORT_COMPARATORS);
     const outList = document.getElementById('po-out-list');
     outList.innerHTML = !out.length
-      ? emptyStateHtml({ message: q ? 'No pulled-out items match this search.' : 'Nothing currently pulled out.', hasFilters: !!q, clearId: 'po-f-clear', createLabel: canCreate ? '+ Pull Out Item' : null, createId: 'po-new-btn' })
+      ? emptyStateHtml({ message: hasFilters ? 'No pulled-out items match this filter.' : 'Nothing currently pulled out.', hasFilters, clearId: 'po-f-clear', createLabel: canCreate ? '+ Pull Out Item' : null, createId: 'po-new-btn' })
       : '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
         '<thead><tr><th>SKU</th><th>Item</th><th>Branch</th><th>Qty</th><th>Pulled By</th><th>Expected Return</th><th></th></tr></thead>' +
         '<tbody>' + sortedOut.map((r) => rowHtml(r, false)).join('') + '</tbody></table></div>';
@@ -243,7 +257,7 @@ if (employee) {
     document.getElementById('po-returned-count').textContent = '(' + returned.length + ')';
     const returnedList = document.getElementById('po-returned-list');
     returnedList.innerHTML = !returned.length
-      ? emptyStateHtml({ message: q ? 'No returned items match this search.' : 'No returned items yet.', hasFilters: !!q, clearId: 'po-f-clear' })
+      ? emptyStateHtml({ message: hasFilters ? 'No returned items match this filter.' : 'No returned items yet.', hasFilters, clearId: 'po-f-clear' })
       : '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
         '<thead><tr><th>SKU</th><th>Item</th><th>Branch</th><th>Qty</th><th>Returned By</th><th></th></tr></thead>' +
         '<tbody>' + sortedReturned.map((r) => rowHtml(r, true)).join('') + '</tbody></table></div>';
@@ -502,8 +516,12 @@ if (employee) {
   });
 
   document.getElementById('po-f-search').addEventListener('input', render);
+  document.getElementById('po-f-from').addEventListener('change', render);
+  document.getElementById('po-f-to').addEventListener('change', render);
   document.getElementById('po-f-clear').addEventListener('click', () => {
     document.getElementById('po-f-search').value = '';
+    document.getElementById('po-f-from').value = '';
+    document.getElementById('po-f-to').value = '';
     render();
   });
 
