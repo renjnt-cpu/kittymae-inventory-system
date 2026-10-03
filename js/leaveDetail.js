@@ -5,7 +5,7 @@
 import {
   esc, statusBadge, fmtDate, fmtDateTime, rangeText, num, daysText, fmtBytes, kv, errorsText,
   EMPLOYEE_EDITABLE, OPEN_STATUSES, PENDING_HR, DECISION_STATUSES, DOC_KINDS, yearOf,
-} from './leaveUi.js?v=20261004b';
+} from './leaveUi.js?v=20261004c';
 
 const $ = (id) => document.getElementById(id);
 let cur = null; // { ctx, id, req, timeline, comments, attachments }
@@ -70,6 +70,27 @@ function who(ctx, employeeId, fallback) {
   return e ? e.full_name : (employeeId ? (fallback || 'HR') : '—');
 }
 
+/** HR / Final Approver only: other people in the same department who already have approved leave
+ * overlapping this request. Purely informational -- nothing is ever rejected because of it. */
+export function overlapInfo(ctx, r) {
+  if (!ctx.flags.view_all || !OPEN_STATUSES.includes(r.status)) return null;
+  const dept = (ctx.dirById[r.employee_id] || {}).department;
+  if (!dept) return null;
+  const people = new Map();
+  (ctx.data.requests || []).forEach((x) => {
+    if (x.id === r.id || x.employee_id === r.employee_id || !['Approved', 'Completed'].includes(x.status)) return;
+    if (x.start_date > r.end_date || x.end_date < r.start_date) return;
+    if ((ctx.dirById[x.employee_id] || {}).department !== dept) return;
+    const list = people.get(x.employee_id) || [];
+    list.push(rangeText(x.start_date, x.end_date));
+    people.set(x.employee_id, list);
+  });
+  if (!people.size) return null;
+  return { dept, people: Array.from(people.entries()).map(([id, ranges]) => ({ name: who(ctx, id), ranges })) };
+}
+const overlapText = (o) => o.people.length + (o.people.length === 1 ? ' employee from ' : ' employees from ') + o.dept +
+  (o.people.length === 1 ? ' already has' : ' already have') + ' approved leave during these dates.';
+
 function render() {
   const { ctx, req: r } = cur;
   const f = ctx.flags;
@@ -104,6 +125,14 @@ function render() {
     kv('Date Filed', fmtDateTime(r.submitted_at || r.created_at));
   if (r.filed_by !== r.employee_id) leaveHtml += kv('Filed By', esc(who(ctx, r.filed_by)) + ' <span class="muted">(on behalf)</span>');
   parts.push('<div class="drawer-section"><h4>Leave Details</h4>' + leaveHtml + '</div>');
+
+  const ov = overlapInfo(ctx, r);
+  if (ov) {
+    parts.push('<div class="msg lv-warn"><b>Warning:</b> ' + esc(overlapText(ov)) +
+      '<details class="exp"><summary><span class="exp-arrow" aria-hidden="true">▸</span>Who</summary><div class="exp-body">' +
+      ov.people.map((p) => '<div>' + esc(p.name) + ' <span class="muted">· ' + esc(p.ranges.join(', ')) + '</span></div>').join('') +
+      '</div></details><div class="muted">For information only — the request is not rejected automatically.</div></div>');
+  }
 
   // How the days were counted
   const bd = Array.isArray(r.calc_breakdown) ? r.calc_breakdown : [];
@@ -307,7 +336,8 @@ function startAction(key) {
       ? (avail < Number(r.requested_days)
         ? ' Heads up: ' + emp + ' only has ' + daysText(avail) + ' of ' + type.name + ' credits, so this cannot be approved as paid leave. Change it to Unpaid first, or add credits.'
         : ' ' + daysText(r.requested_days) + ' will be deducted from ' + emp + '\'s ' + type.name + ' credits (' + num(avail) + ' now, ' + num(avail - Number(r.requested_days)) + ' after).')
-      : r.payment_type === 'Unpaid' ? ' This is unpaid leave, so no credits will be deducted.' : ''), label: 'Comment (optional)', required: false, ok: 'Approve Leave', done: 'Leave approved.', run: (v) => API.finalAction(reqId, 'approve', v, null) },
+      : r.payment_type === 'Unpaid' ? ' This is unpaid leave, so no credits will be deducted.' : '') +
+      (overlapInfo(ctx, r) ? ' Note: ' + overlapText(overlapInfo(ctx, r)) : ''), label: 'Comment (optional)', required: false, ok: 'Approve Leave', done: 'Leave approved.', run: (v) => API.finalAction(reqId, 'approve', v, null) },
     final_reject: { title: 'Reject leave', msg: 'Are you sure you want to reject this leave request?', label: 'Rejection reason (required — the employee will see it)', required: true, ok: 'Reject Leave', danger: true, done: 'Leave rejected.', run: (v) => API.finalAction(reqId, 'reject', null, v) },
     final_return: { title: 'Return to HR', msg: 'Send this request back to HR for another review?', label: 'Note for HR (optional)', required: false, ok: 'Return to HR', done: 'Returned to HR.', run: (v) => API.finalAction(reqId, 'return_to_hr', v, null) },
     final_info: { title: 'Request more information', msg: 'The employee will be notified and asked to update the request.', label: 'What information do you need? (required)', required: true, ok: 'Send Request', done: 'Request for information sent to the employee.', run: (v) => API.finalAction(reqId, 'request_info', v, null) },

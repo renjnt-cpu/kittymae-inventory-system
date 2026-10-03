@@ -1,11 +1,11 @@
 // Leave Management -- Leave Credits: every employee's balances, HR's manual adjustments and the
 // immutable credit ledger. Anyone with view_all can read; only HR can change (the database
 // refuses anyone else, and HR cannot change their own credits -- only the Final Approver can).
-import { esc, fmtDate, fmtDateTime, manilaDate, num, daysText, errorsText, kv } from './leaveUi.js?v=20261004b';
+import { esc, fmtDate, fmtDateTime, manilaDate, num, daysText, errorsText, kv } from './leaveUi.js?v=20261004c';
 import {
   activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber,
 } from './uiKit.js?v=20260928a';
-import { openSide, closeSide, sideBody, confirmPanel } from './leaveSide.js?v=20261004b';
+import { openSide, closeSide, sideBody, confirmPanel } from './leaveSide.js?v=20261004c';
 
 const $ = (id) => document.getElementById(id);
 const cf = { search: '', department: 'all', show: 'all', sort: { field: 'name', dir: 'asc' } };
@@ -95,10 +95,11 @@ function drawList(ctx, people, cols) {
 }
 
 // ---------------- adjust ----------------
-function openAdjust(ctx, employeeId) {
+/** opts.txn pre-selects the transaction type ('Manual Credit' for "Add Credit", 'Correction' for "Adjust Credit"). */
+export function openAdjust(ctx, employeeId, opts = {}) {
   const e = ctx.dirById[employeeId] || {};
   const types = ctx.types.filter((t) => t.active);
-  const st = { typeId: types.length ? String(types[0].id) : '', txn: 'Manual Credit', sign: 'add', amount: '', date: ctx.today, reason: '', notes: '' };
+  const st = { typeId: types.length ? String(types[0].id) : '', txn: TXN_TYPES.includes(opts.txn) ? opts.txn : 'Manual Credit', sign: 'add', amount: '', date: ctx.today, reason: '', notes: '' };
   const bal = () => {
     const b = (ctx.data.balances || []).find((x) => x.employee_id === employeeId && x.leave_type_id === Number(st.typeId));
     return b ? Number(b.available_credits) : 0;
@@ -139,6 +140,7 @@ function openAdjust(ctx, employeeId) {
   $('adj-reason').addEventListener('input', (ev) => { st.reason = ev.target.value; });
   $('adj-notes').addEventListener('input', (ev) => { st.notes = ev.target.value; });
   $('adj-cancel').addEventListener('click', closeSide);
+  $('adj-sign-wrap').hidden = st.txn !== 'Correction';
   preview();
   $('adj-apply').addEventListener('click', () => {
     const slot = $('lv-side-msg');

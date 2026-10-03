@@ -2,8 +2,9 @@
 // day + immediate supervisor, and the policy numbers. HR writes these tables directly (row
 // level security limits that to leave.hr) and every change is recorded in the audit log by a
 // database trigger, not by this file.
-import { esc, fmtDate, num, WEEKDAYS, kv } from './leaveUi.js?v=20261004b';
-import { openSide, closeSide, sideBody } from './leaveSide.js?v=20261004b';
+import { esc, fmtDate, num, WEEKDAYS, kv } from './leaveUi.js?v=20261004c';
+import { openSide, closeSide, sideBody } from './leaveSide.js?v=20261004c';
+import { accrualHtml, wireAccrual } from './leaveAccrual.js?v=20261004c';
 
 const $ = (id) => document.getElementById(id);
 const openSections = new Set(['schedules']);
@@ -24,8 +25,8 @@ function section(key, title, count, body) {
 export async function renderSettings(ctx, root) {
   const seq = ++renderSeq;
   if (!root.firstChild) root.innerHTML = '<p class="muted">Loading…</p>';
-  let holidays, blackouts;
-  try { [holidays, blackouts] = await Promise.all([ctx.api.listHolidays(), ctx.api.listBlackouts()]); } catch (err) {
+  let holidays, blackouts, rules;
+  try { [holidays, blackouts, rules] = await Promise.all([ctx.api.listHolidays(), ctx.api.listBlackouts(), ctx.api.listAccrualRules()]); } catch (err) {
     root.innerHTML = '<div class="msg error">' + esc(err.message || String(err)) + '</div>';
     return;
   }
@@ -35,6 +36,7 @@ export async function renderSettings(ctx, root) {
 
   root.innerHTML =
     section('schedules', 'Rest Days & Immediate Supervisors', notSet ? notSet + ' not set' : 'all set', schedulesHtml(ctx, people)) +
+    section('accrual', 'Automatic Leave Credits', rules.filter((r) => r.active).length + ' on · ' + rules.length + ' rule' + (rules.length === 1 ? '' : 's'), accrualHtml(ctx, rules)) +
     section('types', 'Leave Types', ctx.types.length + ' types', typesHtml(ctx)) +
     section('holidays', 'Company Holidays', holidays.length + ' dates', holidaysHtml(holidays)) +
     section('blackouts', 'Blackout Dates', blackouts.length + ' periods', blackoutsHtml(blackouts)) +
@@ -44,6 +46,7 @@ export async function renderSettings(ctx, root) {
     if (d.open) openSections.add(d.dataset.sec); else openSections.delete(d.dataset.sec);
   }));
   wireSchedules(ctx, people);
+  wireAccrual(ctx, rules);
   wireTypes(ctx);
   wireHolidays(ctx, holidays);
   wireBlackouts(ctx, blackouts);

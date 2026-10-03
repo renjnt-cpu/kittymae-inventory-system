@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HR — 201 File — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261004a">
+<link rel="stylesheet" href="css/styles.css?v=20261004c">
 </head>
 <body>
 <main>
@@ -13,7 +13,7 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261004b';
+import { initShell, toast, esc } from './js/shell.js?v=20261004c';
 import {
   listAllEmployee201Files, upsertEmployee201File, createEmployee, getBranches, updateEmployeeHireDate,
   listEmployee201Documents, uploadEmployee201Document, getEmployee201DocumentUrl, deleteEmployee201Document, listHrPositions,
@@ -221,6 +221,23 @@ if (employee) {
       const docs = await listEmployee201Documents(row.id).catch((err) => { toast('hr-msg', String(err.message || err), true); return []; });
       cell.querySelector('td').innerHTML = editPanelHtml(row, docs);
 
+      const leaveBox = cell.querySelector('[data-leave-profile]');
+      if (leaveBox) {
+        let leaveLoaded = false;
+        leaveBox.addEventListener('toggle', async () => {
+          if (!leaveBox.open || leaveLoaded) return;
+          leaveLoaded = true;
+          const body = leaveBox.querySelector('.exp-body');
+          try {
+            const { mountLeaveProfile } = await import('./js/leaveProfile.js?v=20261004c');
+            await mountLeaveProfile(body, row.id);
+          } catch (err) {
+            leaveLoaded = false;
+            body.innerHTML = '<div class="msg error">Could not load the leave record: ' + esc(err.message || err) + '</div>';
+          }
+        });
+      }
+
       if (canSetPassword) {
         const pwSection = cell.querySelector('#hr-pw-section-' + id);
         const wirePasswordSection = () => {
@@ -405,6 +422,10 @@ if (employee) {
               '</td></tr>'
             ).join('') + '</table></div>'
           : '<p class="muted" style="margin-top:8px;">No documents uploaded yet.</p>') +
+        // Leave tab (Leave Management, spec 24): credits, requests and credit history for this employee.
+        // Loaded only when opened, and via a dynamic import so it can never affect the rest of this page.
+        '<details class="exp card" data-leave-profile="' + id + '" style="margin-top:16px;"><summary><span class="exp-arrow" aria-hidden="true">▸</span>Leave</summary>' +
+          '<div class="exp-body"></div></details>' +
       '</div>';
     }
   }

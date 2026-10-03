@@ -7,7 +7,7 @@ import { initActivityFeed } from './activityFeed.js?v=20260929a';
 import { localDateStr } from './uiKit.js?v=20260928a';
 import { showBirthdayBanner } from './birthdayBanner.js?v=20260928a';
 import { initAdminChat } from './adminChat.js?v=20260928a';
-import { initLeaveNotifications } from './leaveNotifications.js?v=20261004b';
+import { initLeaveNotifications } from './leaveNotifications.js?v=20261004c';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.

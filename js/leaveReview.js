@@ -4,7 +4,7 @@
 import {
   esc, statusBadge, fmtDate, rangeText, num, daysText, manilaDate, addDays, yearOf,
   PENDING_HR, FINAL_QUEUE, DECISION_STATUSES, STATUSES,
-} from './leaveUi.js?v=20261004b';
+} from './leaveUi.js?v=20261004c';
 import {
   activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate,
 } from './uiKit.js?v=20260928a';
@@ -57,12 +57,19 @@ const HR_SORT = [
   { key: 'leave_request_number', label: 'Request No.' }, { key: 'requested_days', label: 'Days' }, { key: 'status', label: 'Status' },
 ];
 
+/** Deep link from the HR 201-File "View Full Leave Record" button: show only this employee's requests. */
+export function setHrEmployeeFilter(employeeId) {
+  Object.assign(hf, { quick: null, employee: employeeId, department: 'all', type: 'all', status: 'all', payment: 'all', from: '', to: '', month: 'all', year: 'all', search: '' });
+}
+
 export function renderHr(ctx, root) {
   const all = (ctx.data.requests || []).filter((r) => r.status !== 'Draft');
   const today = ctx.today;
   const quick = QUICK(today);
   const cnt = (k) => all.filter(quick[k].test).length;
-  const employees = Array.from(new Set(all.map((r) => r.employee_id))).map((id) => ({ id, name: empName(ctx, id) })).sort((a, b) => a.name.localeCompare(b.name));
+  const ids = new Set(all.map((r) => r.employee_id));
+  if (hf.employee !== 'all') ids.add(hf.employee); // keep a deep-linked employee selectable even if they have no requests yet
+  const employees = Array.from(ids).map((id) => ({ id, name: empName(ctx, id) })).sort((a, b) => a.name.localeCompare(b.name));
   const depts = Array.from(new Set(all.map((r) => empDept(ctx, r.employee_id)).filter((d) => d !== '—'))).sort();
   const years = Array.from(new Set([yearOf(today), ...all.map((r) => yearOf(r.start_date))])).sort((a, b) => b - a);
   const opt = (value, label, cur) => '<option value="' + esc(value) + '"' + (String(cur) === String(value) ? ' selected' : '') + '>' + esc(label) + '</option>';

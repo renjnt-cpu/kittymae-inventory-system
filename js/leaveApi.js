@@ -149,6 +149,50 @@ export async function listAudit({ before = null, limit = 100 } = {}) {
   return check(await q);
 }
 
+// ---- automatic leave credit rules (HR drafts them; only the Final Approver switches one on or runs it) ----
+export async function listAccrualRules() {
+  return check(await supabase.from('leave_accrual_rules').select('*').order('created_at'));
+}
+export const saveAccrualRule = (p) => rpc('leave_save_accrual_rule', {
+  p_id: p.id || null, p_name: p.name, p_leave_type_id: p.leaveTypeId, p_frequency: p.frequency, p_amount: p.amount,
+  p_run_month: p.runMonth, p_run_day: p.runDay, p_starts_on: p.startsOn,
+  p_employment_status: p.employmentStatus || null, p_department: p.department || null, p_employee_id: p.employeeId || null,
+  p_min_service_months: p.minServiceMonths, p_max_service_months: p.maxServiceMonths,
+  p_reset_enabled: !!p.resetEnabled, p_reset_month: p.resetMonth, p_reset_day: p.resetDay,
+  p_carry_over_enabled: !!p.carryOverEnabled, p_max_carry_over: p.maxCarryOver,
+});
+export const setAccrualActive = (id, active) => rpc('leave_set_accrual_rule_active', { p_id: id, p_active: !!active });
+export const deleteAccrualRule = (id) => rpc('leave_delete_accrual_rule', { p_id: id });
+export const previewAccrual = (id, asOf) => rpc('leave_accrual_preview', { p_id: id, p_as_of: asOf || null });
+export const runAccrual = (id) => rpc('leave_accrual_run', { p_id: id });
+
+// ---- ERP dashboard widget: a few cheap queries instead of loading every request ----
+const OPEN = ['Submitted', 'Pending HR Review', 'Needs Employee Information', 'HR Recommended Approval', 'HR Recommended Rejection', 'Pending Final Approval'];
+const DECISION = ['Submitted', 'Pending HR Review', 'HR Recommended Approval', 'HR Recommended Rejection', 'Pending Final Approval'];
+export async function getWidgetData() {
+  const prof = await getMyProfile();
+  if (!prof || !prof.profile) return null;
+  const me = prof.profile.employee_id;
+  const count = async (q) => { const { count: n, error } = await q; if (error) throw new Error(error.message); return n || 0; };
+  const [types, balances, nextRows, pending, hrNeeds, finalNeeds] = await Promise.all([
+    listLeaveTypes(),
+    supabase.from('employee_leave_balances').select('leave_type_id, available_credits').eq('employee_id', me).then(check),
+    supabase.from('leave_requests').select('id, start_date, end_date, leave_type_id, requested_days').eq('employee_id', me).eq('status', 'Approved')
+      .gte('end_date', prof.today).order('start_date').limit(1).then(check),
+    count(supabase.from('leave_requests').select('id', { count: 'exact', head: true }).eq('employee_id', me).in('status', OPEN)),
+    // the Final Approver decides everything HR reviews, so they get the one "awaiting final approval" line instead
+    prof.flags.hr && !prof.flags.final ? count(supabase.from('leave_requests').select('id', { count: 'exact', head: true }).in('status', ['Submitted', 'Pending HR Review']).neq('employee_id', me)) : Promise.resolve(null),
+    prof.flags.final ? count(supabase.from('leave_requests').select('id', { count: 'exact', head: true }).in('status', DECISION).neq('employee_id', me)) : Promise.resolve(null),
+  ]);
+  const creditTypes = new Set(types.filter((t) => t.active && t.requires_credit).map((t) => t.id));
+  const available = balances.filter((b) => creditTypes.has(b.leave_type_id)).reduce((s, b) => s + Number(b.available_credits || 0), 0);
+  const next = nextRows[0] || null;
+  return {
+    flags: prof.flags, today: prof.today, available, pending, hrNeeds, finalNeeds,
+    next: next ? { start: next.start_date, end: next.end_date, days: Number(next.requested_days), type: (types.find((t) => t.id === next.leave_type_id) || {}).name || 'Leave' } : null,
+  };
+}
+
 // ---- live updates ----
 export function subscribe(tables, onChange) {
   const list = Array.isArray(tables) ? tables : [tables];
