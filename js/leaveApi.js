@@ -32,6 +32,14 @@ export async function listRequests() {
 export async function getRequest(id) {
   return check(await supabase.from('leave_requests').select('*').eq('id', id).maybeSingle());
 }
+// HR's private review comments live in their own table that only HR / the Final Approver /
+// the Auditor can read (an employee gets zero rows), so they are fetched separately and merged.
+export async function listInternal() {
+  return check(await supabase.from('leave_request_internal').select('leave_request_id, hr_comments').limit(5000));
+}
+export async function getInternal(id) {
+  return check(await supabase.from('leave_request_internal').select('leave_request_id, hr_comments').eq('leave_request_id', id).maybeSingle());
+}
 export async function listTimeline(id) {
   return check(await supabase.from('leave_timeline').select('*').eq('leave_request_id', id).order('created_at').order('id'));
 }

@@ -5,7 +5,7 @@
 import {
   esc, statusBadge, fmtDate, fmtDateTime, rangeText, num, daysText, fmtBytes, kv, errorsText,
   EMPLOYEE_EDITABLE, OPEN_STATUSES, PENDING_HR, DECISION_STATUSES, DOC_KINDS, yearOf,
-} from './leaveUi.js?v=20261004a';
+} from './leaveUi.js?v=20261004b';
 
 const $ = (id) => document.getElementById(id);
 let cur = null; // { ctx, id, req, timeline, comments, attachments }
@@ -47,10 +47,12 @@ export async function openDetail(ctx, id, opts = {}) {
 
 async function loadAll() {
   const { ctx, id } = cur;
-  const [req, timeline, comments, attachments] = await Promise.all([
+  const [req, timeline, comments, attachments, internal] = await Promise.all([
     ctx.api.getRequest(id), ctx.api.listTimeline(id), ctx.api.listComments(id), ctx.api.listAttachments(id),
+    ctx.flags.view_all ? ctx.api.getInternal(id).catch(() => null) : Promise.resolve(null),
   ]);
   if (!req) throw new Error('This leave request was not found, or you do not have access to it.');
+  req.hr_comments = internal ? internal.hr_comments : null;
   Object.assign(cur, { req, timeline, comments, attachments });
 }
 
@@ -149,7 +151,8 @@ function render() {
   if (decHtml) parts.push('<div class="drawer-section"><h4>Decision</h4>' + decHtml + '</div>');
 
   // Documents
-  const canDocs = (isOwner && EMPLOYEE_EDITABLE.includes(r.status)) || f.hr;
+  // documents can only change while the request is open (the database enforces the same rule)
+  const canDocs = (isOwner && EMPLOYEE_EDITABLE.includes(r.status)) || (f.hr && OPEN_STATUSES.includes(r.status));
   parts.push('<div class="drawer-section"><h4>Supporting Documents</h4>' +
     (cur.attachments.length ? cur.attachments.map((a) =>
       '<div class="lv-doc"><div><b>' + esc(a.file_name) + '</b><div class="muted">' + esc(a.kind) + ' · ' + esc(fmtBytes(a.file_size)) + ' · ' +

@@ -1,11 +1,11 @@
 // Leave Management -- Leave Credits: every employee's balances, HR's manual adjustments and the
 // immutable credit ledger. Anyone with view_all can read; only HR can change (the database
 // refuses anyone else, and HR cannot change their own credits -- only the Final Approver can).
-import { esc, fmtDate, fmtDateTime, manilaDate, num, daysText, errorsText, kv } from './leaveUi.js?v=20261004a';
+import { esc, fmtDate, fmtDateTime, manilaDate, num, daysText, errorsText, kv } from './leaveUi.js?v=20261004b';
 import {
   activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber,
 } from './uiKit.js?v=20260928a';
-import { openSide, closeSide, sideBody, confirmPanel } from './leaveSide.js?v=20261004a';
+import { openSide, closeSide, sideBody, confirmPanel } from './leaveSide.js?v=20261004b';
 
 const $ = (id) => document.getElementById(id);
 const cf = { search: '', department: 'all', show: 'all', sort: { field: 'name', dir: 'asc' } };
@@ -119,7 +119,7 @@ function openAdjust(ctx, employeeId) {
         '<div class="field"><label>Number of Days *</label><input type="number" id="adj-amount" min="0" step="0.5" inputmode="decimal"></div>' +
         '<div class="field"><label>Effective Date *</label><input type="date" id="adj-date" value="' + esc(st.date) + '"></div></div>' +
       '<div class="field" style="margin-top:8px;"><label>Reason *</label><textarea id="adj-reason" rows="2" placeholder="Why are you changing these credits?"></textarea></div>' +
-      '<div class="field" style="margin-top:8px;"><label>Notes (optional)</label><textarea id="adj-notes" rows="2"></textarea></div></div>' +
+      '<div class="field" style="margin-top:8px;"><label>Notes (optional — the employee can see these in their credit history)</label><textarea id="adj-notes" rows="2"></textarea></div></div>' +
       '<div class="drawer-section"><h4>Result</h4><div id="adj-preview"></div></div>',
     footer: '<button type="button" class="btn" id="adj-apply">Apply Change</button><button type="button" class="btn secondary" id="adj-cancel">Cancel</button>',
   });

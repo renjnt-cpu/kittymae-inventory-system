@@ -1,15 +1,15 @@
 // Leave Management -- page controller. leave.html is a one-line shell; everything the page does
 // is wired here. The data layer is passed in (`api`), so the same code runs against the real
 // Supabase functions in production and against a stand-in object in tests.
-import { esc, fmtDate, OPEN_STATUSES, DECISION_STATUSES, PENDING_HR } from './leaveUi.js?v=20261004a';
-import { openDetail, closeDetail } from './leaveDetail.js?v=20261004a';
-import { openForm, closeForm, requestCloseForm } from './leaveForm.js?v=20261004a';
-import { renderMine } from './leaveMine.js?v=20261004a';
-import { renderHr, renderFinal } from './leaveReview.js?v=20261004a';
-import { renderCredits } from './leaveCredits.js?v=20261004a';
-import { renderSettings } from './leaveSettings.js?v=20261004a';
-import { renderAudit } from './leaveAudit.js?v=20261004a';
-import { closeSide } from './leaveSide.js?v=20261004a';
+import { esc, fmtDate, OPEN_STATUSES, DECISION_STATUSES, PENDING_HR } from './leaveUi.js?v=20261004b';
+import { openDetail, closeDetail } from './leaveDetail.js?v=20261004b';
+import { openForm, closeForm, requestCloseForm } from './leaveForm.js?v=20261004b';
+import { renderMine } from './leaveMine.js?v=20261004b';
+import { renderHr, renderFinal } from './leaveReview.js?v=20261004b';
+import { renderCredits } from './leaveCredits.js?v=20261004b';
+import { renderSettings } from './leaveSettings.js?v=20261004b';
+import { renderAudit } from './leaveAudit.js?v=20261004b';
+import { closeSide } from './leaveSide.js?v=20261004b';
 
 const SKELETON =
   '<div id="lv-toast" class="lv-toast" aria-live="polite"></div>' +
@@ -51,9 +51,13 @@ export async function startLeavePage({ root, api, search, hash }) {
 
   // ---- data ----
   async function loadData() {
-    const [prof, dir, types, balances, requests] = await Promise.all([
+    const [prof, dir, types, balances, requests, internal] = await Promise.all([
       api.getMyProfile(), api.getDirectory(), api.listLeaveTypes(), api.listBalances(), api.listRequests(),
+      // HR's private comments (an employee simply gets no rows); losing them is never fatal
+      api.listInternal().catch(() => []),
     ]);
+    const commentsById = Object.fromEntries((internal || []).map((i) => [i.leave_request_id, i.hr_comments]));
+    (requests || []).forEach((r) => { r.hr_comments = commentsById[r.id] || null; });
     if (!prof || !prof.profile) throw new Error('Your login is not linked to an active employee record, so Leave Management cannot open. Ask an Admin to check your account.');
     ctx.me = prof.profile;
     ctx.flags = prof.flags;
