@@ -7,6 +7,7 @@ import { initActivityFeed } from './activityFeed.js?v=20260929a';
 import { localDateStr } from './uiKit.js?v=20260928a';
 import { showBirthdayBanner } from './birthdayBanner.js?v=20260928a';
 import { initAdminChat } from './adminChat.js?v=20260928a';
+import { initLeaveNotifications } from './leaveNotifications.js?v=20261004a';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -48,7 +49,9 @@ const ERP_BLOCKED_JOB_TITLES = [];
 // 'branches' removed from this list 2026-09-28 -- the page it pointed to no longer
 // exists in this app (Layaway access for this job title now goes through kittymae-pos'
 // own branches.html instead, open to any authenticated employee there).
-const ERP_SCOPED_JOB_TITLES = { 'Sales Admin Associate': ['item-monitoring', 'transfers', 'refunds'] };
+// 'leave' (Ren, 2026-10-04): Leave Management is for every employee with a login, scoped
+// job titles included -- what they can see inside it is decided by their leave role.
+const ERP_SCOPED_JOB_TITLES = { 'Sales Admin Associate': ['item-monitoring', 'transfers', 'refunds', 'leave'] };
 
 export async function initShell(activePage) {
   const session = await requireSession();
@@ -113,6 +116,7 @@ export async function initShell(activePage) {
     'access-checklist': { label: 'Access Checklist', href: 'access-checklist.html' },
     'access-matrix': { label: 'Position Access Matrix', href: 'access-matrix.html' },
     'data-backup': { label: 'Data Backup', href: 'data-backup.html' },
+    leave: { label: 'Leave Management', href: 'leave.html' },
   };
   const pages = [];
   const scopedIds = jobTitle && ERP_SCOPED_JOB_TITLES[jobTitle];
@@ -154,6 +158,9 @@ export async function initShell(activePage) {
     // block — refunds.html itself shows a simple request form to most people, and the
     // full approve/manage view only to has_refund_approval_access() accounts.
     pages.push({ id: 'refunds', ...ALL_PAGE_DEFS.refunds });
+    // Leave Management: every employee (ungated) -- the page's own tabs and every action
+    // are decided by the leave role, and enforced by the database.
+    pages.push({ id: 'leave', ...ALL_PAGE_DEFS.leave });
     if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || employee.position === 'Admin Assistant' || (employee.extra_page_access || []).includes('transactions')) {
       // Transactions doesn't fit the per-branch model (a different process, per Ren) —
       // flat company-wide log. Admin/Manager run CSV imports and manage everything;
@@ -215,7 +222,7 @@ export async function initShell(activePage) {
     { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers', 'pull-out'] },
     { label: 'Operations', ids: ['lbc', 'assets'] },
     { label: 'Finance', ids: ['bills', 'transactions'] },
-    { label: 'People', ids: ['hr', 'access-checklist', 'access-matrix', 'data-backup'] },
+    { label: 'People', ids: ['leave', 'hr', 'access-checklist', 'access-matrix', 'data-backup'] },
   ];
   const pageById = Object.fromEntries(pages.map((p) => [p.id, p]));
   const navHtml = NAV_GROUPS.map((g) => {
@@ -277,6 +284,8 @@ export async function initShell(activePage) {
   initActivityFeed({ employee, headerEl: header, esc, links: ACTIVITY_LINKS })
     .then((feed) => { window.__kmActivity = feed; document.dispatchEvent(new Event('km-activity-ready')); })
     .catch(() => { /* the feed is an overlay -- a failure here must never break the page */ });
+  // Personal Leave notifications bell (Leave Management) -- same rule: an overlay that must never break the page.
+  initLeaveNotifications({ employee, headerEl: header }).catch(() => { /* ignore */ });
 
   // Mobile/tablet off-canvas drawer (<1024px) -- the sidebar is always visible
   // above that, so the toggle/backdrop are only ever reachable via the hamburger

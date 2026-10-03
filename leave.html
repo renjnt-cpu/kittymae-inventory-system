@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leave Management — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css?v=20261004a">
+</head>
+<body>
+<main id="lv-root"><p class="muted">Loading…</p></main>
+
+<script type="module">
+import { initShell } from './js/shell.js?v=20261004a';
+import * as api from './js/leaveApi.js?v=20261004a';
+import { startLeavePage } from './js/leavePage.js?v=20261004a';
+
+// Everyone with a login can open this page; what each person sees and can do inside it is
+// decided by their leave role (Employee / HR / Final Approver / Auditor) -- and enforced by
+// the database, not by this page.
+const employee = await initShell('leave');
+if (employee) {
+  await startLeavePage({ root: document.getElementById('lv-root'), api, search: location.search, hash: location.hash });
+}
+</script>
+</body>
+</html>

@@ -399,3 +399,98 @@ details.exp.exp-cat > .exp-body { padding:10px 12px; }
    needs the same caret bolted on. */
 .exp-row-btn { background:none; border:none; padding:4px 0; font:inherit; color:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:6px; min-height:32px; }
 [aria-expanded="true"] > .exp-arrow { transform:rotate(90deg); }
+
+/* ---- Leave Management (Ren, 2026-10-04) -- tabs, status badges, request drawer pieces.
+   Everything is prefixed lv- so it cannot collide with the other modules' classes. Status
+   colours follow the spec: yellow = pending, blue = HR review, orange = final approval,
+   green = approved, red = rejected, grey = cancelled / completed / draft. ---- */
+.badge.lv-gray { background:#eeeeee; color:#555; }
+.badge.lv-yellow { background:#fff4e0; color:#a15c00; }
+.badge.lv-blue { background:#e3edfd; color:#1a56b0; }
+.badge.lv-orange { background:#ffe9d6; color:#b04a00; }
+.badge.lv-green { background:#eaf6ec; color:#2e7d32; }
+.badge.lv-red { background:#fdecea; color:#c62828; }
+
+.lv-toast { position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:95; width:min(560px, calc(100vw - 24px)); pointer-events:none; }
+.lv-toast .msg { pointer-events:auto; box-shadow:0 4px 14px rgba(0,0,0,0.18); margin:0; }
+.lv-whoami { font-size:13px; margin-bottom:10px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.lv-tabs { display:flex; gap:6px; margin-bottom:14px; overflow-x:auto; padding-bottom:4px; border-bottom:1px solid #eee; }
+.lv-tab { background:none; border:1px solid transparent; border-bottom:none; border-radius:8px 8px 0 0; padding:9px 14px; font:inherit; font-size:13px; cursor:pointer; color:var(--muted); white-space:nowrap; display:inline-flex; gap:6px; align-items:center; min-height:40px; }
+.lv-tab:hover { background:var(--rose-bg); color:var(--ink); }
+.lv-tab-active { background:var(--rose); color:var(--ink); font-weight:700; border-color:#ecdc9a; }
+.lv-tab-badge { background:var(--warn); color:#fff; font-size:10px; font-weight:700; border-radius:10px; padding:1px 6px; min-width:16px; text-align:center; }
+
+.drawer.lv-drawer { width:680px; }
+.drawer-footer[hidden], .field[hidden], .lv-bell-panel[hidden] { display:none; }
+@media (max-width:760px) { .drawer.lv-drawer { width:auto; } }
+
+.lv-empcard { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.lv-empname { font-size:18px; font-weight:700; }
+.lv-h { margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); }
+.lv-credit-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:10px; }
+.lv-credit-card { border:1px solid #eee; border-radius:10px; padding:10px 12px; background:var(--rose-bg); }
+.lv-credit-name { font-size:12px; font-weight:700; }
+.lv-credit-rem { margin-top:6px; font-size:13px; }
+.lv-credit-rem b { font-size:24px; }
+.lv-row-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.lv-clickable { cursor:pointer; transition:box-shadow .12s ease, transform .12s ease; }
+.lv-clickable:hover { box-shadow:0 2px 8px rgba(0,0,0,0.14); }
+.lv-tile-active { box-shadow:inset 0 0 0 2px #1a56b0, 0 1px 3px rgba(0,0,0,0.08); }
+.lv-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+@media (max-width:760px) { .lv-grid { grid-template-columns:1fr; } }
+.lv-two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media (max-width:760px) { .lv-two-col { grid-template-columns:1fr; } }
+.lv-people { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.lv-people li { border:1px solid #eee; border-radius:8px; padding:7px 10px; cursor:pointer; font-size:13px; }
+.lv-people li:hover { background:var(--rose-bg); }
+
+.lv-preview { background:var(--rose-bg); border:1px solid #f1e7b8; border-radius:10px; padding:10px 12px; }
+.lv-pv-row { display:flex; justify-content:space-between; gap:10px; padding:3px 0; font-size:13px; }
+.lv-pv-row span { color:var(--muted); }
+.lv-neg { color:var(--warn); font-weight:700; }
+.lv-pos { color:var(--ok); font-weight:700; }
+.msg.lv-warn { background:#fff8e8; color:#8a5a00; border:1px solid #f0c36d; }
+.lv-mini { width:100%; border-collapse:collapse; font-size:12px; }
+.lv-mini td { padding:3px 6px; border-bottom:1px solid #f3f3f3; }
+.lv-mini .lv-skip td { color:var(--muted); }
+.lv-click { cursor:pointer; }
+.lv-click:hover td { background:var(--rose-bg); }
+.lv-pre { background:#f7f7f7; border-radius:6px; padding:8px; font-size:11px; overflow-x:auto; margin:2px 0 8px; max-height:220px; }
+
+.lv-text { white-space:pre-wrap; word-break:break-word; font-size:13px; }
+.lv-doc { display:flex; justify-content:space-between; align-items:center; gap:10px; border:1px solid #eee; border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:13px; }
+.lv-doc-actions { display:flex; gap:6px; flex-shrink:0; }
+.lv-upload { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+.lv-upload select, .lv-upload input[type=file] { padding:6px; border:1px solid #ddd; border-radius:6px; font-size:12px; max-width:100%; }
+.lv-timeline { display:flex; flex-direction:column; gap:0; }
+.lv-tl-item { display:grid; grid-template-columns:120px 1fr; gap:10px; padding:8px 0; border-bottom:1px solid #f3f3f3; font-size:12.5px; }
+.lv-tl-item:last-child { border-bottom:none; }
+.lv-tl-when { color:var(--muted); font-size:11px; }
+.lv-internal { background:#f6f8fb; margin:0 -6px; padding-left:6px; padding-right:6px; }
+@media (max-width:760px) { .lv-tl-item { grid-template-columns:1fr; gap:2px; } }
+.lv-comment { border:1px solid #eee; border-radius:8px; padding:8px 10px; margin-bottom:6px; }
+.lv-comment-form { display:flex; flex-direction:column; gap:6px; align-items:flex-start; margin-top:8px; }
+.lv-comment-form textarea { width:100%; box-sizing:border-box; padding:7px 8px; border:1px solid #ddd; border-radius:6px; font:inherit; font-size:13px; }
+
+.lv-action-panel { border:1px solid #f0c36d; background:#fffaf0; border-radius:10px; padding:12px 14px; margin-bottom:14px; }
+.lv-action-panel h4 { margin:0 0 6px; font-size:13px; text-transform:none; letter-spacing:0; color:var(--ink); }
+.lv-action-panel p { margin:0 0 8px; font-size:13px; }
+.lv-action-panel textarea { width:100%; box-sizing:border-box; padding:7px 8px; border:1px solid #ddd; border-radius:6px; font:inherit; font-size:13px; }
+.lv-action-panel.lv-danger { border-color:#e8a7a1; background:#fff3f2; }
+.lv-action-buttons { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+.btn.lv-btn-danger { background:var(--warn); color:#fff; }
+.lv-confirm { display:flex; gap:8px; align-items:flex-start; font-size:13px; margin-top:10px; }
+.lv-check { display:flex; gap:8px; align-items:center; font-size:13px; margin-top:8px; }
+
+.lv-success { text-align:center; padding:18px 6px; }
+.lv-success-icon { width:56px; height:56px; border-radius:50%; background:#eaf6ec; color:var(--ok); font-size:30px; line-height:56px; margin:0 auto 10px; }
+.lv-success h3 { margin:0 0 4px; }
+.lv-success-num { font-size:22px; font-weight:700; letter-spacing:0.02em; }
+
+.lv-bell-panel { position:fixed; top:64px; right:12px; width:340px; max-width:calc(100vw - 24px); z-index:46; background:#fff; border:1px solid #e6e6e6; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.2); padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+.lv-bell-list { max-height:min(60vh, 420px); overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+.lv-bell-item { border:1px solid #eee; border-left:4px solid #cfd5dc; border-radius:8px; padding:8px 10px; font-size:12px; cursor:pointer; }
+.lv-bell-item:hover { background:var(--rose-bg); }
+.lv-bell-item.lv-unread { border-left-color:#1a56b0; background:#f4f8ff; }
+@media (max-width:760px) { .lv-bell-panel { left:8px; right:8px; width:auto; max-width:none; } }
+.drawer-section details.exp > summary { font-size:12px; color:var(--muted); min-height:32px; padding:4px 0; font-weight:600; }
