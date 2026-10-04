@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SKU Catalog — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261004f">
+<link rel="stylesheet" href="css/styles.css?v=20261004g">
 </head>
 <body>
 <main>
@@ -13,13 +13,18 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261004f';
+import { initShell, toast, esc } from './js/shell.js?v=20261004g';
 import {
   listProducts, updateProduct, getBranches, listAllInventoryQty, subscribeToChanges,
   requestProductEdit, listProductEditRequests, approveProductEdit, rejectProductEdit,
   setProductStatus, listProductLastChanges,
 } from './js/api.js?v=20260928b';
 import { branchColor } from './js/branchColors.js?v=20260928a';
+import { supabase } from './js/supabaseClient.js?v=20260928a';
+import { openSkuMovement } from './js/skuMovement.js?v=20261004g';
+
+// "History" on a SKU row: the read-only movement history (transfers, sales, adjustments ... with stock before / after) -- see js/skuMovement.js.
+const showHistory = (sku) => openSkuMovement(supabase, sku, { transferUrl: 'transfers.html?open=' });
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g';
@@ -336,9 +341,11 @@ if (employee) {
         '<td data-label="Sub SKU">' + esc(p.sub_sku || '—') + '</td>' +
         '<td data-label="Price">' + priceCellHtml(p) + '</td>' +
         '<td data-label="Est. Gram">' + weight(p.gross_weight_g) + '</td>' +
-        '<td>' + (canDiscontinue ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="reactivate-folder">Reactivate</button>' : '') + '</td>' +
+        '<td style="white-space:nowrap;"><button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="history">History</button> ' +
+          (canDiscontinue ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="reactivate-folder">Reactivate</button>' : '') + '</td>' +
       '</tr>').join('') +
       '</tbody></table></div>';
+    box.querySelectorAll('[data-act="history"]').forEach((btn) => btn.addEventListener('click', () => showHistory(btn.dataset.sku)));
     if (!canDiscontinue) return;
     box.querySelectorAll('[data-act="reactivate-folder"]').forEach((btn) => btn.addEventListener('click', async () => {
       try {
@@ -485,6 +492,7 @@ if (employee) {
             return '<td data-label="' + esc(b.name) + '" style="text-align:center;' + (searched ? 'background:' + c.bg + ';color:' + c.text + ';font-weight:800;' : '') + '">' + qtyCell(qtyForSku[b.id]) + '</td>';
           }).join('') +
           '<td data-label="Actions" style="white-space:nowrap;">' +
+            '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="history">History</button> ' +
             (canEdit ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="edit">Edit</button> ' : '') +
             (canDiscontinue
               ? (p.product_status === 'Active'
@@ -519,6 +527,8 @@ if (employee) {
       filterBranchId = filterBranchId === id ? null : id;
       render();
     }));
+
+    list.querySelectorAll('[data-act="history"]').forEach((btn) => btn.addEventListener('click', () => showHistory(btn.dataset.sku)));
 
     if (!canEdit) return;
 

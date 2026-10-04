@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Item Monitoring — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261004f">
+<link rel="stylesheet" href="css/styles.css?v=20261004g">
 </head>
 <body>
 <main>
@@ -13,7 +13,7 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261004f';
+import { initShell, toast, esc } from './js/shell.js?v=20261004g';
 import {
   getBranches, listStockByBranch, searchProducts, logCycleCount, listRecentCycleCounts,
   markCycleCountInvestigated, listLatestCycleCountBySkuBranch, listProductChangeLog,
@@ -21,6 +21,8 @@ import {
 } from './js/api.js?v=20260928b';
 import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20260928a';
 import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20260928a';
+import { supabase } from './js/supabaseClient.js?v=20260928a';
+import { openSkuMovement } from './js/skuMovement.js?v=20261004g';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 14: Monitoring) -- one Sort
 // control for the Stock by Branch board.
@@ -538,7 +540,7 @@ if (employee) {
     // Filtering already picked `rows`; sort only reorders them for display (section 11).
     rows = applySort(rows, sbbSort, SBB_SORT_COMPARATORS);
     list.innerHTML = '<div class="table-scroll table-mini"><table><thead><tr>' +
-      '<th>SKU</th><th>Product Name</th><th>Branch</th><th>Product Line</th><th>Metal Purity</th><th>Current Stock</th><th>Status</th><th>Weight on Hand</th><th>Next Count Due</th>' +
+      '<th>SKU</th><th>Product Name</th><th>Branch</th><th>Product Line</th><th>Metal Purity</th><th>Current Stock</th><th>Status</th><th>Weight on Hand</th><th>Next Count Due</th><th></th>' +
       '</tr></thead><tbody>' +
       rows.map((r) => {
         const p = r.products || {};
@@ -556,8 +558,11 @@ if (employee) {
           '<td data-label="Next Count Due">' + fmtDate(due) + (overdue ? ' <span class="badge low">DUE</span>' : '') +
             '<div class="muted" style="font-size:10px;">' + (lastCounted ? 'Last: ' + fmtDate(lastCounted) : 'Never counted') + '</div>' +
           '</td>' +
+          // read-only movement history of this SKU (transfers, sales, adjustments ... with stock before / after), opened on this branch
+          '<td data-label="" style="white-space:nowrap;"><button type="button" class="btn small secondary" data-act="history" data-sku="' + esc(r.sku) + '" data-branch="' + r.branch_id + '">History</button></td>' +
         '</tr>';
       }).join('') + '</tbody></table></div>';
+    list.querySelectorAll('[data-act="history"]').forEach((btn) => btn.addEventListener('click', () => openSkuMovement(supabase, btn.dataset.sku, { branchId: Number(btn.dataset.branch), transferUrl: 'transfers.html?open=' })));
   }
 
   // ---- Recent Counts: every logged physical count, newest first, with the variance

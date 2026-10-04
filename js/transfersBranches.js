@@ -1,12 +1,12 @@
 // Transfers -- the Branches tab (what each branch holds, has promised to send, and is waiting to receive; what each branch has
 // received; who sends to whom) and the Discrepancies tab (every missing / damaged / wrong item, open or resolved).
 // Stock numbers are READ from the real inventory through the database; nothing is stored in Transfers.
-import { esc, qty, fmtDate, plural, tagBadge, routeText, branchBadge, emptyBox } from './transfersUi.js?v=20261004f';
-import { receivedByBranch, matchesScope, inPeriod, sum, DISC_TYPES } from './transfersLogic.js?v=20261004f';
-import { filterBarHtml, bindFilterBar, scopedPeriod, periodLabel, scopeLabel } from './transfersFilters.js?v=20261004f';
-import { DISC_COLUMNS, discRow, exportRows } from './transfersExport.js?v=20261004f';
-import { manilaDate } from './leaveUi.js?v=20261004f';
-import { bindActions } from './transfersActions.js?v=20261004f';
+import { esc, qty, fmtDate, plural, tagBadge, routeText, branchBadge, emptyBox } from './transfersUi.js?v=20261004g';
+import { receivedByBranch, matchesScope, inPeriod, sum, DISC_TYPES } from './transfersLogic.js?v=20261004g';
+import { filterBarHtml, bindFilterBar, scopedPeriod, periodLabel, scopeLabel } from './transfersFilters.js?v=20261004g';
+import { DISC_COLUMNS, discRow, exportRows } from './transfersExport.js?v=20261004g';
+import { manilaDate } from './leaveUi.js?v=20261004g';
+import { bindActions } from './transfersActions.js?v=20261004g';
 
 const $ = (id) => document.getElementById(id);
 
@@ -27,12 +27,16 @@ export async function renderBranches(ctx, panel) {
   panel.innerHTML = '<div id="tf-br">' + filterBarHtml(ctx) +
     '<div class="card bl-panel"><h3 class="bl-h">Branch stock right now</h3><div id="tf-br-cards"><p class="muted">Loading…</p></div>' +
     '<p class="muted">Read live from the inventory. “Promised to send” is approved or being prepared but not yet released — it is <b>not</b> reserved or deducted; the stock only leaves when the transfer is released.</p></div>' +
-    '<div class="card bl-panel"><h3 class="bl-h">Received by branch <span class="muted">· ' + esc(periodLabel(ctx)) + ' · ' + esc(scopeLabel(ctx)) + '</span></h3>' +
-    '<div class="table-scroll table-2col"><table class="lv-mini"><thead><tr><th>Branch</th><th>Transfers received</th><th>SKUs</th><th>Pieces</th><th>Last receipt</th><th>Open discrepancies</th></tr></thead><tbody>' +
-    rbb.map((r) => '<tr><td data-label="Branch"><b>' + esc(r.branch.name) + '</b></td><td data-label="Transfers received">' + r.count + '</td><td data-label="SKUs">' + r.skus + '</td><td data-label="Pieces"><b>' + qty(r.units) + '</b></td><td data-label="Last receipt">' + (r.lastReceipt ? esc(fmtDate(r.lastReceipt)) : '—') + '</td><td data-label="Open discrepancies">' + (r.openDiscs ? '<b class="lv-neg">' + r.openDiscs + '</b>' : '—') + '</td></tr>').join('') + '</tbody></table></div></div>' +
+    '<div class="card bl-panel"><h3 class="bl-h">Received by branch <span class="muted">· ' + esc(periodLabel(ctx)) + ' · ' + esc(scopeLabel(ctx)) + ' · click a branch to see what it received</span></h3>' +
+    rbb.map((r) => '<details class="tf-brx"><summary><b class="tf-brx-name">' + esc(r.branch.name) + '</b><span>' + plural(r.count, 'transfer') + '</span><span>' + plural(r.skus, 'SKU') + '</span><span><b>' + qty(r.units) + '</b> units received</span>' +
+      '<span class="muted">Last receipt: ' + (r.lastReceipt ? esc(fmtDate(r.lastReceipt)) : '—') + '</span><span>' + (r.openDiscs ? '<b class="lv-neg">' + plural(r.openDiscs, 'open discrepancy', 'open discrepancies') + '</b>' : '<span class="muted">No open discrepancies</span>') + '</span></summary>' +
+      '<div class="tf-brx-body">' + (r.count ? '<div class="table-scroll table-2col"><table class="lv-mini"><thead><tr><th>Transfer</th><th>Received from</th><th>Received on</th><th>SKUs</th><th>Pieces</th><th>Discrepancy</th></tr></thead><tbody>' +
+        r.transfers.slice().sort((a, b) => String(b._receivedOn).localeCompare(String(a._receivedOn))).slice(0, 30).map((t) => '<tr><td data-label="Transfer"><button type="button" class="bl-link" data-act="view" data-id="' + t.id + '">' + esc(t.transfer_number) + '</button></td><td data-label="Received from">' + esc(t._from) + '</td><td data-label="Received on">' + esc(fmtDate(t._receivedOn)) + '</td><td data-label="SKUs">' + t._items.filter((i) => i.rec > 0).length + '</td><td data-label="Pieces"><b>' + qty(t._recPcs) + '</b></td><td data-label="Discrepancy">' + (t._openDiscs.length ? '<b class="lv-neg">' + t._openDiscs.length + ' open</b>' : '—') + '</td></tr>').join('') +
+        '</tbody></table></div>' + (r.count > 30 ? '<p class="muted">Showing the latest 30 of ' + r.count + ' — the Transfers tab (filtered to this destination) lists them all.</p>' : '') : '<p class="muted">Nothing was received here in this period.</p>') + '</div></details>').join('') + '</div>' +
     '<div class="card bl-panel"><h3 class="bl-h">Who sends to whom <span class="muted">· pieces released · ' + esc(periodLabel(ctx)) + '</span></h3>' + matrixHtml(ctx, period) + '</div></div>';
   const root = $('tf-br');
   bindFilterBar(ctx, root, () => ctx.rerender());
+  bindActions(ctx, root);
   try {
     const rows = await ctx.api.branchOverview();
     if (!$('tf-br-cards')) return;

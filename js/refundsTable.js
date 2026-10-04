@@ -1,11 +1,11 @@
 // Refund Management -- the Requests tab: every refund request in one report table, with saved views, search, filters,
 // sorting, paging and export. The table collapses to one card per request on a phone (the app-wide .table-scroll rule),
 // and the sort control is a field + direction pair rather than clickable headers so it still works there.
-import { esc, money, fmtDate, plural, statusBadge, approvalBadge, paymentBadge, priorityBadge, agingBadge, proofBadge, flagBadges } from './refundsUi.js?v=20261004f';
-import { SAVED_VIEWS, viewById, matchesScope, inPeriod, matchesQuery, SORT_FIELDS, SORT_COMPARATORS, STATUSES, APPROVAL_STATUSES, PAYMENT_STATUSES, PRIORITIES, agingKey, sum, uniqueSorted } from './refundsLogic.js?v=20261004f';
-import { filterBarHtml, bindFilterBar, periodLabel } from './refundsFilters.js?v=20261004f';
-import { exportRefundList } from './refundsExport.js?v=20261004f';
-import { actionButtons, bindActions } from './refundsActions.js?v=20261004f';
+import { esc, money, fmtDate, plural, statusBadge, approvalBadge, paymentBadge, priorityBadge, agingBadge, proofBadge, flagBadges } from './refundsUi.js?v=20261004g';
+import { SAVED_VIEWS, viewById, matchesScope, inPeriod, matchesQuery, SORT_FIELDS, SORT_COMPARATORS, STATUSES, APPROVAL_STATUSES, PAYMENT_STATUSES, PRIORITIES, agingKey, sum, uniqueSorted } from './refundsLogic.js?v=20261004g';
+import { filterBarHtml, bindFilterBar, periodLabel } from './refundsFilters.js?v=20261004g';
+import { exportRefundList } from './refundsExport.js?v=20261004g';
+import { actionButtons, bindActions } from './refundsActions.js?v=20261004g';
 import { applySort, sortControlHtml, wireSortControl } from './uiKit.js?v=20260928a';
 
 const $ = (id) => document.getElementById(id);

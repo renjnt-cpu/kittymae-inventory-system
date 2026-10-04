@@ -1,9 +1,9 @@
 // Transfers -- the SKU Trace tab: pick a SKU from the SKU Catalog (read-only here; the catalog stays the master) and see where it is
 // right now by branch, what is promised or on the way, every transfer it has been on, and its whole stock-ledger history (sales,
 // adjustments, transfers ...). Links go to the SKU Catalog and Item Monitoring -- this screen never copies either of them.
-import { esc, qty, fmtDate, plural, friendly, tagBadge, statusBadge, routeText, emptyBox } from './transfersUi.js?v=20261004f';
-import { stockOf, sum } from './transfersLogic.js?v=20261004f';
-import { exportRows } from './transfersExport.js?v=20261004f';
+import { esc, qty, fmtDate, plural, friendly, tagBadge, statusBadge, routeText, emptyBox } from './transfersUi.js?v=20261004g';
+import { stockOf, sum } from './transfersLogic.js?v=20261004g';
+import { exportRows } from './transfersExport.js?v=20261004g';
 
 const $ = (id) => document.getElementById(id);
 export const newSkuState = () => ({ sku: '', product: null, ledger: [], loaded: false, q: '', results: [], msg: '' });
@@ -73,6 +73,8 @@ export function renderSku(ctx, panel) {
   const total = ctx.branches.reduce((s, b) => s + stockOf(ctx, S.sku, b.id), 0);
   const moved = lines.filter((x) => !['Cancelled', 'Rejected'].includes(x.t.status));
   const sums = { n: moved.length, req: sum(moved, (x) => x.i.req), sent: sum(moved, (x) => x.i.sent || 0), rec: sum(moved, (x) => x.i.rec), dam: sum(moved, (x) => x.i.dam), mis: sum(moved, (x) => x.i.mis) };
+  const byBranch = ctx.branches.map((b) => ({ b, out: sum(moved.filter((x) => x.t.from_branch_id === b.id), (x) => x.i.sent || 0), inn: sum(moved.filter((x) => x.t.to_branch_id === b.id), (x) => x.i.rec),
+    n: moved.filter((x) => x.t.from_branch_id === b.id || x.t.to_branch_id === b.id).length })).filter((x) => x.out || x.inn);
   const q = encodeURIComponent(S.sku);
   const ledgerRows = S.ledger.map((x) => { const t = x.transfer_id ? ctx.byId.get(x.transfer_id) : null;
     return { when: dtm(x.occurred_at), type: x.transaction_type, branch: (ctx.branchById[x.branch_id] || {}).name || x.branch_id, change: x.qty_change, before: x.qty_before, after: x.qty_after, transfer: t ? t.transfer_number : '', reference: x.reference_number || '', by: ctx.names[x.employee_id] || '', reason: x.reason || '', _t: t }; });
@@ -85,6 +87,9 @@ export function renderSku(ctx, panel) {
     '<div class="card bl-panel"><h3 class="bl-h">Stock by branch</h3><div class="table-scroll table-2col"><table class="lv-mini"><thead><tr><th>Branch</th><th>In stock now</th><th>Promised to send</th><th>On the way to it</th></tr></thead><tbody>' +
       ctx.branches.map((b) => '<tr><td data-label="Branch"><b>' + esc(b.name) + '</b></td><td data-label="In stock now"><b>' + qty(stockOf(ctx, S.sku, b.id)) + '</b></td><td data-label="Promised to send">' + (promised(b.id) ? qty(promised(b.id)) : '—') + '</td><td data-label="On the way to it">' + (incoming(b.id) ? qty(incoming(b.id)) : '—') + '</td></tr>').join('') + '</tbody></table></div>' +
       '<p class="muted">“Promised to send” is approved or being prepared but not yet released. It is not reserved and not deducted.</p></div>' +
+    (byBranch.length ? '<div class="card bl-panel"><h3 class="bl-h">Where it moved <span class="muted">· transfers that were not cancelled or rejected</span></h3><div class="table-scroll table-2col"><table class="lv-mini"><thead><tr><th>Branch</th><th>Sent out</th><th>Received in</th><th>Transfers</th></tr></thead><tbody>' +
+      byBranch.map((x) => '<tr><td data-label="Branch"><b>' + esc(x.b.name) + '</b></td><td data-label="Sent out">' + (x.out ? qty(x.out) : '—') + '</td><td data-label="Received in">' + (x.inn ? '<b class="lv-pos">' + qty(x.inn) + '</b>' : '—') + '</td><td data-label="Transfers">' + x.n + '</td></tr>').join('') + '</tbody></table></div>' +
+      '<p class="muted">Sent from: <b>' + esc(byBranch.filter((x) => x.out).map((x) => x.b.name).join(', ') || '—') + '</b> · Received at: <b>' + esc(byBranch.filter((x) => x.inn).map((x) => x.b.name).join(', ') || '—') + '</b></p></div>' : '') +
     '<div class="card bl-panel"><div class="tf-skuhead"><h3 class="bl-h">Transfers with this SKU <span class="muted">· ' + plural(lines.length, 'transfer') + '</span></h3>' + exportMenu('tr') + '</div>' +
       (lines.length ? '<div class="table-scroll table-2col"><table class="lv-mini"><thead><tr><th>Transfer</th><th>Route</th><th>Status</th><th>Requested</th><th>Approved</th><th>Released</th><th>Received</th><th>Damaged</th><th>Missing</th></tr></thead><tbody>' +
         lines.map((x) => '<tr><td data-label="Transfer"><button type="button" class="bl-link" data-act="view" data-id="' + x.t.id + '">' + esc(x.t.transfer_number) + '</button><div class="muted bl-sub">' + esc(fmtDate(x.t._requestedOn)) + '</div></td><td data-label="Route" class="tf-routecell">' + routeText(ctx, x.t) + '</td><td data-label="Status">' + statusBadge(x.t.status) + '</td>' +

@@ -1,12 +1,12 @@
 // Transfers -- the Transfers tab: every transfer in one report table, with saved views, search, filters, sorting, paging and export.
 // The table collapses to one card per transfer on a phone (the app-wide .table-scroll rule), and the sort control is a field + direction
 // pair rather than clickable headers so it still works there.
-import { manilaDate } from './leaveUi.js?v=20261004f';
-import { esc, qty, fmtDate, plural, statusBadge, priorityBadge, routeText, tagBadge } from './transfersUi.js?v=20261004f';
-import { SAVED_VIEWS, viewById, matchesScope, inPeriod, matchesQuery, SORT_FIELDS, SORT_COMPARATORS, STATUSES, PRIORITIES, sum, uniqueSorted } from './transfersLogic.js?v=20261004f';
-import { filterBarHtml, bindFilterBar, periodLabel } from './transfersFilters.js?v=20261004f';
-import { exportTransferList } from './transfersExport.js?v=20261004f';
-import { actionButtons, bindActions } from './transfersActions.js?v=20261004f';
+import { manilaDate } from './leaveUi.js?v=20261004g';
+import { esc, qty, fmtDate, plural, statusBadge, priorityBadge, routeText, tagBadge } from './transfersUi.js?v=20261004g';
+import { SAVED_VIEWS, viewById, matchesScope, inPeriod, matchesQuery, SORT_FIELDS, SORT_COMPARATORS, STATUSES, PRIORITIES, sum, uniqueSorted } from './transfersLogic.js?v=20261004g';
+import { filterBarHtml, bindFilterBar, periodLabel } from './transfersFilters.js?v=20261004g';
+import { exportTransferList } from './transfersExport.js?v=20261004g';
+import { actionButtons, bindActions } from './transfersActions.js?v=20261004g';
 import { applySort, sortControlHtml, wireSortControl } from './uiKit.js?v=20260928a';
 
 const $ = (id) => document.getElementById(id);
