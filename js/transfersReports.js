@@ -1,8 +1,8 @@
 // Transfers -- the Reports tab: the twelve reports, each with a preview and CSV / Excel / PDF export.
 // Every export covers exactly what the filters above show ("right now" reports ignore the Month / Year filter).
-import { esc, qty, fmtDate, plural } from './transfersUi.js?v=20261004g';
-import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './transfersFilters.js?v=20261004g';
-import { REPORTS, buildReport, exportReport } from './transfersExport.js?v=20261004g';
+import { esc, qty, fmtDate, plural } from './transfersUi.js?v=20261004h';
+import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './transfersFilters.js?v=20261004h';
+import { REPORTS, buildReport, exportReport } from './transfersExport.js?v=20261004h';
 
 const $ = (id) => document.getElementById(id);
 const PREVIEW = {

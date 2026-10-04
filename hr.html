@@ -4,21 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HR — 201 File — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261004g">
+<link rel="stylesheet" href="css/styles.css?v=20261004h">
 </head>
 <body>
 <main>
   <div id="hr-msg"></div>
+  <div id="hr-assets-alert"></div>
   <div id="hr-root"></div>
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261004g';
+import { initShell, toast, esc } from './js/shell.js?v=20261004h';
 import {
   listAllEmployee201Files, upsertEmployee201File, createEmployee, getBranches, updateEmployeeHireDate,
   listEmployee201Documents, uploadEmployee201Document, getEmployee201DocumentUrl, deleteEmployee201Document, listHrPositions,
   setEmployeePassword,
-} from './js/api.js?v=20260928b';
+} from './js/api.js?v=20261004h';
 
 // Roles mirror employees.role's own CHECK constraint exactly (Admin/Manager
 // picked here are rare via this form -- almost every new hire is Staff or Branch
@@ -107,6 +108,9 @@ if (employee) {
     let knownPositions = [];
     try { knownPositions = (await listHrPositions()).filter((p) => p.is_active).map((p) => p.name); } catch (err) { /* datalist is a nice-to-have -- free-typing still works if this fails */ }
     await load();
+    // Offboarding warning (Asset & Supplies Custodian): people who have left but still hold company property. Loaded on its own, so it
+    // can never hold up or break the 201-File itself.
+    import('./js/hrAssets.js?v=20261004h').then((m) => m.offboardingBanner()).then((html) => { document.getElementById('hr-assets-alert').innerHTML = html; }).catch(() => {});
 
     async function load() {
       root.innerHTML = '<div class="muted">Loading…</div>';
@@ -229,13 +233,38 @@ if (employee) {
           leaveLoaded = true;
           const body = leaveBox.querySelector('.exp-body');
           try {
-            const { mountLeaveProfile } = await import('./js/leaveProfile.js?v=20261004g');
+            const { mountLeaveProfile } = await import('./js/leaveProfile.js?v=20261004h');
             await mountLeaveProfile(body, row.id);
           } catch (err) {
             leaveLoaded = false;
             body.innerHTML = '<div class="msg error">Could not load the leave record: ' + esc(err.message || err) + '</div>';
           }
         });
+      }
+
+      const assetsBox = cell.querySelector('[data-assets-profile]');
+      if (assetsBox) {
+        let assetsLoaded = false;
+        assetsBox.addEventListener('toggle', async () => {
+          if (!assetsBox.open || assetsLoaded) return;
+          assetsLoaded = true;
+          const body = assetsBox.querySelector('.exp-body');
+          try {
+            const { mountAssetsProfile } = await import('./js/hrAssets.js?v=20261004h');
+            await mountAssetsProfile(body, row.id);
+          } catch (err) {
+            assetsLoaded = false;
+            body.innerHTML = '<div class="msg error">Could not load the company assets: ' + esc(err.message || err) + '</div>';
+          }
+        });
+        // someone who has already left: show straight away whether they still hold anything
+        if (row.status === 'Inactive' || ['RES', 'TER', 'AWOL', 'DECEASED'].includes((row.file201 || {}).employment_status)) {
+          import('./js/hrAssets.js?v=20261004h').then((m) => m.afterSaveWarning(row.id)).then((msg) => {
+            if (!msg) return;
+            const box = cell.querySelector('[data-assets-warning]');
+            if (box) box.innerHTML = '<div class="msg error">' + esc(msg) + '</div>';
+          }).catch(() => {});
+        }
       }
 
       if (canSetPassword) {
@@ -299,6 +328,10 @@ if (employee) {
           });
           await updateEmployeeHireDate(row.id, ff.hireDate.value || null);
           toast('hr-msg', 'Saved.', false);
+          // Offboarding: if this save marks the person as no longer employed and they still hold company property, say so right away.
+          if (['RES', 'TER', 'AWOL', 'DECEASED'].includes(ff.employmentStatus.value) || (ff.endOfEmploymentDate.value && ff.endOfEmploymentDate.value <= new Date().toISOString().slice(0, 10))) {
+            import('./js/hrAssets.js?v=20261004h').then((m) => m.afterSaveWarning(row.id)).then((msg) => { if (msg) toast('hr-msg', 'Saved. ' + msg, true); }).catch(() => {});
+          }
           await load();
         } catch (err) {
           toast('hr-msg', String(err.message || err), true);
@@ -361,6 +394,7 @@ if (employee) {
         (canSetPassword
           ? '<div id="hr-pw-section-' + id + '" style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #f0f0f0;">' + passwordSectionHtml(row, false) + '</div>'
           : '') +
+        '<div data-assets-warning="' + id + '"></div>' +
         '<form class="hr-edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
           '<div class="field"><label>Date Hired</label><input type="date" name="hireDate" value="' + (row.hire_date || '') + '"></div>' +
           '<div class="field"><label>First Name</label><input type="text" name="firstName" value="' + esc(f.first_name || '') + '"></div>' +
@@ -425,6 +459,10 @@ if (employee) {
         // Leave tab (Leave Management, spec 24): credits, requests and credit history for this employee.
         // Loaded only when opened, and via a dynamic import so it can never affect the rest of this page.
         '<details class="exp card" data-leave-profile="' + id + '" style="margin-top:16px;"><summary><span class="exp-arrow" aria-hidden="true">▸</span>Leave</summary>' +
+          '<div class="exp-body"></div></details>' +
+        // Company Assets (Asset & Supplies Custodian): what is issued to this employee. A read-only summary -- the records live in the
+        // Assets module; nothing about the employee is copied.
+        '<details class="exp card" data-assets-profile="' + id + '" style="margin-top:16px;"><summary><span class="exp-arrow" aria-hidden="true">▸</span>Company Assets</summary>' +
           '<div class="exp-body"></div></details>' +
       '</div>';
     }

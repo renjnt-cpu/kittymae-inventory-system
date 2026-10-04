@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Access Checklist — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261004g">
+<link rel="stylesheet" href="css/styles.css?v=20261004h">
 <style>
   .ac-item { padding:10px 0; border-bottom:1px solid #f0f0f0; }
   .ac-item:last-child { border-bottom:none; }
@@ -46,14 +46,14 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261004g';
+import { initShell, toast, esc } from './js/shell.js?v=20261004h';
 import {
   getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, listScrapEntries,
   subscribeToChanges, getBranches, listProducts, listAllInventoryQty, listHrPositions, setEmployeePassword,
   listSales, listPackedOrders, listOnlineOrderCareAssignments,
-} from './js/api.js?v=20260928b';
-import { branchColor } from './js/branchColors.js?v=20260928a';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20260928a';
+} from './js/api.js?v=20261004h';
+import { branchColor } from './js/branchColors.js?v=20261004h';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20261004h';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 36) -- replaces this leaderboard's
 // old per-column header-click sort with the one shared control used everywhere else.
@@ -157,7 +157,7 @@ function itemsForEmployee(emp) {
     cat.branches  = { label: 'Can add, edit, and delete Subasta/Scrap for every branch', access: true, levels: ['edit'] };
     cat.capital   = { label: 'Can add (pending Ren’s approval) and view Branch Capital for every branch — cannot approve or delete', access: true, levels: ['view', 'encode'] };
     cat.payments  = { label: 'Can see, add, and import Transactions', access: true, levels: ['edit'] };
-    cat.assets    = { label: 'Can add/edit/delete Asset & Supplies Custodian items', access: true, levels: ['edit'] };
+    cat.assets    = { label: 'Can manage Asset & Supplies Custodian at every branch (assign, return, transfer, repair, approve disposals, see prices) — cannot change its settings', access: true, levels: ['edit'] };
     cat.lbc       = { label: 'Can see and manage LBC Monitoring', access: true, levels: ['edit'] };
   } else if (emp.role === 'Branch Supervisor') {
     cat.inventory = { label: 'Sees inventory for ' + branch + ' only', access: true, levels: ['view'] };
@@ -166,7 +166,7 @@ function itemsForEmployee(emp) {
     cat.branches  = { label: 'Can add, edit, and delete Subasta/Scrap for ' + branch, access: true, levels: ['edit'] };
     cat.capital   = { label: 'Can add (pending Ren’s approval) and view Branch Capital for ' + branch + ' — cannot approve or delete', access: true, levels: ['view', 'encode'] };
     cat.payments  = { label: 'Can see Transactions and fill in FB Name/Customer/Order ID (not add/import/delete)', access: true, levels: ['edit'] };
-    cat.assets    = { label: 'Can add/edit/delete Asset & Supplies Custodian items', access: true, levels: ['edit'] };
+    cat.assets    = { label: 'Can assign, receive back, transfer, report and repair assets, and request / issue supplies, for ' + branch + ' only — cannot add assets or see prices', access: true, levels: ['encode'] };
     cat.lbc       = { label: 'Can see and manage LBC Monitoring', access: true, levels: ['edit'] };
   } else if (emp.role === 'Staff') {
     cat.inventory = { label: 'Sees inventory for ' + branch + ' only', access: true, levels: ['view'] };
@@ -185,19 +185,23 @@ function itemsForEmployee(emp) {
     if (emp.position === 'Admin Assistant') {
       cat.payments = { label: 'Can see Transactions and fill in FB Name/Customer/Order ID (not add/import/delete)', access: true, levels: ['edit'] };
       cat.lbc      = { label: 'Can see and manage LBC Monitoring', access: true, levels: ['edit'] };
-      cat.assets   = { label: 'Can add/edit/delete Asset & Supplies Custodian items', access: true, levels: ['edit'] };
+      cat.assets   = { label: 'Can manage Asset & Supplies Custodian at every branch (add, assign, return, transfer, repair, supplies, see prices)', access: true, levels: ['edit'] };
     }
   } else if (emp.role === 'None' && emp.position === 'Personal Assistant') {
     cat.branches = { label: 'Can view Subasta/Scrap for every branch (view only)', access: true, levels: ['view'] };
     cat.capital  = { label: 'Can add (pending Ren’s approval) and view Branch Capital for every branch', access: true, levels: ['view', 'encode'] };
-    cat.assets   = { label: 'Can add/edit/delete Asset & Supplies Custodian items', access: true, levels: ['edit'] };
+    cat.assets   = { label: 'Can manage Asset & Supplies Custodian at every branch (add, assign, return, transfer, repair, supplies, see prices)', access: true, levels: ['edit'] };
   } else if (emp.role === 'None') {
     cat.branches = emp.branches
       ? { label: 'Can add Subasta/Scrap entries for ' + branch + ' (cannot edit/delete)', access: true, levels: ['encode'] }
       : { label: 'No branch assigned — cannot add Subasta/Scrap entries', access: false, levels: [] };
   }
 
-  const autoRefundApprover = ['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || isPosMgr;
+  // Asset & Supplies Custodian (upgraded 2026-10-04): every employee can open the page for "My Company Assets" -- what is issued to
+  // them, confirming receipt, reporting a problem. Anything more comes from the Position Access Matrix (assets.* / supplies.* keys).
+  if (!cat.assets.access) cat.assets = { label: 'Sees only the company property issued to them (My Company Assets) — can confirm receipt and report a problem', access: true, levels: ['view'] };
+
+  const autoRefundApprover =['Admin', 'Manager', 'Branch Supervisor'].includes(emp.role) || isPosMgr;
   cat.refund = (autoRefundApprover || emp.refund_approval_access)
     ? { label: 'Can approve and process refund requests', access: true, levels: ['approver'] }
     : { label: 'Can only submit refund requests (cannot approve)', access: false, levels: [] };

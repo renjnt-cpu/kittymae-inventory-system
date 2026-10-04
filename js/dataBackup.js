@@ -1,9 +1,9 @@
 // Bundles date-range-filtered transaction records and their Storage attachments
-// (scrap/layaway/refund/bill/transfer photos) into one downloadable zip -- see data-backup.html.
+// (scrap/layaway/refund/bill/transfer/asset photos) into one downloadable zip -- see data-backup.html.
 // This exists because Supabase's own daily backups only snapshot the Postgres database;
 // they explicitly do NOT include Storage bucket contents, so without this, the photos
 // themselves have no backup at all if something ever happens to them.
-import { supabase } from './supabaseClient.js?v=20260928a';
+import { supabase } from './supabaseClient.js?v=20261004h';
 
 const SOURCES = [
   { table: 'bills', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'bill-attachments', label: 'Bills' },
@@ -16,6 +16,8 @@ const SOURCES = [
   { table: 'refund_files', dateCol: 'created_at', pathCol: 'file_path', bucket: 'refund-attachments', label: 'Refund Files (requests & proofs)' },
   // transfer slips, packing / receiving / damage photos and courier receipts (a removed file stays in storage, so it is included too)
   { table: 'transfer_files', dateCol: 'created_at', pathCol: 'file_path', bucket: 'transfer-attachments', label: 'Transfer Files (slips & photos)' },
+  // asset photos and documents (Asset & Supplies Custodian) -- a file removed from an asset is hidden from everyone, so only the current ones are included
+  { table: 'asset_files', dateCol: 'created_at', pathCol: 'file_path', bucket: 'asset-attachments', label: 'Asset Files (photos & documents)' },
   { table: 'layaway_payments', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'layaway-attachments', label: 'Layaway Payments' },
 ];
 

@@ -1,13 +1,13 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20260928a';
-import { listMyPermissions } from './api.js?v=20260928b';
-import { initActivityFeed } from './activityFeed.js?v=20260929a';
-import { localDateStr } from './uiKit.js?v=20260928a';
-import { showBirthdayBanner } from './birthdayBanner.js?v=20260928a';
-import { initAdminChat } from './adminChat.js?v=20260928a';
-import { initLeaveNotifications } from './leaveNotifications.js?v=20261004g';
+import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20261004h';
+import { listMyPermissions } from './api.js?v=20261004h';
+import { initActivityFeed } from './activityFeed.js?v=20261004h';
+import { localDateStr } from './uiKit.js?v=20261004h';
+import { showBirthdayBanner } from './birthdayBanner.js?v=20261004h';
+import { initAdminChat } from './adminChat.js?v=20261004h';
+import { initLeaveNotifications } from './leaveNotifications.js?v=20261004h';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -51,7 +51,9 @@ const ERP_BLOCKED_JOB_TITLES = [];
 // own branches.html instead, open to any authenticated employee there).
 // 'leave' (Ren, 2026-10-04): Leave Management is for every employee with a login, scoped
 // job titles included -- what they can see inside it is decided by their leave role.
-const ERP_SCOPED_JOB_TITLES = { 'Sales Admin Associate': ['item-monitoring', 'transfers', 'refunds', 'leave'] };
+// 'assets' (Ren, 2026-10-04): the Asset & Supplies Custodian page is open to every employee for "My Company Assets" (what is issued to them),
+// scoped job titles included -- everything else inside it follows the Position Access Matrix and is enforced by the database.
+const ERP_SCOPED_JOB_TITLES = { 'Sales Admin Associate': ['item-monitoring', 'transfers', 'refunds', 'leave', 'assets'] };
 
 export async function initShell(activePage) {
   const session = await requireSession();
@@ -170,9 +172,9 @@ export async function initShell(activePage) {
       // fill in FB Name/Customer/Order ID, not import or delete.
       pages.push({ id: 'transactions', ...ALL_PAGE_DEFS.transactions });
     }
-    if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) || ['Personal Assistant', 'Admin Assistant'].includes(employee.position) || (employee.extra_page_access || []).includes('assets')) {
-      pages.push({ id: 'assets', ...ALL_PAGE_DEFS.assets });
-    }
+    // Asset & Supplies Custodian: every employee (ungated) -- a plain employee sees "My Company Assets"; custodians, supervisors, managers and
+    // admins see more by permission (assets.* / supplies.* in the Position Access Matrix), and the database enforces it (migrations 131-136).
+    pages.push({ id: 'assets', ...ALL_PAGE_DEFS.assets });
     // Phase 1 of the HR-201 migration (Ren, 2026-09-29) -- checks employee.jobTitle
     // instead of employee.position now; see the jobTitle assignment above for why.
     if (['Admin', 'Manager', 'Branch Supervisor'].includes(employee.role) ||

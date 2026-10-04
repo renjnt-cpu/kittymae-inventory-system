@@ -2,8 +2,8 @@
 // `supabase` directly, so the query shape lives in one place. Mirrors the old app's
 // `api(name, ...args)` helper in spirit, just split into named functions since
 // supabase-js's table/RPC calls aren't as uniformly shaped as google.script.run's.
-import { supabase } from './supabaseClient.js?v=20260928a';
-import { localDateStr } from './uiKit.js?v=20260928a';
+import { supabase } from './supabaseClient.js?v=20261004h';
+import { localDateStr } from './uiKit.js?v=20261004h';
 
 /** Caps the core ledger list queries (Sales, Layaway, Scrap, Subasta) so a tab load
  * fetches recent history instead of the entire table unconditionally -- these had no
@@ -876,39 +876,9 @@ export async function listLayawayHandlers() {
   return data || [];
 }
 
-export async function listAssetCustodianItems() {
-  const { data, error } = await supabase.from('asset_custodian_items')
-    .select('*, branches(name)')
-    .order('created_at', { ascending: false });
-  if (error) throw new Error(error.message);
-  return attachEmployeeNames(data, { custodian: 'custodian_id', creator: 'created_by' });
-}
-
-export async function createAssetCustodianItem({ itemName, itemType, branchId, custodianId, quantity, unitValue, condition, dateAssigned, notes }) {
-  const empId = await currentEmployeeId();
-  const { error } = await supabase.from('asset_custodian_items').insert({
-    item_name: itemName, item_type: itemType || 'Asset', branch_id: branchId || null,
-    custodian_id: custodianId || null, quantity: quantity || 1, unit_value: unitValue || null,
-    condition: condition || 'Good', date_assigned: dateAssigned || null, notes: notes || null,
-    created_by: empId,
-  });
-  if (error) throw new Error(error.message);
-}
-
-export async function updateAssetCustodianItem(id, { itemName, itemType, branchId, custodianId, quantity, unitValue, condition, dateAssigned, notes }) {
-  const { error } = await supabase.from('asset_custodian_items').update({
-    item_name: itemName, item_type: itemType, branch_id: branchId || null,
-    custodian_id: custodianId || null, quantity: quantity || 1, unit_value: unitValue || null,
-    condition, date_assigned: dateAssigned || null, notes: notes || null,
-    updated_at: new Date().toISOString(),
-  }).eq('id', id);
-  if (error) throw new Error(error.message);
-}
-
-export async function deleteAssetCustodianItem(id) {
-  const { error } = await supabase.from('asset_custodian_items').delete().eq('id', id);
-  if (error) throw new Error(error.message);
-}
+// Asset & Supplies Custodian (upgraded 2026-10-04): the old flat list helpers that were here (list / create / update / delete on
+// asset_custodian_items) are gone -- that table is kept as read-only history and everything now goes through js/assetsApi.js and the
+// asset_* / supply_* database functions (migrations 131-136).
 
 // ---- LBC monitoring (COD parcels shipped via LBC for online orders) — company-wide,
 // not branch-scoped, same shape as Transactions. ----

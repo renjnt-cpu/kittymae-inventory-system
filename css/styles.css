@@ -1082,3 +1082,120 @@ input.tf-qty { width:92px; max-width:100%; text-align:right; box-sizing:border-b
 .tf-brx[open] > summary::before { content:"▾"; }
 .tf-brx-name { min-width:110px; font-size:14px; }
 .tf-brx-body { padding:0 14px 12px; }
+
+/* ---- Assets & Supplies Custodian (Ren, 2026-10-04) -- statuses, conditions, "needs attention" chips, the asset card, work panels, scanning and printable tags / forms.
+   Everything is prefixed ac- so it cannot collide with the other modules' classes. Layout, KPI cards, charts, filters and drawers reuse the shared bl- / lv- blocks above. ---- */
+.ac-tabs { flex-wrap:nowrap; scrollbar-width:thin; }
+.ac-tabs .lv-tab { white-space:nowrap; }
+
+/* statuses (one colour per status family) and conditions */
+.badge.ac-st-avail { background:#eaf6ec; color:#2e7d32; }
+.badge.ac-st-assigned { background:#e3edfd; color:#1a56b0; }
+.badge.ac-st-inuse { background:#e8eefb; color:#3b5db0; box-shadow:inset 0 0 0 1px #c6d4f2; }
+.badge.ac-st-storage { background:#eef1f4; color:#52606d; }
+.badge.ac-st-transit { background:#efe9fa; color:#5b3fa0; }
+.badge.ac-st-repair { background:#ffe9d6; color:#b04a00; }
+.badge.ac-st-bad { background:#fdecea; color:#c62828; font-weight:700; }
+.badge.ac-st-return { background:#fff1c9; color:#7a5200; }
+.badge.ac-st-returned { background:#e4f4ea; color:#2c7a4b; }
+.badge.ac-st-disposal { background:#f3e8dd; color:#8d5524; }
+.badge.ac-st-gone { background:#eeeeee; color:#666; }
+.badge.ac-cond-good { background:#f1f8f2; color:#2e7d32; box-shadow:inset 0 0 0 1px #cfe7d3; }
+.badge.ac-cond-fair { background:#fff8e8; color:#8a5a00; box-shadow:inset 0 0 0 1px #f0dcae; }
+.badge.ac-cond-warn { background:#ffe9d6; color:#b04a00; box-shadow:inset 0 0 0 1px #f2c9a2; }
+.badge.ac-cond-bad { background:#fdecea; color:#a31515; box-shadow:inset 0 0 0 1px #f3c3be; }
+/* status of a repair / report / disposal / transfer / request */
+.badge.ac-flow-gray { background:#eeeeee; color:#555; }
+.badge.ac-flow-yellow { background:#fff1c9; color:#7a5200; }
+.badge.ac-flow-blue { background:#e3edfd; color:#1a56b0; }
+.badge.ac-flow-purple { background:#efe9fa; color:#5b3fa0; }
+.badge.ac-flow-orange { background:#ffe9d6; color:#b04a00; }
+.badge.ac-flow-green { background:#eaf6ec; color:#2e7d32; }
+.badge.ac-flow-red { background:#fdecea; color:#c62828; font-weight:700; }
+.badge.bl-tag.ac-tag-bad { background:#fdecea; color:#a31515; font-weight:700; }
+.msg.lv-note { background:#eef4fd; color:#27508f; border:1px solid #cddcf3; }
+.lv-warn-text { color:#b04a00; }
+
+/* why an asset needs attention */
+.ac-whys { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+.ac-why { font-size:11px; padding:2px 7px; border-radius:10px; background:#eee; color:#555; line-height:1.4; }
+.ac-why-red { background:#fdecea; color:#a31515; }
+.ac-why-orange { background:#ffe9d6; color:#b04a00; }
+.ac-why-yellow { background:#fff4e0; color:#8a5a00; }
+.ac-why-gray { background:#eeeeee; color:#666; }
+.msg.ac-warn-red { background:#fdecea; color:#a31515; border:1px solid #f3c3be; }
+.msg.ac-warn-orange { background:#fff1e4; color:#9a4300; border:1px solid #f2c9a2; }
+.msg.ac-warn-gray { background:#f4f4f4; color:#555; border:1px solid #ddd; }
+
+/* rows */
+.ac-table .ac-selcell { width:28px; }
+.ac-row-lost td:first-child, .ac-row-missing td:first-child, .ac-row-damaged td:first-child { box-shadow:inset 3px 0 0 #c62828; }
+.ac-row-underrepair td:first-child, .ac-row-undermaintenance td:first-child { box-shadow:inset 3px 0 0 #e07b30; }
+.ac-row-disposed, .ac-row-archived, .ac-row-gone { opacity:0.65; }
+.ac-row-sel { background:#fff9e0; }
+.bl-table tr.ac-row-sel td { background:#fff9e0; }
+
+/* the asset card */
+.ac-sum4 { grid-template-columns:repeat(4, minmax(0, 1fr)); }
+@media (max-width:760px) { .ac-sum4 { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+.ac-dtabs { display:flex; gap:4px; overflow-x:auto; border-bottom:1px solid #e5e5e5; margin:14px 0 10px; }
+.ac-dtab { background:none; border:none; border-bottom:3px solid transparent; padding:8px 12px; font:inherit; font-size:13px; color:#555; cursor:pointer; white-space:nowrap; }
+.ac-dtab:hover { color:#222; }
+.ac-dtab-on { border-bottom-color:var(--rose, #e0a030); color:#222; font-weight:700; }
+.ac-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.ac-chip { background:#f1f1f1; border-radius:14px; padding:3px 10px; font-size:12px; }
+.ac-acks { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.ac-ack { font-size:12px; padding:3px 9px; border-radius:12px; }
+.ac-ack-yes { background:#eaf6ec; color:#2e7d32; }
+.ac-ack-no { background:#f4f4f4; color:#777; }
+.ac-mt { margin-top:10px; }
+.ac-readonly { padding:8px 10px; background:#f6f6f6; border-radius:8px; font-size:14px; }
+
+/* work panels */
+.ac-checks { display:flex; flex-wrap:wrap; gap:4px 16px; margin:4px 0 10px; }
+.ac-line { display:grid; grid-template-columns:minmax(0, 2fr) minmax(90px, 1fr) auto auto; gap:8px; align-items:center; margin-bottom:8px; }
+.ac-line select, .ac-line input { min-width:0; width:100%; }
+.ac-stockhint { font-size:12px; color:#666; white-space:nowrap; }
+@media (max-width:760px) { .ac-line { grid-template-columns:1fr 1fr; } .ac-line .ac-stockhint { grid-column:1 / -1; white-space:normal; } }
+.ac-perbranch { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+.ac-pb { font-size:11px; background:#f1f1f1; border-radius:10px; padding:1px 7px; }
+.ac-pb-low { background:#fff4e0; color:#8a5a00; }
+.ac-pb-out { background:#fdecea; color:#a31515; font-weight:700; }
+.ac-catlist { list-style:none; margin:0 0 8px; padding:0; }
+.ac-catrow { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid #f1f1f1; font-size:13px; }
+.ac-cat-off { opacity:0.6; }
+.ac-rep-prev { margin-top:8px; }
+.ac-video { width:100%; max-height:50vh; background:#000; border-radius:10px; }
+
+/* My Company Assets */
+.ac-mygrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; }
+.ac-mycard { margin:0; }
+.ac-mycard-head { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; margin-bottom:8px; }
+.ac-mycard-body { display:flex; flex-direction:column; gap:3px; font-size:13px; margin-bottom:8px; }
+
+/* printing: asset tags with a QR code, and the forms people sign (ac-print.js puts them in #ac-print-root, directly under <body>) */
+.ac-print-area { display:none; }
+.ac-labels { display:grid; grid-template-columns:repeat(3, 1fr); gap:6mm; }
+.ac-label { display:flex; gap:3mm; align-items:center; border:1px dashed #999; border-radius:2mm; padding:3mm; break-inside:avoid; }
+.ac-label-qr { width:24mm; height:24mm; flex:0 0 24mm; }
+.ac-label-qr svg { width:100%; height:100%; display:block; }
+.ac-label-text { display:flex; flex-direction:column; font-size:9pt; line-height:1.25; min-width:0; }
+.ac-label-no { font-size:11pt; }
+.ac-label-name { overflow:hidden; text-overflow:ellipsis; }
+.ac-label-co { font-size:7pt; color:#555; margin-top:1mm; }
+.ac-ptable { width:100%; border-collapse:collapse; margin:8px 0; }
+.ac-ptable th, .ac-ptable td { border:1px solid #bbb; padding:4px 6px; text-align:left; vertical-align:top; font-size:11pt; }
+.ac-ptable th { width:32%; background:#f4f4f4; font-weight:600; }
+.ac-ptable thead th { width:auto; }
+.ac-decl { margin:14px 0; font-size:11pt; line-height:1.5; }
+.ac-signoff { display:flex; gap:24px; margin-top:34px; }
+.ac-signoff > div { flex:1; border-top:1px solid #333; padding-top:4px; font-size:10pt; }
+.ac-datesoff { margin-top:12px; }
+.ac-datesoff > div { border-top:1px dotted #888; }
+.ac-pfoot { margin-top:18px; font-size:9pt; }
+@media print {
+  body.ac-printing > *:not(#ac-print-root) { display:none !important; }
+  body.ac-printing #ac-print-root { display:block; padding:10mm; font-size:11pt; color:#000; }
+  body.ac-printing .ac-noprint-note { display:none; }
+  @page { margin:10mm; }
+}

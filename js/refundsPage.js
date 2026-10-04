@@ -5,17 +5,17 @@
 // One loaded copy of the data (ctx) feeds every tab; a change anywhere goes through the database, then ctx.refresh()
 // reloads and redraws. Who may do what is decided by the database -- the page only hides the buttons a person
 // could not use.
-import { esc, drawersHtml, makeToast, closeDrawer, isDrawerOpen, friendly } from './refundsUi.js?v=20261004g';
-import { enrichRefunds } from './refundsLogic.js?v=20261004g';
-import { defaultFilters } from './refundsFilters.js?v=20261004g';
-import { renderDashboard } from './refundsDashboard.js?v=20261004g';
-import { renderTable, newTableState } from './refundsTable.js?v=20261004g';
-import { renderQueue, renderPayments, renderCompleted } from './refundsQueue.js?v=20261004g';
-import { renderAnalytics, newAnalyticsState } from './refundsAnalytics.js?v=20261004g';
-import { renderReports } from './refundsReports.js?v=20261004g';
-import { renderLog, renderSettings, newLogState } from './refundsAdmin.js?v=20261004g';
-import { openDetail, closeDetail, detailOpenId, printRefund } from './refundsDetail.js?v=20261004g';
-import { openRefundForm, requestCloseForm, openPayment, openEditPayment, openUpload, openNote, openComm, openFollowUp, openPriority } from './refundsForm.js?v=20261004g';
+import { esc, drawersHtml, makeToast, closeDrawer, isDrawerOpen, friendly } from './refundsUi.js?v=20261004h';
+import { enrichRefunds } from './refundsLogic.js?v=20261004h';
+import { defaultFilters } from './refundsFilters.js?v=20261004h';
+import { renderDashboard } from './refundsDashboard.js?v=20261004h';
+import { renderTable, newTableState } from './refundsTable.js?v=20261004h';
+import { renderQueue, renderPayments, renderCompleted } from './refundsQueue.js?v=20261004h';
+import { renderAnalytics, newAnalyticsState } from './refundsAnalytics.js?v=20261004h';
+import { renderReports } from './refundsReports.js?v=20261004h';
+import { renderLog, renderSettings, newLogState } from './refundsAdmin.js?v=20261004h';
+import { openDetail, closeDetail, detailOpenId, printRefund } from './refundsDetail.js?v=20261004h';
+import { openRefundForm, requestCloseForm, openPayment, openEditPayment, openUpload, openNote, openComm, openFollowUp, openPriority } from './refundsForm.js?v=20261004h';
 
 const $ = (id) => document.getElementById(id);
 const CLOSED = ['Cancelled', 'Rejected'];

@@ -5,7 +5,7 @@
 //
 // A report column is { key, label, type } where type is 'text' (default), 'number' or 'date'
 // (an ISO yyyy-mm-dd string). Rows are plain objects keyed by column key.
-import { fmtDate, num } from './leaveUi.js?v=20261004g';
+import { fmtDate, num } from './leaveUi.js?v=20261004h';
 
 const LIBS = {
   jszip: { url: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', integrity: 'sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG', ready: () => window.JSZip },

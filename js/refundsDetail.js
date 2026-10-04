@@ -1,9 +1,9 @@
 // Refund Management -- the refund "report card": customer, order, request, approval, payments and proof, customer
 // communication, notes, and the full timeline, with the approval controls and every action a person is allowed to take.
 // Opens as a drawer from anywhere. Confirmations and reasons are inline panels (the app never uses confirm() / prompt()).
-import { esc, money, fmtDate, fmtDateTime, fmtBytes, kv, openDrawer, closeDrawer, drawerBody, isDrawerOpen, actionPanel, errorsText, statusBadge, approvalBadge, paymentBadge, priorityBadge, agingBadge, proofBadge, flagBadges, tagBadge, progressBar } from './refundsUi.js?v=20261004g';
-import { METHODS, agingKey, refundableLeft } from './refundsLogic.js?v=20261004g';
-import { refundSummaryPdf } from './refundsExport.js?v=20261004g';
+import { esc, money, fmtDate, fmtDateTime, fmtBytes, kv, openDrawer, closeDrawer, drawerBody, isDrawerOpen, actionPanel, errorsText, statusBadge, approvalBadge, paymentBadge, priorityBadge, agingBadge, proofBadge, flagBadges, tagBadge, progressBar } from './refundsUi.js?v=20261004h';
+import { METHODS, agingKey, refundableLeft } from './refundsLogic.js?v=20261004h';
+import { refundSummaryPdf } from './refundsExport.js?v=20261004h';
 
 const $ = (id) => document.getElementById(id);
 const val = (id) => ($(id) ? $(id).value : '');
