@@ -5,7 +5,7 @@
 //
 // A report column is { key, label, type } where type is 'text' (default), 'number' or 'date'
 // (an ISO yyyy-mm-dd string). Rows are plain objects keyed by column key.
-import { fmtDate, num } from './leaveUi.js?v=20261004c';
+import { fmtDate, num } from './leaveUi.js?v=20261004d';
 
 const LIBS = {
   jszip: { url: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', integrity: 'sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG', ready: () => window.JSZip },
@@ -13,7 +13,7 @@ const LIBS = {
   autotable: { url: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js', integrity: 'sha384-fCAW/rDWORTbQXSiB7mOg0QtQ5c+r0f544y6XoKjuVva0nMBlCpNUjiFeG5iMdS3', ready: () => window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && window.jspdf.jsPDF.API.autoTable },
 };
 const pending = {};
-function ensureLib(name) {
+export function ensureLib(name) {
   const lib = LIBS[name];
   if (lib.ready()) return Promise.resolve();
   if (pending[name]) return pending[name];
@@ -35,7 +35,10 @@ export function download(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-const shown = (v, type) => (v === null || v === undefined || v === '') ? '' : type === 'date' ? fmtDate(v) : type === 'number' ? num(v) : String(v);
+// 'money' is a number shown as 12,500.00 in a PDF and stored as a plain number in CSV / Excel (no currency
+// symbol: jsPDF's built-in fonts cannot print the peso sign, and a number cell stays summable in a spreadsheet)
+const shown = (v, type) => (v === null || v === undefined || v === '') ? '' : type === 'date' ? fmtDate(v) : type === 'number' ? num(v)
+  : type === 'money' ? Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : String(v);
 
 // ---------------------------------------------------------------- CSV
 // Text that starts with = + - @ (or a tab/CR) would be run as a formula by Excel/Sheets; a leave
@@ -73,7 +76,7 @@ function sheetXml(columns, rows) {
     columns.forEach((c, ci) => {
       const v = r[c.key], ref = colLetter(ci) + (ri + 2);
       if (v === null || v === undefined || v === '') return;
-      if (c.type === 'number' && typeof v === 'number' && Number.isFinite(v)) x += '<c r="' + ref + '"><v>' + v + '</v></c>';
+      if ((c.type === 'number' || c.type === 'money') && typeof v === 'number' && Number.isFinite(v)) x += '<c r="' + ref + '"><v>' + v + '</v></c>';
       else if (c.type === 'date' && /^\d{4}-\d{2}-\d{2}/.test(v)) x += '<c r="' + ref + '" s="1"><v>' + excelDate(String(v).slice(0, 10)) + '</v></c>';
       else x += '<c r="' + ref + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEsc(v) + '</t></is></c>'; // inline text is never evaluated as a formula
     });
@@ -122,7 +125,7 @@ export async function exportXlsx(filename, title, columns, rows, aboutRows) {
 // ---------------------------------------------------------------- PDF
 // jsPDF's built-in fonts are Latin-1 only, so anything outside it is swapped for a safe stand-in.
 const pdfSafe = (s) => String(s).replace(/[–—]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/…/g, '...').replace(/[^ -ÿ]/g, '?');
-export async function buildPdfBlob(title, subtitleLines, columns, rows) {
+export async function buildPdfBlob(title, subtitleLines, columns, rows, footer) {
   await ensureLib('jspdf'); await ensureLib('autotable');
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: columns.length > 6 ? 'landscape' : 'portrait', unit: 'pt', format: 'a4' });
@@ -138,16 +141,16 @@ export async function buildPdfBlob(title, subtitleLines, columns, rows) {
     styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
     headStyles: { fillColor: [255, 241, 188], textColor: 30, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [250, 250, 247] },
-    columnStyles: Object.fromEntries(columns.map((c, i) => [i, { halign: c.type === 'number' ? 'right' : 'left' }]).filter(([, s]) => s.halign === 'right')),
+    columnStyles: Object.fromEntries(columns.map((c, i) => [i, { halign: (c.type === 'number' || c.type === 'money') ? 'right' : 'left' }]).filter(([, s]) => s.halign === 'right')),
   });
   const pages = doc.internal.getNumberOfPages();
   for (let p = 1; p <= pages; p++) {
     doc.setPage(p); doc.setFontSize(8); doc.setTextColor(120);
-    doc.text('Kittymae Jewels - Leave Management', margin, doc.internal.pageSize.getHeight() - 20);
+    doc.text(pdfSafe(footer || 'Kittymae Jewels - Leave Management'), margin, doc.internal.pageSize.getHeight() - 20);
     doc.text('Page ' + p + ' of ' + pages, doc.internal.pageSize.getWidth() - margin, doc.internal.pageSize.getHeight() - 20, { align: 'right' });
   }
   return doc.output('blob');
 }
-export async function exportPdf(filename, title, subtitleLines, columns, rows) {
-  download(await buildPdfBlob(title, subtitleLines, columns, rows), filename + '.pdf');
+export async function exportPdf(filename, title, subtitleLines, columns, rows, footer) {
+  download(await buildPdfBlob(title, subtitleLines, columns, rows, footer), filename + '.pdf');
 }
