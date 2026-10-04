@@ -78,6 +78,9 @@ if (employee) {
         '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="SKU, Sub SKU, or product name…"></div>' +
         '<div class="field"><label>Status</label><select id="f-status"><option value="all">All</option><option value="Active" selected>Active</option><option value="Discontinued">Discontinued</option></select></div>' +
         '<div class="field"><label>Category</label><select id="f-category"><option value="all">All</option></select></div>' +
+        // Pricing filter (Ren, 2026-10-04: "add sku catalog in per grams ... add on the filter option") --
+        // narrows the catalog to just the gram-priced SKUs (or just the per-piece ones).
+        '<div class="field"><label>Pricing</label><select id="f-pricing"><option value="all">All</option><option value="Per Gram">Per Gram</option><option value="Per Piece">Per Piece</option></select></div>' +
         // One Sort control, same as every other module (Ren's 2026-09-21 Filter + Sort
         // spec, section 36: no per-module sort UI) -- generic fields plus this catalog's
         // own useful "pcs at this branch" sort share the one dropdown instead of two
@@ -135,6 +138,7 @@ if (employee) {
   await loadQty();
   await Promise.all([loadProducts(), loadDiscontinued(), loadPendingEditRequests(), loadLastChanges()]);
   document.getElementById('f-category').addEventListener('change', render);
+  document.getElementById('f-pricing').addEventListener('change', render);
   // Split by table so a search keystroke's debounce isn't sharing a timer with
   // inventory's -- a sale/stock-in elsewhere shouldn't cancel/delay a pending search,
   // and vice versa.
@@ -164,6 +168,7 @@ if (employee) {
     document.getElementById('f-search').value = '';
     document.getElementById('f-status').value = 'all';
     document.getElementById('f-category').value = 'all';
+    document.getElementById('f-pricing').value = 'all';
     document.getElementById('f-sort-branch').value = 'sku';
     document.getElementById('f-sort-dir').value = 'desc';
     filterBranchId = null;
@@ -357,6 +362,11 @@ if (employee) {
     categorySelect.innerHTML = '<option value="all">All</option>' +
       categories.map((c) => '<option value="' + esc(c) + '"' + (c === currentCategory ? ' selected' : '') + '>' + esc(c) + '</option>').join('');
     if (currentCategory !== 'all' && categories.includes(currentCategory)) rows = rows.filter((p) => p.category === currentCategory);
+
+    // Pricing filter: Per Gram (rate x weight) vs Per Piece. A SKU with no pricing_mode is Per Piece,
+    // the same default the Edit form uses. Applied with the other filters, before the tiles below.
+    const pricingFilter = document.getElementById('f-pricing').value;
+    if (pricingFilter !== 'all') rows = rows.filter((p) => (p.pricing_mode || 'Per Piece') === pricingFilter);
 
     // Click a branch column header to filter down to just the SKUs actually stocked
     // there (pcs > 0) -- click it again to clear. Applied before the tiles below so
