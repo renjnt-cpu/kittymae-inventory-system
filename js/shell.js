@@ -7,7 +7,7 @@ import { initActivityFeed } from './activityFeed.js?v=20260929a';
 import { localDateStr } from './uiKit.js?v=20260928a';
 import { showBirthdayBanner } from './birthdayBanner.js?v=20260928a';
 import { initAdminChat } from './adminChat.js?v=20260928a';
-import { initLeaveNotifications } from './leaveNotifications.js?v=20261004d';
+import { initLeaveNotifications } from './leaveNotifications.js?v=20261004e';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -155,8 +155,9 @@ export async function initShell(activePage) {
       { id: 'bills', ...ALL_PAGE_DEFS.bills },
     );
     // Refunds: anyone can request one, so it's not role-gated like the rest of this
-    // block — refunds.html itself shows a simple request form to most people, and the
-    // full approve/manage view only to has_refund_approval_access() accounts.
+    // block — refunds.html shows each person what their Refunds role allows (Staff: their own
+    // requests; Viewer / Finance / Manager / Admin: everything, with the matching actions), and
+    // the database enforces it (refund_my_access(), migrations 124-127).
     pages.push({ id: 'refunds', ...ALL_PAGE_DEFS.refunds });
     // Leave Management: every employee (ungated) -- the page's own tabs and every action
     // are decided by the leave role, and enforced by the database.

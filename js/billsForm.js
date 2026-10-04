@@ -1,8 +1,8 @@
 // Bills Management -- the add / edit bill drawer, plus the small drawers for recording a payment,
 // attaching a proof file and snoozing a reminder. Forms open in drawers (never a permanent column);
 // nothing here uses confirm() or prompt() -- confirmations are inline panels.
-import { esc, money, openDrawer, closeDrawer, drawerBody, drawerFooter, actionPanel, friendly, errorsText, fmtDate, fmtBytes, setDrawerTitle } from './billsUi.js?v=20261004d';
-import { PRIORITIES, METHODS, FREQUENCIES, REMINDER_CHOICES, suggestPriority, addDays, uniqueSorted, FILE_TYPES, MAX_FILE } from './billsLogic.js?v=20261004d';
+import { esc, money, openDrawer, closeDrawer, drawerBody, drawerFooter, actionPanel, friendly, errorsText, fmtDate, fmtBytes, setDrawerTitle } from './billsUi.js?v=20261004e';
+import { PRIORITIES, METHODS, FREQUENCIES, REMINDER_CHOICES, suggestPriority, addDays, uniqueSorted, FILE_TYPES, MAX_FILE } from './billsLogic.js?v=20261004e';
 import { flagInvalid } from './uiKit.js?v=20260928a';
 
 const $ = (id) => document.getElementById(id);

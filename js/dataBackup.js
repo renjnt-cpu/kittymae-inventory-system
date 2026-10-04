@@ -12,6 +12,8 @@ const SOURCES = [
   { table: 'scrap_entries', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'scrap-attachments', label: 'Scrap Entries' },
   { table: 'refunds', dateCol: 'created_at', pathCol: 'request_attachment_path', bucket: 'refund-attachments', label: 'Refund Requests' },
   { table: 'refund_attachments', dateCol: 'uploaded_at', pathCol: 'attachment_path', bucket: 'refund-attachments', label: 'Refund Payment Proofs' },
+  // every request attachment and refund proof uploaded since the Refund Management upgrade (the two lines above hold the older ones)
+  { table: 'refund_files', dateCol: 'created_at', pathCol: 'file_path', bucket: 'refund-attachments', label: 'Refund Files (requests & proofs)' },
   { table: 'layaway_payments', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'layaway-attachments', label: 'Layaway Payments' },
 ];
 

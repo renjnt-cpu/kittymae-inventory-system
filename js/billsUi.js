@@ -1,7 +1,7 @@
 // Bills Management -- shared display helpers: money and date text, status / priority badges, KPI cards,
 // the drawers every screen uses, the inline confirmation panel (the app never uses confirm() / prompt())
 // and the charts. Charts are plain SVG or CSS bars: no chart library, nothing loaded from the internet.
-import { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText } from './leaveUi.js?v=20261004d';
+import { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText } from './leaveUi.js?v=20261004e';
 export { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText };
 
 export const money = (n) => (n === null || n === undefined || n === '') ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -168,7 +168,7 @@ export function hbars(items, { format, color, max }) {
   const m = max || Math.max(...items.map((i) => i.value), 1);
   return '<div class="bl-hbars">' + items.map((i) =>
     '<div class="bl-hbar"><div class="bl-hbar-label" title="' + esc(i.label) + '">' + esc(i.label) + (i.sub ? '<span class="muted"> ' + esc(i.sub) + '</span>' : '') + '</div>' +
-    '<div class="bl-hbar-track"><span style="width:' + Math.max(1, (i.value / m) * 100).toFixed(1) + '%;background:' + (color || COLORS.billed) + '"></span></div>' +
+    '<div class="bl-hbar-track"><span style="width:' + Math.max(1, (i.value / m) * 100).toFixed(1) + '%;background:' + (i.color || color || COLORS.billed) + '"></span></div>' +
     '<div class="bl-hbar-value">' + esc((format || String)(i.value)) + '</div></div>').join('') + '</div>';
 }
 

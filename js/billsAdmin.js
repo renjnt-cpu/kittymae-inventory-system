@@ -1,9 +1,9 @@
 // Bills Management -- the two Admin-only tabs: the company-wide Activity Log (who changed what, with
 // before / after values; permanent and read-only) and Settings (alert limits, categories, branch assignment).
-import { esc, money, fmtDateTime, tagBadge, openDrawer, closeDrawer, plural, friendly, errorsText, prioBadge } from './billsUi.js?v=20261004d';
-import { PRIORITIES, uniqueSorted } from './billsLogic.js?v=20261004d';
-import { LOG_COLUMNS, logRow } from './billsExport.js?v=20261004d';
-import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261004d';
+import { esc, money, fmtDateTime, tagBadge, openDrawer, closeDrawer, plural, friendly, errorsText, prioBadge } from './billsUi.js?v=20261004e';
+import { PRIORITIES, uniqueSorted } from './billsLogic.js?v=20261004e';
+import { LOG_COLUMNS, logRow } from './billsExport.js?v=20261004e';
+import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261004e';
 import { flagInvalid } from './uiKit.js?v=20260928a';
 
 const $ = (id) => document.getElementById(id);

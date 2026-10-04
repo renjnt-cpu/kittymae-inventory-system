@@ -888,3 +888,59 @@ button.bl-kpi:hover { box-shadow:0 3px 10px rgba(0,0,0,0.14); transform:translat
   .bl-table td.bl-col-sel { width:auto; padding:6px 12px; }
   .bl-table td.bl-empty { display:none; }
 }
+
+/* ---- Refund Management (Ren, 2026-10-04) -- statuses, priorities, aging, the request form's item rows and the printable summary.
+   Everything specific to Refunds is prefixed rf-. The dashboard layout, filter bar, KPI cards, tables, drawers and charts
+   deliberately reuse the bl- (Bills) classes above so the two modules look and behave the same. Status colours follow the spec:
+   yellow = waiting for a decision, blue = approved, orange = partly paid / action needed, green = completed, red = rejected or late, grey = cancelled. ---- */
+.badge.rf-st-pending { background:#fff1c9; color:#7a5200; }
+.badge.rf-st-review { background:#fff8de; color:#7a5200; box-shadow:inset 0 0 0 1px #ecd98a; }
+.badge.rf-st-info { background:#ffe9d6; color:#b04a00; }
+.badge.rf-st-hold { background:#f3e8dc; color:#7a4a1a; }
+.badge.rf-st-approved { background:#e3edfd; color:#1a56b0; }
+.badge.rf-st-partial { background:#ffe9d6; color:#b04a00; }
+.badge.rf-st-completed { background:#eaf6ec; color:#2e7d32; }
+.badge.rf-st-rejected { background:#fdecea; color:#c62828; font-weight:700; }
+.badge.rf-st-cancelled, .badge.rf-st-gray { background:#eeeeee; color:#555; }
+.badge.rf-pr-urgent { background:#a31515; color:#fff; }
+.badge.rf-pr-high { background:#ffe9d6; color:#b04a00; }
+.badge.rf-pr-normal { background:#e3edfd; color:#1a56b0; }
+.badge.rf-pr-low { background:#eeeeee; color:#666; }
+.badge.rf-ag-a0 { background:#eef0f2; color:#4a5560; }
+.badge.rf-ag-a1 { background:#fff1c9; color:#7a5200; }
+.badge.rf-ag-a2 { background:#ffe3cc; color:#a14400; }
+.badge.rf-ag-a3 { background:#fbd8d4; color:#a31515; }
+.badge.rf-ag-a4 { background:#a31515; color:#fff; font-weight:700; }
+.badge.bl-tag.rf-tag-flag { background:#fdecea; color:#a31515; }
+.bl-table tr.rf-row-cancelled td, .bl-table tr.rf-row-rejected td { color:var(--muted); }
+.bl-table tr.rf-row-flagged { background:#fffafa; }
+.rf-sub { margin:14px 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; color:var(--muted); }
+.rf-liab { list-style:none; margin:6px 0 0; padding:0; font-size:13px; }
+.rf-liab li { display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid #f1f1f1; }
+.bl-big.rf-owe { color:#b04a00; }
+.rf-age { margin:8px 0 0; }
+.rf-kpi-long { font-size:0.84em; }
+.bl-link.rf-x { color:var(--muted); font-weight:400; padding:0 4px; }
+.bl-link.rf-x:hover { color:var(--warn); }
+.rf-gap { margin:8px 0 10px; }
+.rf-orderinfo { margin-top:6px; font-size:12px; }
+.rf-dups { background:#fff8de; border-radius:8px; padding:8px 10px; font-size:13px; margin:6px 0 10px; display:flex; flex-direction:column; gap:4px; }
+.rf-item { border:1px solid #eee; border-radius:10px; padding:10px 12px; margin-bottom:8px; background:#fff; }
+.rf-item-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+.rf-item-top input[type="text"] { flex:1 1 180px; min-width:0; }
+.rf-item-fields { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px 10px; }
+.rf-item-fields .field input { min-width:0; }
+@media (max-width:760px) { .rf-item-fields { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+.bl-table.rf-mini td, .bl-table.rf-mini th { white-space:normal; }
+.rf-addreason { margin-top:10px; }
+.rf-addreason input { flex:1 1 220px; min-width:0; padding:7px 9px; border:1px solid #ddd; border-radius:6px; font-size:13px; }
+.rf-signoff { display:grid; grid-template-columns:repeat(3, 1fr); gap:24px; margin:44px 0 16px; }
+.rf-signoff div { border-top:1px solid #444; padding-top:6px; font-size:12px; }
+/* printing one refund (refundsDetail.js puts the summary in #rf-print-root, directly under <body>) */
+.rf-print-area { display:none; }
+@media print {
+  body.rf-printing > *:not(#rf-print-root) { display:none !important; }
+  body.rf-printing #rf-print-root { display:block; padding:12px; font-size:12px; }
+  body.rf-printing #rf-print-root .drawer-section { break-inside:avoid; }
+  body.rf-printing #rf-print-root .btn, body.rf-printing #rf-print-root details.exp { display:none; }
+}

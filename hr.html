@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HR — 201 File — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261004d">
+<link rel="stylesheet" href="css/styles.css?v=20261004e">
 </head>
 <body>
 <main>
@@ -13,7 +13,7 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261004d';
+import { initShell, toast, esc } from './js/shell.js?v=20261004e';
 import {
   listAllEmployee201Files, upsertEmployee201File, createEmployee, getBranches, updateEmployeeHireDate,
   listEmployee201Documents, uploadEmployee201Document, getEmployee201DocumentUrl, deleteEmployee201Document, listHrPositions,
@@ -229,7 +229,7 @@ if (employee) {
           leaveLoaded = true;
           const body = leaveBox.querySelector('.exp-body');
           try {
-            const { mountLeaveProfile } = await import('./js/leaveProfile.js?v=20261004d');
+            const { mountLeaveProfile } = await import('./js/leaveProfile.js?v=20261004e');
             await mountLeaveProfile(body, row.id);
           } catch (err) {
             leaveLoaded = false;
