@@ -944,3 +944,108 @@ button.bl-kpi:hover { box-shadow:0 3px 10px rgba(0,0,0,0.14); transform:translat
   body.rf-printing #rf-print-root .drawer-section { break-inside:avoid; }
   body.rf-printing #rf-print-root .btn, body.rf-printing #rf-print-root details.exp { display:none; }
 }
+
+/* ---- Transfers (Ren, 2026-10-04) -- statuses, priorities, the route picture, status steps, receiving cards, stock chips, warnings and the printable transfer slip.
+   Everything specific to Transfers is prefixed tf-. The dashboard layout, filter bar, KPI cards, tables, drawers and charts deliberately reuse
+   the bl- (Bills) classes above so the modules look and behave the same. Status colours: yellow = waiting for a decision, blue = approved / being prepared,
+   purple = on the road, orange = partly received / action needed, green = received, red = rejected or a problem, grey = draft / cancelled. ---- */
+.badge.tf-st-draft, .badge.tf-st-cancelled { background:#eeeeee; color:#555; }
+.badge.tf-st-requested { background:#fff1c9; color:#7a5200; }
+.badge.tf-st-approved { background:#e3edfd; color:#1a56b0; }
+.badge.tf-st-preparing { background:#e8eefb; color:#3b5db0; box-shadow:inset 0 0 0 1px #c6d4f2; }
+.badge.tf-st-transit { background:#efe9fa; color:#5b3fa0; }
+.badge.tf-st-partial { background:#ffe9d6; color:#b04a00; }
+.badge.tf-st-received { background:#eaf6ec; color:#2e7d32; }
+.badge.tf-st-rejected { background:#fdecea; color:#c62828; font-weight:700; }
+.badge.tf-pr-urgent { background:#a31515; color:#fff; }
+.badge.tf-pr-high { background:#ffe9d6; color:#b04a00; }
+.badge.tf-pr-normal { background:#e3edfd; color:#1a56b0; }
+.badge.tf-pr-low { background:#eeeeee; color:#666; }
+.badge.bl-tag.tf-tag-disc { background:#fdecea; color:#a31515; font-weight:700; }
+.bl-table tr.tf-row-cancelled td, .bl-table tr.tf-row-rejected td { color:var(--muted); }
+.bl-table tr.tf-row-open, .lv-mini tr.tf-row-open { background:#fffafa; }
+.tf-arrow { color:var(--muted); font-weight:700; }
+.tf-routeline { display:inline-flex; flex-wrap:wrap; align-items:center; gap:4px; }
+.tf-routecell { white-space:nowrap; }
+.bl-sum.tf-sum5 { grid-template-columns:repeat(5, minmax(0, 1fr)); }
+@media (max-width:760px) { .bl-sum.tf-sum5 { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+/* the picture of the route at the top of a transfer */
+.tf-route { display:grid; grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr); gap:10px; align-items:center; margin:8px 0 12px; }
+.tf-route-box { border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:3px; min-width:0; overflow-wrap:anywhere; }
+.tf-route-box b { font-size:15px; letter-spacing:0.02em; }
+.tf-route-box span { font-size:12px; opacity:0.92; }
+.tf-route-arrow { font-size:26px; color:var(--muted); }
+@media (max-width:520px) { .tf-route { grid-template-columns:minmax(0, 1fr); } .tf-route-arrow { transform:rotate(90deg); text-align:center; line-height:1; } }
+/* Requested -> Approved -> Prepared -> Released -> Received */
+.tf-steps { list-style:none; display:flex; margin:4px 0 14px; padding:0; }
+.tf-step { flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:12px; color:var(--muted); text-align:center; position:relative; }
+.tf-step::before { content:""; position:absolute; top:12px; left:-50%; width:100%; height:2px; background:#e2e2dc; z-index:0; }
+.tf-step:first-child::before { display:none; }
+.tf-step small { display:block; font-size:11px; color:var(--muted); }
+.tf-dot { position:relative; z-index:1; width:26px; height:26px; border-radius:50%; border:2px solid #d5d5cf; background:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; }
+.tf-step-done { color:var(--ink); }
+.tf-step-done::before { background:#2e7d32; }
+.tf-step-done .tf-dot { background:#2e7d32; border-color:#2e7d32; }
+.tf-step-cur { color:var(--ink); font-weight:700; }
+.tf-step-cur .tf-dot { border-color:#e0a030; color:#b07800; background:#fff8de; }
+.tf-step-stop { color:#a31515; font-weight:700; }
+.tf-step-stop::before { background:#c62828; }
+.tf-step-stop .tf-dot { background:#c62828; border-color:#c62828; }
+/* why a transfer needs attention */
+.tf-whys { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+.tf-why { font-size:11.5px; padding:2px 9px; border-radius:999px; }
+.tf-why-orange { background:#ffe9d6; color:#9a3f00; }
+.tf-why-red { background:#fdecea; color:#a31515; }
+/* work panels, item tables and quantity inputs */
+.tf-worktable td, .tf-itemtable td { vertical-align:middle; }
+input.tf-qty { width:92px; max-width:100%; text-align:right; box-sizing:border-box; }
+.tf-itemtable th, .tf-itemtable td { white-space:normal; }
+.tf-receipt { border:1px solid #eee; border-radius:10px; padding:10px 12px; margin:8px 0; background:#fff; }
+/* receiving: one big card per line, large touch targets for a phone at the counter */
+.tf-rcv { border:1px solid #e8e8e2; border-radius:12px; padding:12px; margin-bottom:10px; background:#fff; }
+.tf-rcv-issue { border-color:#f1c4c0; background:#fffafa; }
+.tf-rcv-head { display:flex; flex-direction:column; gap:2px; font-size:13px; }
+.tf-rcv-inputs { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; margin:10px 0 6px; }
+.tf-rcv-inputs label { display:flex; flex-direction:column; gap:3px; font-size:12px; font-weight:600; color:var(--muted); }
+.tf-rcv-inputs input { width:100%; box-sizing:border-box; font-size:20px; min-height:48px; padding:8px; text-align:center; }
+.tf-rcv-state { font-size:12.5px; margin-top:4px; }
+.tf-rcv-note { margin-top:8px; }
+/* picking a SKU: search box, results, stock chips, warnings */
+.tf-search { margin-bottom:8px; }
+.tf-search input { width:100%; box-sizing:border-box; }
+.tf-results { border:1px solid #ddd; border-radius:10px; background:#fff; max-height:300px; overflow-y:auto; margin-top:6px; }
+.tf-result { display:flex; justify-content:space-between; align-items:center; gap:10px; width:100%; text-align:left; background:none; border:none; border-bottom:1px solid #f1f1f1; padding:9px 12px; font:inherit; font-size:13px; cursor:pointer; color:var(--ink); }
+.tf-result:last-child { border-bottom:none; }
+.tf-result:hover, .tf-result:focus { background:var(--rose-bg); outline:none; }
+.tf-result-msg { padding:10px 12px; }
+.tf-chips { display:flex; flex-wrap:wrap; gap:4px; }
+.tf-chip { font-size:11.5px; background:#f4f4ef; border-radius:999px; padding:2px 9px; white-space:nowrap; }
+.tf-chip b { font-variant-numeric:tabular-nums; }
+.tf-chip-zero { color:var(--muted); background:#f8f8f5; }
+.tf-chip-total { background:#e3edfd; color:#1a56b0; }
+.tf-flags { display:flex; flex-direction:column; align-items:flex-start; gap:3px; margin-top:4px; }
+.tf-flag { font-size:12px; padding:3px 8px; border-radius:6px; }
+.tf-flag-red { background:#fdecea; color:#a31515; font-weight:700; }
+.tf-flag-amber { background:#fff1c9; color:#7a5200; }
+.tf-flag-blue { background:#e3edfd; color:#1a56b0; }
+.tf-routehint { margin-top:8px; font-size:13px; }
+.tf-skuhead { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px 14px; }
+.tf-skuhead .bl-h { margin:0 0 4px; }
+/* branches tab */
+.tf-branchgrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
+.tf-branchcard { border:1px solid #eee; border-radius:12px; padding:12px 14px; background:#fff; display:flex; flex-direction:column; gap:8px; min-width:0; }
+.tf-bc-main b { font-size:24px; font-variant-numeric:tabular-nums; }
+.tf-bc-list { list-style:none; margin:0; padding:0; font-size:12.5px; }
+.tf-bc-list li { display:flex; justify-content:space-between; gap:8px; padding:5px 0; border-bottom:1px solid #f4f4f4; }
+.tf-matrix th, .tf-matrix td { text-align:right; white-space:nowrap; }
+.tf-matrix th:first-child, .tf-matrix tbody th { text-align:left; }
+/* printing one transfer (transfersDetail.js puts the slip in #tf-print-root, directly under <body>) */
+.tf-print-area { display:none; }
+@media print {
+  body.tf-printing > *:not(#tf-print-root) { display:none !important; }
+  body.tf-printing #tf-print-root { display:block; padding:12px; font-size:12px; }
+  body.tf-printing #tf-print-root table { width:100%; border-collapse:collapse; margin:8px 0; }
+  body.tf-printing #tf-print-root td, body.tf-printing #tf-print-root th { border:1px solid #bbb; padding:4px 6px; text-align:left; }
+}
+.tf-finalwrap { margin:10px 0 16px; }
+.tf-finalwrap .lv-check { align-items:flex-start; }

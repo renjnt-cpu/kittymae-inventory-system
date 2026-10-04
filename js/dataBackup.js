@@ -1,5 +1,5 @@
 // Bundles date-range-filtered transaction records and their Storage attachments
-// (scrap/layaway/refund/bill photos) into one downloadable zip -- see data-backup.html.
+// (scrap/layaway/refund/bill/transfer photos) into one downloadable zip -- see data-backup.html.
 // This exists because Supabase's own daily backups only snapshot the Postgres database;
 // they explicitly do NOT include Storage bucket contents, so without this, the photos
 // themselves have no backup at all if something ever happens to them.
@@ -14,6 +14,8 @@ const SOURCES = [
   { table: 'refund_attachments', dateCol: 'uploaded_at', pathCol: 'attachment_path', bucket: 'refund-attachments', label: 'Refund Payment Proofs' },
   // every request attachment and refund proof uploaded since the Refund Management upgrade (the two lines above hold the older ones)
   { table: 'refund_files', dateCol: 'created_at', pathCol: 'file_path', bucket: 'refund-attachments', label: 'Refund Files (requests & proofs)' },
+  // transfer slips, packing / receiving / damage photos and courier receipts (a removed file stays in storage, so it is included too)
+  { table: 'transfer_files', dateCol: 'created_at', pathCol: 'file_path', bucket: 'transfer-attachments', label: 'Transfer Files (slips & photos)' },
   { table: 'layaway_payments', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'layaway-attachments', label: 'Layaway Payments' },
 ];
 

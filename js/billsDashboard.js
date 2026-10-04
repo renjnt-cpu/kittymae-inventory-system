@@ -2,9 +2,9 @@
 // high amount / upcoming recurring), the "Recommended to pay first" panel, charts and recent payments.
 // Two groups of numbers on purpose: "this period" follows the Month / Year filter, "right now" never does
 // (an overdue bill is overdue whatever month it belongs to).
-import { esc, money, moneyShort, fmtDate, daysText, statusBadge, prioBadge, tagBadge, kpiCard, emptyBox, progressBar, donut, hbars, stackedHbars, stackedColumns, lineChart, COLORS, statusColor, plural } from './billsUi.js?v=20261004e';
-import { periodKpis, liveKpis, buildAlerts, recommendedToPay, weekBuckets, monthlyTrend, groupTotals, statusCounts, recentPayments, matchesScope, daysBetween, PRIORITIES, STATUSES } from './billsLogic.js?v=20261004e';
-import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './billsFilters.js?v=20261004e';
+import { esc, money, moneyShort, fmtDate, daysText, statusBadge, prioBadge, tagBadge, kpiCard, emptyBox, progressBar, donut, hbars, stackedHbars, stackedColumns, lineChart, COLORS, statusColor, plural } from './billsUi.js?v=20261004f';
+import { periodKpis, liveKpis, buildAlerts, recommendedToPay, weekBuckets, monthlyTrend, groupTotals, statusCounts, recentPayments, matchesScope, daysBetween, PRIORITIES, STATUSES } from './billsLogic.js?v=20261004f';
+import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './billsFilters.js?v=20261004f';
 
 const btn = (act, id, label, cls) => '<button type="button" class="btn small' + (cls ? ' ' + cls : '') + '" data-act="' + act + '" data-id="' + id + '">' + label + '</button>';
 

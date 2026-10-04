@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SKU Catalog — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261004e">
+<link rel="stylesheet" href="css/styles.css?v=20261004f">
 </head>
 <body>
 <main>
@@ -13,7 +13,7 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261004e';
+import { initShell, toast, esc } from './js/shell.js?v=20261004f';
 import {
   listProducts, updateProduct, getBranches, listAllInventoryQty, subscribeToChanges,
   requestProductEdit, listProductEditRequests, approveProductEdit, rejectProductEdit,
@@ -142,6 +142,9 @@ if (employee) {
   // nothing to do with (typing a search term doesn't change anyone's stock). That was
   // most of the "SKU Catalog is lagging" feel while searching.
   await loadQty();
+  // ?q=<sku or name> opens the catalog already searched (used by the "Open in SKU Catalog" link on the Transfers SKU Trace)
+  const presetSearch = new URLSearchParams(location.search).get('q');
+  if (presetSearch) document.getElementById('f-search').value = presetSearch.slice(0, 80);
   await Promise.all([loadProducts(), loadDiscontinued(), loadPendingEditRequests(), loadLastChanges()]);
   document.getElementById('f-category').addEventListener('change', render);
   document.getElementById('f-grams').addEventListener('change', render);

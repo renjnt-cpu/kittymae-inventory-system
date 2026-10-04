@@ -1,6 +1,6 @@
 // Leave Management -- Audit Log (Auditor / Admin only). Read-only: the table is append-only in
 // the database, and this screen has no way to change it.
-import { esc, fmtDateTime } from './leaveUi.js?v=20261004e';
+import { esc, fmtDateTime } from './leaveUi.js?v=20261004f';
 import { activeFiltersHtml, emptyStateHtml, wireProxyButtons } from './uiKit.js?v=20260928a';
 
 const $ = (id) => document.getElementById(id);

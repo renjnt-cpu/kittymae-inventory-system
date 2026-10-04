@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Item Monitoring — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261004e">
+<link rel="stylesheet" href="css/styles.css?v=20261004f">
 </head>
 <body>
 <main>
@@ -13,7 +13,7 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261004e';
+import { initShell, toast, esc } from './js/shell.js?v=20261004f';
 import {
   getBranches, listStockByBranch, searchProducts, logCycleCount, listRecentCycleCounts,
   markCycleCountInvestigated, listLatestCycleCountBySkuBranch, listProductChangeLog,
@@ -452,6 +452,9 @@ if (employee) {
   let latestCounts = {};
   let productChanges = [];
   let factoryPurchases = [];
+  // ?q=<sku or name> opens Stock by Branch already searched, on "All" (used by the "Open in Item Monitoring" link on the Transfers SKU Trace)
+  const presetSearch = new URLSearchParams(location.search).get('q');
+  if (presetSearch) { document.getElementById('f-search').value = presetSearch.slice(0, 80); document.getElementById('f-status').value = 'all'; }
   await load();
   subscribeToChanges(['inventory', 'cycle_counts'], load);
   subscribeToChanges('product_change_log', async () => { productChanges = await listProductChangeLog(100); renderProductChanges(); });

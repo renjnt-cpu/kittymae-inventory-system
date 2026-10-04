@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Data Backup — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261004e">
+<link rel="stylesheet" href="css/styles.css?v=20261004f">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
@@ -13,7 +13,7 @@
 </main>
 
 <script type="module">
-import { initShell, esc, toast } from './js/shell.js?v=20261004e';
+import { initShell, esc, toast } from './js/shell.js?v=20261004f';
 import { buildBackupZip } from './js/dataBackup.js?v=20260928a';
 
 const employee = await initShell('data-backup');
@@ -28,7 +28,7 @@ if (employee) {
       '<div id="backup-msg"></div>' +
       '<div class="card">' +
         '<h3>Data Backup</h3>' +
-        '<p class="muted" style="margin-top:-4px;">Downloads a zip with the records and photos for Bills, Scrap, Refunds, and Layaway Payments in the date range below -- including the actual attached photos, which are NOT part of Supabase\'s own automatic daily backups.</p>' +
+        '<p class="muted" style="margin-top:-4px;">Downloads a zip with the records and photos for Bills, Scrap, Refunds, Transfers, and Layaway Payments in the date range below -- including the actual attached photos, which are NOT part of Supabase\'s own automatic daily backups.</p>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
           '<div class="field"><label>From</label><input type="date" id="backup-from" value="' + monthAgo + '"></div>' +
           '<div class="field"><label>To</label><input type="date" id="backup-to" value="' + today + '"></div>' +

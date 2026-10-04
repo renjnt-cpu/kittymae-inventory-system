@@ -4,7 +4,7 @@
 // through a refund_* database function that re-checks who is calling. A function that finds a problem
 // returns {ok:false, errors:[...]} -- callers show those; anything else thrown is an Error.
 import { supabase } from './supabaseClient.js?v=20260928a';
-import { FILE_TYPES, MAX_FILE } from './refundsLogic.js?v=20261004e';
+import { FILE_TYPES, MAX_FILE } from './refundsLogic.js?v=20261004f';
 
 async function rpc(name, params) {
   const { data, error } = await supabase.rpc(name, params);
