@@ -23,6 +23,10 @@ import { branchColor } from './js/branchColors.js?v=20260928a';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 const weight = (n) => n === null || n === undefined ? '—' : Number(n).toLocaleString('en-PH', { minimumFractionDigits: 3 }) + ' g';
+// "Show Qty In: Grams" (Ren, 2026-10-04: "how many grams per branch") -- a SKU's grams at a branch is the pcs there x its
+// Est. Gram; a SKU with no Est. Gram counts as 0 g. (inventory.total_grams_on_hand is only filled in for some stock-ins, so it is not used.)
+const gramsOf = (p, qty) => (Number(p.gross_weight_g) > 0 ? Number(qty || 0) * Number(p.gross_weight_g) : 0);
+const gramsNum = (g) => Number(g).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
 // Per Gram jewelry (Ren, 2026-09-18: "since its jewelry per piece i also sell per
 // gram... we will based it per grams") -- a Per Gram SKU's selling price is its rate
 // (current_gold_rate_per_g) x its weight, computed here rather than stored, so editing
@@ -81,6 +85,8 @@ if (employee) {
         // Grams filter (Ren, 2026-10-04: "add sku catalog in per grams ... only those with per grams") -- "With gram weight"
         // keeps only SKUs that have an Est. Gram value; "Per Gram pricing" keeps only the SKUs priced as rate x weight.
         '<div class="field"><label>Grams</label><select id="f-grams"><option value="all">All</option><option value="weighed">With gram weight only</option><option value="pergram">Per Gram pricing only</option></select></div>' +
+        // Show the stock per branch as pieces (default) or as grams -- see gramsOf above.
+        '<div class="field"><label>Show Qty In</label><select id="f-unit"><option value="pcs" selected>Pieces</option><option value="grams">Grams</option></select></div>' +
         // One Sort control, same as every other module (Ren's 2026-09-21 Filter + Sort
         // spec, section 36: no per-module sort UI) -- generic fields plus this catalog's
         // own useful "pcs at this branch" sort share the one dropdown instead of two
@@ -139,6 +145,7 @@ if (employee) {
   await Promise.all([loadProducts(), loadDiscontinued(), loadPendingEditRequests(), loadLastChanges()]);
   document.getElementById('f-category').addEventListener('change', render);
   document.getElementById('f-grams').addEventListener('change', render);
+  document.getElementById('f-unit').addEventListener('change', render);
   // Split by table so a search keystroke's debounce isn't sharing a timer with
   // inventory's -- a sale/stock-in elsewhere shouldn't cancel/delay a pending search,
   // and vice versa.
@@ -169,6 +176,7 @@ if (employee) {
     document.getElementById('f-status').value = 'all';
     document.getElementById('f-category').value = 'all';
     document.getElementById('f-grams').value = 'all';
+    document.getElementById('f-unit').value = 'pcs';
     document.getElementById('f-sort-branch').value = 'sku';
     document.getElementById('f-sort-dir').value = 'desc';
     filterBranchId = null;
@@ -374,24 +382,37 @@ if (employee) {
     // the subtotal/total reflect whatever's actually showing in the table.
     if (filterBranchId != null) rows = rows.filter((p) => Number((qtyBySku[p.sku] || {})[filterBranchId] || 0) > 0);
 
+    // Show Qty In: pieces (default) or grams (pcs x Est. Gram). Everything below that shows a quantity
+    // -- the tiles, the branch columns, the Total column and the sort -- follows this one choice.
+    const inGrams = document.getElementById('f-unit').value === 'grams';
+    const qtyOf = (p, bId) => { const q = Number((qtyBySku[p.sku] || {})[bId] || 0); return inGrams ? gramsOf(p, q) : q; };
+    const fmtTotal = (n) => (inGrams ? gramsNum(n) + ' g' : n.toLocaleString('en-PH'));
+    const sortSel = document.getElementById('f-sort-branch');
+    const totalOpt = sortSel.querySelector('option[value="total_pcs"]'), branchGroup = sortSel.querySelector('optgroup');
+    if (totalOpt) totalOpt.textContent = inGrams ? 'Total Grams (All Branches)' : 'Total Pcs (All Branches)';
+    if (branchGroup) branchGroup.label = inGrams ? 'Grams at Branch' : 'Pcs at Branch';
+
     // Subtotal per branch + grand total across all of them -- reflects whatever's
     // currently filtered (search/status/branch), same as the SKU count notice below,
     // and is independent of the sort (sorting only reorders these same rows).
     let grandTotal = 0;
     const branchTiles = branches.map((b) => {
-      const total = rows.reduce((s, p) => s + Number((qtyBySku[p.sku] || {})[b.id] || 0), 0);
+      const total = rows.reduce((s, p) => s + qtyOf(p, b.id), 0);
       grandTotal += total;
       const c = branchColor(b.id, branches);
-      return '<div class="tile" style="background:' + c.bg + ';"><div class="num" style="color:' + c.text + ';">' + total.toLocaleString('en-PH') + '</div><div class="lbl" style="color:' + c.text + ';">' + esc(b.name) + '</div></div>';
+      return '<div class="tile" style="background:' + c.bg + ';"><div class="num" style="color:' + c.text + ';">' + fmtTotal(total) + '</div><div class="lbl" style="color:' + c.text + ';">' + esc(b.name) + '</div></div>';
     });
-    document.getElementById('prod-tiles').innerHTML = tile(grandTotal.toLocaleString('en-PH'), 'Total Pcs (All Branches)') + branchTiles.join('');
+    document.getElementById('prod-tiles').innerHTML = tile(fmtTotal(grandTotal), inGrams ? 'Total Grams (All Branches)' : 'Total Pcs (All Branches)') + branchTiles.join('');
 
     // One Sort control for the whole catalog (section 36) -- generic fields plus a
     // per-branch "pcs there" sort share this same dropdown+direction pair. Filtering
     // (search/status/category/branch-column click) already picked `rows` above; this
     // only reorders them (section 11).
     const sortKey = document.getElementById('f-sort-branch').value;
-    const totalPcsFor = (p) => Object.values(qtyBySku[p.sku] || {}).reduce((s, q) => s + Number(q || 0), 0);
+    const totalPcsFor = (p) => {
+      const pcs = Object.values(qtyBySku[p.sku] || {}).reduce((s, q) => s + Number(q || 0), 0);
+      return inGrams ? gramsOf(p, pcs) : pcs;
+    };
     const GENERIC_SORT_COMPARATORS = {
       sku: (a, b) => a.sku.localeCompare(b.sku), item_name: (a, b) => a.item_name.localeCompare(b.item_name),
       category: (a, b) => String(a.category || '').localeCompare(String(b.category || '')),
@@ -404,10 +425,7 @@ if (employee) {
       rows = rows.slice().sort((a, b) => genericCmp(a, b) * dirMul);
     } else if (sortKey !== 'none') {
       const bId = Number(sortKey);
-      rows = rows.slice().sort((a, b) => {
-        const qa = Number((qtyBySku[a.sku] || {})[bId] || 0), qb = Number((qtyBySku[b.sku] || {})[bId] || 0);
-        return (qa - qb) * dirMul;
-      });
+      rows = rows.slice().sort((a, b) => (qtyOf(a, bId) - qtyOf(b, bId)) * dirMul);
     }
 
     const list = document.getElementById('prod-list');
@@ -437,11 +455,16 @@ if (employee) {
     const sortedBranchId = !genericCmp && sortKey !== 'none' ? Number(sortKey) : null;
     const displayBranches = sortedBranchId != null ? branches.filter((b) => b.id === sortedBranchId) : branches;
     const colCount = 9 + displayBranches.length;
+    // SKUs in the list that have pcs somewhere but no Est. Gram -- only matters (and is only shown) in grams mode
+    const noWeightStocked = inGrams ? rows.filter((p) => !(Number(p.gross_weight_g) > 0) && Object.values(qtyBySku[p.sku] || {}).some((q) => Number(q) > 0)).length : 0;
     const pendingSkus = new Set(pendingEditRequests.map((r) => r.sku));
 
     function rowHtml(p) {
       const qtyForSku = qtyBySku[p.sku] || {};
       const totalPcs = Object.values(qtyForSku).reduce((s, q) => s + Number(q || 0), 0);
+      // In grams mode a SKU with no Est. Gram shows "—" (it cannot be converted) instead of a misleading 0.
+      const hasGrams = Number(p.gross_weight_g) > 0;
+      const qtyCell = (q) => (!inGrams ? (q ?? '—') : q === undefined || q === null || !hasGrams ? '—' : gramsNum(gramsOf(p, q)));
       return '<tr data-row-id="' + esc(p.sku) + '">' +
           '<td data-label="SKU"><b>' + esc(p.sku) + '</b>' +
             (pendingSkus.has(p.sku) ? ' <span class="badge pending" title="An edit request for this SKU is awaiting Admin or Branch Supervisor approval">Pending Edit</span>' : '') +
@@ -451,12 +474,12 @@ if (employee) {
           '<td data-label="Sub SKU">' + esc(p.sub_sku || '—') + '</td>' +
           '<td data-label="Price">' + priceCellHtml(p) + '</td>' +
           '<td data-label="Est. Gram">' + weight(p.gross_weight_g) + '</td>' +
-          '<td data-label="Total Pcs"><b>' + totalPcs.toLocaleString('en-PH') + '</b></td>' +
+          '<td data-label="' + (inGrams ? 'Total Grams' : 'Total Pcs') + '"><b>' + (inGrams ? (hasGrams ? gramsNum(gramsOf(p, totalPcs)) : '—') : totalPcs.toLocaleString('en-PH')) + '</b></td>' +
           '<td data-label="Status"><span class="badge ' + (p.product_status === 'Active' ? 'ok' : 'low') + '">' + esc(p.product_status) + '</span></td>' +
           displayBranches.map((b) => {
             const searched = branchMatch && branchMatch.id === b.id;
             const c = branchColor(b.id, branches);
-            return '<td data-label="' + esc(b.name) + '" style="text-align:center;' + (searched ? 'background:' + c.bg + ';color:' + c.text + ';font-weight:800;' : '') + '">' + (qtyForSku[b.id] ?? '—') + '</td>';
+            return '<td data-label="' + esc(b.name) + '" style="text-align:center;' + (searched ? 'background:' + c.bg + ';color:' + c.text + ';font-weight:800;' : '') + '">' + qtyCell(qtyForSku[b.id]) + '</td>';
           }).join('') +
           '<td data-label="Actions" style="white-space:nowrap;">' +
             (canEdit ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="edit">Edit</button> ' : '') +
@@ -477,14 +500,15 @@ if (employee) {
       return '<th data-branch-filter="' + b.id + '" title="Click to show only SKUs stocked at ' + esc(b.name) + '" style="cursor:pointer;background:' + c.bg + ';color:' + c.text + ';' +
         (active ? 'outline:2px solid ' + c.text + ';outline-offset:-2px;' : '') +
         (searched ? 'outline:3px solid ' + c.text + ';outline-offset:-3px;box-shadow:0 0 8px ' + c.text + ';font-weight:800;' : '') +
-        '">' + (searched ? '🔎 ' : '') + esc(b.name) + (active ? ' ✕' : '') + '</th>';
+        '">' + (searched ? '🔎 ' : '') + esc(b.name) + (inGrams ? ' (g)' : '') + (active ? ' ✕' : '') + '</th>';
     }).join('');
 
     list.innerHTML = (filterBranchId != null ? '<p class="muted" style="margin:0 0 8px;">Showing only SKUs stocked at <b>' + esc((branches.find((b) => b.id === filterBranchId) || {}).name) + '</b> — click the column again to clear.</p>' : '') +
-      (sortedBranchId != null ? '<p class="muted" style="margin:0 0 8px;">Sorted by pcs at <b>' + esc((branches.find((b) => b.id === sortedBranchId) || {}).name) + '</b> — only that branch\'s column is shown; pick a different Sort By to see every branch again.</p>' : '') +
+      (inGrams ? '<p class="muted" style="margin:0 0 8px;">Showing <b>grams</b> = pcs × each SKU\'s Est. Gram. ' + (noWeightStocked ? '<b>' + noWeightStocked.toLocaleString('en-PH') + '</b> SKU(s) in this list have stock but no Est. Gram, so they show — and count as 0 g.' : 'Every SKU in this list has an Est. Gram.') + '</p>' : '') +
+      (sortedBranchId != null ? '<p class="muted" style="margin:0 0 8px;">Sorted by ' + (inGrams ? 'grams' : 'pcs') + ' at <b>' + esc((branches.find((b) => b.id === sortedBranchId) || {}).name) + '</b> — only that branch\'s column is shown; pick a different Sort By to see every branch again.</p>' : '') +
       (branchMatch ? '<p class="muted" style="margin:0 0 8px;">🔎 Sorted by <b>' + esc(branchMatch.name) + '</b>, fewest pcs first — clear the search to sort another way.</p>' : '') +
       countNotice + '<div class="table-scroll table-mini"><table><thead><tr style="white-space:nowrap;">' +
-      '<th>SKU</th><th>Product Name</th><th>Category</th><th>Sub SKU</th><th>Price</th><th>Est. Gram</th><th>Total Pcs</th><th>Status</th>' + branchThs + '<th></th>' +
+      '<th>SKU</th><th>Product Name</th><th>Category</th><th>Sub SKU</th><th>Price</th><th>Est. Gram</th><th>' + (inGrams ? 'Total Grams' : 'Total Pcs') + '</th><th>Status</th>' + branchThs + '<th></th>' +
       '</tr></thead><tbody>' + renderRows.map(rowHtml).join('') + '</tbody></table></div>';
 
     list.querySelectorAll('[data-branch-filter]').forEach((th) => th.addEventListener('click', () => {
