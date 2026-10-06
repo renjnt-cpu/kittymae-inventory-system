@@ -1,7 +1,7 @@
 // Bills Management -- the notification center: the bell with an unread count, and a drawer listing the
 // reminders (due today, due tomorrow, due in 3 / 7 days, overdue, recurring bill created). They are
 // personal -- the database only returns this person's own rows. Each one opens the bill it is about.
-import { esc, fmtDateTime, openDrawer, closeDrawer, drawerBody, isDrawerOpen, say } from './billsUi.js?v=20261007f';
+import { esc, fmtDateTime, openDrawer, closeDrawer, drawerBody, isDrawerOpen, say } from './billsUi.js?v=20261007g';
 
 const ICON = { overdue: '🔴', overdue_summary: '📋', due_today: '🟠', due_tomorrow: '🟡', recurring_generated: '🔁' };
 const icon = (t) => ICON[t] || (/^due_in_/.test(t) ? '🟡' : '🔔');

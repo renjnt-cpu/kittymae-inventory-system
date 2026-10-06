@@ -2,9 +2,9 @@
 // forms. Everything is built in the browser from the data already loaded and printed with the browser's own print dialog (Save as PDF works
 // too). A tag shows only the asset number, name and the QR link -- never who holds it and never a price. The forms name people because they are
 // internal paper records that people sign.
-import { esc, dt, qty, money, branchName } from './assetsUi.js?v=20261007f';
-import { qrSvg } from './assetsQr.js?v=20261007f';
-import { dayOf } from './assetsLogic.js?v=20261007f';
+import { esc, dt, qty, money, branchName } from './assetsUi.js?v=20261007g';
+import { qrSvg } from './assetsQr.js?v=20261007g';
+import { dayOf } from './assetsLogic.js?v=20261007g';
 
 const $ = (id) => document.getElementById(id);
 const COMPANY = 'Kittymae Jewels';

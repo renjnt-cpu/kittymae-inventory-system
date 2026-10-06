@@ -1,7 +1,7 @@
 // Sales & Profit Dashboard -- the filter bar: date range (presets or a custom range, always shown with the previous comparable period), branch, and the
 // "more filters" (channel, shop, product, SKU, category, collection, supplier, customer, salesperson, payment method, order status, payment status).
 // Every filter works together with every other, and every tab, chart, table and export reads the same state.
-import { esc, PRESETS, presetRange, previousPeriod, rangeText, fmtDate } from './sdCore.js?v=20261007f';
+import { esc, PRESETS, presetRange, previousPeriod, rangeText, fmtDate } from './sdCore.js?v=20261007g';
 
 const MORE = [
   { key: 'channel', label: 'Sales channel', opt: 'channels' }, { key: 'shop', label: 'Shop', opt: 'shops' },

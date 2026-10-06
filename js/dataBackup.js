@@ -3,13 +3,15 @@
 // This exists because Supabase's own daily backups only snapshot the Postgres database;
 // they explicitly do NOT include Storage bucket contents, so without this, the photos
 // themselves have no backup at all if something ever happens to them.
-import { supabase } from './supabaseClient.js?v=20261007f';
+import { supabase } from './supabaseClient.js?v=20261007g';
 
 const SOURCES = [
   { table: 'bills', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'bill-attachments', label: 'Expenses' },
   // every proof / invoice file attached to a bill (the line above only reaches the newest one per bill)
   { table: 'bill_attachments', dateCol: 'created_at', pathCol: 'file_path', bucket: 'bill-attachments', label: 'Expense Files (proofs & invoices)' },
   { table: 'scrap_entries', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'scrap-attachments', label: 'Scrap Entries' },
+  // the proof of payment on each scrap payment line (the line above only reaches the entry's own photo)
+  { table: 'scrap_payments', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'scrap-attachments', label: 'Scrap Payment Proofs' },
   { table: 'refunds', dateCol: 'created_at', pathCol: 'request_attachment_path', bucket: 'refund-attachments', label: 'Refund Requests' },
   { table: 'refund_attachments', dateCol: 'uploaded_at', pathCol: 'attachment_path', bucket: 'refund-attachments', label: 'Refund Payment Proofs' },
   // every request attachment and refund proof uploaded since the Refund Management upgrade (the two lines above hold the older ones)

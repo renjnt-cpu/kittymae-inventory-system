@@ -2,8 +2,8 @@
 // It only ever shows open, fixable tasks, in plain words, each with one clear button. Everything comes from dq_summary / dq_list, which return
 // sanitized fields only -- no sales, profit, capital, equity, cash or accounting notes, ever. The Dashboard loads this lazily and ignores any failure,
 // so a problem here can never break the Dashboard itself.
-import { dq } from './dqApi.js?v=20261007f';
-import { TYPES, GROUPS, esc, int, prioBadge, bar, fixUrl, greeting, longDate, firstName, debounce } from './dqUi.js?v=20261007f';
+import { dq } from './dqApi.js?v=20261007g';
+import { TYPES, GROUPS, esc, int, prioBadge, bar, fixUrl, greeting, longDate, firstName, debounce } from './dqUi.js?v=20261007g';
 
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* a private window: the choice just is not remembered */ } };
