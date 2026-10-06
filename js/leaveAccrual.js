@@ -2,8 +2,8 @@
 // HR drafts rules; a rule does nothing until the Final Approver switches it on, and before they
 // do (or run it) they see exactly what it would change. The rules themselves are applied by the
 // database every night -- this file only edits rules and previews them.
-import { esc, fmtDate, num, daysText, errorsText } from './leaveUi.js?v=20261007b';
-import { openSide, closeSide, sideBody } from './leaveSide.js?v=20261007b';
+import { esc, fmtDate, num, daysText, errorsText } from './leaveUi.js?v=20261007c';
+import { openSide, closeSide, sideBody } from './leaveSide.js?v=20261007c';
 
 const $ = (id) => document.getElementById(id);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];

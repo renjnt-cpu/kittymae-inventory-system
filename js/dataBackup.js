@@ -3,7 +3,7 @@
 // This exists because Supabase's own daily backups only snapshot the Postgres database;
 // they explicitly do NOT include Storage bucket contents, so without this, the photos
 // themselves have no backup at all if something ever happens to them.
-import { supabase } from './supabaseClient.js?v=20261007b';
+import { supabase } from './supabaseClient.js?v=20261007c';
 
 const SOURCES = [
   { table: 'bills', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'bill-attachments', label: 'Expenses' },

@@ -1,13 +1,13 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20261007b';
-import { listMyPermissions } from './api.js?v=20261007b';
-import { initActivityFeed } from './activityFeed.js?v=20261007b';
-import { localDateStr } from './uiKit.js?v=20261007b';
-import { showBirthdayBanner } from './birthdayBanner.js?v=20261007b';
-import { initAdminChat } from './adminChat.js?v=20261007b';
-import { initLeaveNotifications } from './leaveNotifications.js?v=20261007b';
+import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20261007c';
+import { listMyPermissions } from './api.js?v=20261007c';
+import { initActivityFeed } from './activityFeed.js?v=20261007c';
+import { localDateStr } from './uiKit.js?v=20261007c';
+import { showBirthdayBanner } from './birthdayBanner.js?v=20261007c';
+import { initAdminChat } from './adminChat.js?v=20261007c';
+import { initLeaveNotifications } from './leaveNotifications.js?v=20261007c';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -194,7 +194,11 @@ export async function initShell(activePage) {
     // 201-File: strictly HR Supervisor + Admin -- matches is_hr_or_admin() in
     // 83_hr_201_file.sql exactly, so this link is never shown to someone who'd just
     // hit "No access" on it.
-    if ((employee.role === 'Admin' || employee.position === 'HR Supervisor') && !employee.hr_201_file_blocked) {
+    // HR upgrade (2026-10-07): the same two people as before, plus anyone an Admin has given the new "hr.view_profile" key in the Position Access Matrix
+    // (someone with narrower HR access, e.g. payroll). The database decides what each person sees inside; a person carved out of HR (hr_201_file_blocked,
+    // and the deny rows copied from it) gets no link either way.
+    if (((employee.role === 'Admin' || employee.position === 'HR Supervisor') && !employee.hr_201_file_blocked) ||
+      ((employee.permissions || []).includes('hr.view_profile') && !employee.hr_201_file_blocked)) {
       pages.push({ id: 'hr', ...ALL_PAGE_DEFS.hr });
     }
     // Admin-only -- Ren, 2026-09-21: "only me can access the access checklist this is

@@ -1,7 +1,7 @@
 // Refund Management -- the quick-action buttons that appear on every list (dashboard alerts, the approval queue,
 // payment tracking and the Requests table) and the one click handler that runs them. Which buttons a person sees
 // follows their role and the refund's state; the database re-checks every one of them when it is pressed.
-import { esc, errorsText } from './refundsUi.js?v=20261007b';
+import { esc, errorsText } from './refundsUi.js?v=20261007c';
 
 const btn = (act, id, label, cls) => '<button type="button" class="btn small' + (cls ? ' ' + cls : '') + '" data-act="' + act + '" data-id="' + id + '">' + label + '</button>';
 

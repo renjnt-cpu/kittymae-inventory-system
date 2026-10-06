@@ -1,10 +1,10 @@
 // Sales & Profit Dashboard -- the Overview tab: 17 KPI cards (each with the previous comparable period, the change, and a green / red / gray arrow that follows
 // what the change MEANS: lower expenses are good, higher refunds are not), the sales trend, the profit breakdown, channel / product / expense / stock / capital panels,
 // and the detailed sales table. Click a KPI card to see the transactions behind it.
-import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS, rangeText, fmtDateTime } from './sdCore.js?v=20261007b';
-import { kpiCard, panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, hbars, donut, lineChart, waterfall, trendLabels, seriesOf, C, PALETTE, kvRow, closeDrawer } from './sdUi.js?v=20261007b';
-import { createTable } from './sdTable.js?v=20261007b';
-import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007b';
+import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS, rangeText, fmtDateTime } from './sdCore.js?v=20261007c';
+import { kpiCard, panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, hbars, donut, lineChart, waterfall, trendLabels, seriesOf, C, PALETTE, kvRow, closeDrawer } from './sdUi.js?v=20261007c';
+import { createTable } from './sdTable.js?v=20261007c';
+import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007c';
 
 // ---------------------------------------------------------------- the 17 cards
 // (There is deliberately no "Cash Available" card: it came from the Finance > Transactions ledger, which does not see the real money -- Ren, 2026-10-07.)

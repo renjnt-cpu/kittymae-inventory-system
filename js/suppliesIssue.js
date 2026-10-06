@@ -2,11 +2,11 @@
 // takes them out of one branch's stock: the stock is re-checked and locked by the database at the moment of issuing, so two people issuing the
 // last box at the same time cannot both succeed, and stock never goes negative. Only an Admin or Manager can issue more than the system shows —
 // with a written reason, and the difference is recorded as a stock correction in the ledger.
-import { esc, plural, field, opts, qty, dt, emptyBox, branchName, branchChip, openDrawer, closeDrawer, drawerBody, friendly, errorsText, val, personOptions, branchOptions, fmtDateTime } from './assetsUi.js?v=20261007b';
-import { uniqueSorted, stockOf, dayOf } from './assetsLogic.js?v=20261007b';
-import { exportIssuances } from './assetsReports.js?v=20261007b';
-import { exportMenu, pagerHtml } from './assetsList.js?v=20261007b';
-import { flagInvalid } from './uiKit.js?v=20261007b';
+import { esc, plural, field, opts, qty, dt, emptyBox, branchName, branchChip, openDrawer, closeDrawer, drawerBody, friendly, errorsText, val, personOptions, branchOptions, fmtDateTime } from './assetsUi.js?v=20261007c';
+import { uniqueSorted, stockOf, dayOf } from './assetsLogic.js?v=20261007c';
+import { exportIssuances } from './assetsReports.js?v=20261007c';
+import { exportMenu, pagerHtml } from './assetsList.js?v=20261007c';
+import { flagInvalid } from './uiKit.js?v=20261007c';
 
 const $ = (id) => document.getElementById(id);
 export const newIssuanceState = () => ({ q: '', branch: '', dept: '', from: '', to: '', page: 1, pageSize: 50 });

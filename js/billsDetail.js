@@ -1,8 +1,8 @@
 // Bills Management -- the bill "report card": every field, the payment history, files, reminder history
 // and a timeline, with the actions a person is allowed to take. Opens as a drawer from anywhere.
-import { esc, money, fmtDate, fmtDateTime, fmtBytes, kv, openDrawer, closeDrawer, drawerBody, drawerFooter, isDrawerOpen, actionPanel, friendly, errorsText, daysText, billBadges, statusBadge, payBadge, prioBadge, progressBar, setDrawerTitle, say } from './billsUi.js?v=20261007b';
-import { frequencyText } from './billsLogic.js?v=20261007b';
-import { billReportPdf } from './billsExport.js?v=20261007b';
+import { esc, money, fmtDate, fmtDateTime, fmtBytes, kv, openDrawer, closeDrawer, drawerBody, drawerFooter, isDrawerOpen, actionPanel, friendly, errorsText, daysText, billBadges, statusBadge, payBadge, prioBadge, progressBar, setDrawerTitle, say } from './billsUi.js?v=20261007c';
+import { frequencyText } from './billsLogic.js?v=20261007c';
+import { billReportPdf } from './billsExport.js?v=20261007c';
 
 const $ = (id) => document.getElementById(id);
 let currentId = null;
