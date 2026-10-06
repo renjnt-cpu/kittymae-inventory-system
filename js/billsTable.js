@@ -2,11 +2,11 @@
 // sorting, grouping, paging, bulk changes and export; plus the one-time "assign branches" helper.
 // The table collapses to one card per bill on a phone (the app-wide .table-scroll rule), and the sort
 // control is a field + direction pair rather than clickable headers so it still works there.
-import { esc, money, fmtDate, fmtDateTime, daysShort, daysText, statusBadge, payBadge, prioBadge, tagBadge, openDrawer, closeDrawer, drawerBody, friendly, errorsText, plural } from './billsUi.js?v=20261007a';
-import { SAVED_VIEWS, viewById, matchesScope, inPeriod, matchesStatus, matchesQuery, SORT_FIELDS, SORT_COMPARATORS, PRIORITIES, suggestBranch, sum, uniqueSorted, round2 } from './billsLogic.js?v=20261007a';
-import { filterBarHtml, bindFilterBar, periodLabel } from './billsFilters.js?v=20261007a';
-import { exportBillList } from './billsExport.js?v=20261007a';
-import { applySort, sortControlHtml, wireSortControl } from './uiKit.js?v=20261007a';
+import { esc, money, fmtDate, fmtDateTime, daysShort, daysText, statusBadge, payBadge, prioBadge, tagBadge, openDrawer, closeDrawer, drawerBody, friendly, errorsText, plural } from './billsUi.js?v=20261007b';
+import { SAVED_VIEWS, viewById, matchesScope, inPeriod, matchesStatus, matchesQuery, SORT_FIELDS, SORT_COMPARATORS, PRIORITIES, suggestBranch, sum, uniqueSorted, round2 } from './billsLogic.js?v=20261007b';
+import { filterBarHtml, bindFilterBar, periodLabel } from './billsFilters.js?v=20261007b';
+import { exportBillList } from './billsExport.js?v=20261007b';
+import { applySort, sortControlHtml, wireSortControl } from './uiKit.js?v=20261007b';
 
 const $ = (id) => document.getElementById(id);
 export const newTableState = () => ({ view: 'all', q: { search: '', paymentStatus: '', recurring: '', priority: '', dueToday: false, dueWeek: false, overdueOnly: false, min: '', max: '', addedBy: '' },
@@ -44,11 +44,11 @@ function columns(ctx, all) {
       (w && b._open && b._remaining > 0 ? '<button type="button" class="btn small" data-act="pay" data-id="' + b.id + '">Pay</button>' : '') +
       (menu.length ? '<details class="bl-menu"><summary class="btn small secondary" aria-label="More actions">⋯</summary><div class="bl-menu-pop">' + menu.map((m) => '<button type="button" data-act="' + m[0] + '" data-id="' + b.id + '">' + m[1] + '</button>').join('') + '</div></details>' : '') + '</div>';
   };
-  const sel = w ? [{ h: '<input type="checkbox" id="bl-sel-all" aria-label="Select all on this page">', cell: (b) => td('', '<input type="checkbox" data-sel="' + b.id + '"' + (ctx.ui.table.selected.has(b.id) ? ' checked' : '') + ' aria-label="Select bill ' + b.id + '">', 'bl-col-sel full-row') }] : [];
+  const sel = w ? [{ h: '<input type="checkbox" id="bl-sel-all" aria-label="Select all on this page">', cell: (b) => td('', '<input type="checkbox" data-sel="' + b.id + '"' + (ctx.ui.table.selected.has(b.id) ? ' checked' : '') + ' aria-label="Select expense ' + b.id + '">', 'bl-col-sel full-row') }] : [];
   const rec = (b) => b.is_recurring ? '<span title="Repeats ' + esc(b.recurring_frequency || '') + '">↻ ' + esc(b.recurring_frequency || 'Yes') + '</span>' : '—';
   const proof = (b) => b._proof ? '<span title="Has a proof file">📎' + (b._files.length > 1 ? ' ' + b._files.length : '') + '</span>' : '—';
   if (!all) return [...sel,
-    { h: 'Bill', cell: (b) => td('Bill', nameCell(b), 'full-row') },
+    { h: 'Expense', cell: (b) => td('Expense', nameCell(b), 'full-row') },
     { h: 'Category', cell: (b) => td('Category', esc(b._cat)) },
     { h: 'Branch', cell: (b) => td('Branch', esc(b._branch)) },
     { h: 'Amount', cell: (b) => td('Amount', '<b>' + money(b._amount) + '</b>' + (b._paid > 0 && b._remaining > 0 ? '<div class="muted bl-sub">paid ' + money(b._paid) + ' · left ' + money(b._remaining) + '</div>' : '')) },
@@ -59,8 +59,8 @@ function columns(ctx, all) {
     { h: 'Proof', cell: (b) => td('Proof', proof(b), b._proof ? '' : 'bl-empty') },
     { h: '', cell: (b) => td('', actions(b), 'full-row') }];
   return [...sel,
-    { h: 'Bill ID', cell: (b) => td('Bill ID', '#' + b.id) },
-    { h: 'Bill Name', cell: (b) => td('Bill Name', nameCell(b), 'full-row') },
+    { h: 'Expense ID', cell: (b) => td('Expense ID', '#' + b.id) },
+    { h: 'Expense Name', cell: (b) => td('Expense Name', nameCell(b), 'full-row') },
     { h: 'Category', cell: (b) => td('Category', esc(b._cat)) },
     { h: 'Branch', cell: (b) => td('Branch', esc(b._branch)) },
     { h: 'Account Name', cell: (b) => td('Account Name', esc(b.account_name || '—')) },
@@ -114,13 +114,13 @@ export function renderTable(ctx, panel) {
     '<div class="bl-views" role="group" aria-label="Saved views">' + SAVED_VIEWS.filter((x) => !x.hidden || x.id === t.view).map((x) =>
       '<button type="button" class="bl-chip' + (x.id === t.view ? ' bl-chip-on' : '') + '" data-view="' + x.id + '">' + esc(x.label) + '</button>').join('') + '</div>' +
     '<div class="card bl-toolbar"><div class="bl-toolrow">' +
-      '<div class="field bl-grow"><label>Search</label><input type="search" id="bl-search" placeholder="Name, account, note, branch, bill number…" value="' + esc(q.search) + '"></div>' +
+      '<div class="field bl-grow"><label>Search</label><input type="search" id="bl-search" placeholder="Name, account, note, branch, expense number…" value="' + esc(q.search) + '"></div>' +
       sortControlHtml(SORT_FIELDS, t.sort, 'bl-sort-field', 'bl-sort-dir') +
       '<div class="field"><label>Group by</label><select id="bl-group">' + [['none', 'No grouping'], ['category', 'Category'], ['branch', 'Branch'], ['status', 'Status'], ['priority', 'Priority']].map((g) => '<option value="' + g[0] + '"' + (t.group === g[0] ? ' selected' : '') + '>' + g[1] + '</option>').join('') + '</select></div>' +
       '<div class="field"><label>&nbsp;</label><div class="bl-btnrow"><button type="button" class="btn small secondary" id="bl-more-btn" aria-expanded="' + t.more + '">' + (t.more ? 'Hide filters' : 'More filters') + '</button>' +
         '<button type="button" class="btn small secondary" id="bl-cols-btn">' + (t.allCols ? 'Fewer columns' : 'All columns') + '</button>' +
         '<details class="bl-menu bl-exportmenu"><summary class="btn small secondary">Export ▾</summary><div class="bl-menu-pop"><button type="button" data-exp="csv">CSV</button><button type="button" data-exp="xlsx">Excel (.xlsx)</button><button type="button" data-exp="pdf">PDF</button></div></details>' +
-        (ctx.canAdd ? '<button type="button" class="btn small" id="bl-add">+ Add Bill</button>' : '') + '</div></div></div>' +
+        (ctx.canAdd ? '<button type="button" class="btn small" id="bl-add">+ Add Expense</button>' : '') + '</div></div></div>' +
       '<div class="bl-morefilters"' + (t.more ? '' : ' hidden') + '>' +
         '<div class="field"><label>Payment status</label><select data-q="paymentStatus"><option value="">Any</option>' + ['Unpaid', 'Partially Paid', 'Paid'].map((s) => '<option' + (q.paymentStatus === s ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
         '<div class="field"><label>Recurring</label><select data-q="recurring"><option value="">Any</option><option value="1"' + (q.recurring === '1' ? ' selected' : '') + '>Recurring only</option><option value="0"' + (q.recurring === '0' ? ' selected' : '') + '>One-time only</option></select></div>' +
@@ -131,15 +131,15 @@ export function renderTable(ctx, panel) {
         '<div class="bl-checks bl-span-all"><label class="bl-chk"><input type="checkbox" data-qb="dueToday"' + (q.dueToday ? ' checked' : '') + '> Due today</label><label class="bl-chk"><input type="checkbox" data-qb="dueWeek"' + (q.dueWeek ? ' checked' : '') + '> Due this week</label><label class="bl-chk"><input type="checkbox" data-qb="overdueOnly"' + (q.overdueOnly ? ' checked' : '') + '> Overdue only</label></div>' +
       '</div></div>' +
     (chips.length ? '<div class="active-filters" role="status"><span class="active-filters-label">Active filters:</span>' + chips.map((x) => '<span class="filter-chip">' + x[0] + ': <b>' + x[1] + '</b></span>').join('') + ' <button type="button" class="act-link" id="bl-clear-q">Clear</button></div>' : '') +
-    '<div class="bl-summary"><b>' + plural(rows.length, 'bill') + '</b><span>Total <b>' + money(totals.total) + '</b></span><span>Paid <b class="lv-pos">' + money(totals.paid) + '</b></span><span>Outstanding <b>' + money(totals.left) + '</b></span><span class="muted">' + esc(periodLabel(ctx)) + (v.live ? ' · view ignores the month' : '') + '</span></div>' +
+    '<div class="bl-summary"><b>' + plural(rows.length, 'expense') + '</b><span>Total <b>' + money(totals.total) + '</b></span><span>Paid <b class="lv-pos">' + money(totals.paid) + '</b></span><span>Outstanding <b>' + money(totals.left) + '</b></span><span class="muted">' + esc(periodLabel(ctx)) + (v.live ? ' · view ignores the month' : '') + '</span></div>' +
     (bulk ? bulkBar(ctx, t) : '') +
     '<div id="bl-tbl-body"></div></div>';
 
   // ---- the table (or the grouped tables) ----
   const body = $('bl-tbl-body');
   if (!rows.length) {
-    body.innerHTML = '<div class="empty-state"><div class="empty-state-msg">' + (ctx.bills.length ? 'No bills match these filters.' : 'No bills yet — add the first one.') + '</div><div class="empty-state-actions">' +
-      (ctx.bills.length ? '<button type="button" class="btn small secondary" id="bl-empty-clear">Clear filters</button>' : '') + (ctx.canAdd ? '<button type="button" class="btn small" id="bl-empty-add">+ Add Bill</button>' : '') + '</div></div>';
+    body.innerHTML = '<div class="empty-state"><div class="empty-state-msg">' + (ctx.bills.length ? 'No expenses match these filters.' : 'No expenses yet — add the first one.') + '</div><div class="empty-state-actions">' +
+      (ctx.bills.length ? '<button type="button" class="btn small secondary" id="bl-empty-clear">Clear filters</button>' : '') + (ctx.canAdd ? '<button type="button" class="btn small" id="bl-empty-add">+ Add Expense</button>' : '') + '</div></div>';
   } else if (t.group === 'none') {
     body.innerHTML = tableHtml(ctx, pageRows, cols) + pagerHtml(t, rows.length, pages);
   } else {
@@ -172,7 +172,7 @@ export function renderTable(ctx, panel) {
   if ($('bl-empty-add')) $('bl-empty-add').addEventListener('click', () => ctx.openForm({}));
   root.querySelectorAll('[data-exp]').forEach((el) => el.addEventListener('click', async () => {
     el.closest('details').open = false;
-    try { await exportBillList(ctx, rows, el.dataset.exp, viewById(t.view).label + ' bills'); } catch (err) { ctx.toast(err, true); }
+    try { await exportBillList(ctx, rows, el.dataset.exp, viewById(t.view).label + ' expenses'); } catch (err) { ctx.toast(err, true); }
   }));
   root.querySelectorAll('[data-page]').forEach((el) => el.addEventListener('click', () => { t.page = Math.max(1, Math.min(pages, t.page + Number(el.dataset.page))); redraw(); root.scrollIntoView({ block: 'start' }); }));
   if ($('bl-pagesize')) $('bl-pagesize').addEventListener('change', (e) => { t.pageSize = Number(e.target.value); t.page = 1; redraw(); });
@@ -197,7 +197,7 @@ export function renderTable(ctx, panel) {
       try {
         const res = await ctx.api.bulkUpdate(ids, p);
         if (res && res.ok === false) throw new Error(errorsText(res));
-        t.selected.clear(); ctx.toast('Updated ' + plural(res.updated, 'bill') + '.'); await ctx.refresh();
+        t.selected.clear(); ctx.toast('Updated ' + plural(res.updated, 'expense') + '.'); await ctx.refresh();
       } catch (err) { ctx.toast(err, true); }
     });
   }
@@ -220,7 +220,7 @@ export function renderTable(ctx, panel) {
 }
 
 function bulkBar(ctx, t) {
-  return '<div class="bl-bulk" role="region" aria-label="Change selected bills"><b>' + t.selected.size + ' selected</b>' +
+  return '<div class="bl-bulk" role="region" aria-label="Change selected expenses"><b>' + t.selected.size + ' selected</b>' +
     '<div class="field"><label>Branch</label><select id="bl-bulk-branch"><option value="">— no change —</option><option value="none">Not assigned</option>' + ctx.branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('') + '</select></div>' +
     '<div class="field"><label>Category</label><select id="bl-bulk-cat"><option value="">— no change —</option>' + ctx.cats.filter((c) => c.active).map((c) => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('') + '</select></div>' +
     '<div class="field"><label>Priority</label><select id="bl-bulk-prio"><option value="">— no change —</option><option value="auto">Automatic</option>' + PRIORITIES.map((p) => '<option>' + p + '</option>').join('') + '</select></div>' +
@@ -240,7 +240,7 @@ function pagerHtml(t, total, pages) {
  * with a suggested branch where the bill's text names exactly one branch. Nothing is saved until Apply. */
 export function openAssignBranches(ctx) {
   const open = ctx.bills.filter((b) => !b.archived_at && !b.branch_id);
-  if (!open.length) { ctx.toast('Every bill already has a branch.'); return; }
+  if (!open.length) { ctx.toast('Every expense already has a branch.'); return; }
   const groups = {};
   open.forEach((b) => { const k = b.name.trim().toLowerCase(); (groups[k] = groups[k] || { name: b.name, rows: [] }).rows.push(b); });
   const list = Object.values(groups).sort((a, b) => b.rows.length - a.rows.length || a.name.localeCompare(b.name));
@@ -248,9 +248,9 @@ export function openAssignBranches(ctx) {
   list.forEach((g) => { g.suggest = personal(g) ? null : suggestBranch(g.rows[0], ctx.branches); });
   const opts = (sel) => '<option value="">Leave unassigned</option>' + ctx.branches.map((b) => '<option value="' + b.id + '"' + (sel === b.id ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('');
   openDrawer('side', {
-    title: 'Assign Branches', sub: plural(open.length, 'bill') + ' with no branch',
-    body: '<div id="bl-side-msg"></div><div id="ba-errors"></div><p class="muted">Pick the branch each bill belongs to so branch reports are accurate. Bills with the same name are grouped — one choice covers all of them. A suggestion is only filled in when the bill’s text names exactly one branch. Personal bills can stay unassigned. Nothing is saved until you press Apply.</p>' +
-      '<div class="bl-assign">' + list.map((g, i) => '<div class="bl-assign-row"><div><b>' + esc(g.name) + '</b><div class="muted">' + plural(g.rows.length, 'bill') + ' · ' + esc(g.rows[0]._cat) + ' · ' + money(sum(g.rows, (b) => b._amount)) + (g.suggest ? ' · <span class="lv-pos">suggested</span>' : '') + '</div></div>' +
+    title: 'Assign Branches', sub: plural(open.length, 'expense') + ' with no branch',
+    body: '<div id="bl-side-msg"></div><div id="ba-errors"></div><p class="muted">Pick the branch each expense belongs to so branch reports are accurate. Expenses with the same name are grouped — one choice covers all of them. A suggestion is only filled in when the expense’s text names exactly one branch. Personal expenses can stay unassigned. Nothing is saved until you press Apply.</p>' +
+      '<div class="bl-assign">' + list.map((g, i) => '<div class="bl-assign-row"><div><b>' + esc(g.name) + '</b><div class="muted">' + plural(g.rows.length, 'expense') + ' · ' + esc(g.rows[0]._cat) + ' · ' + money(sum(g.rows, (b) => b._amount)) + (g.suggest ? ' · <span class="lv-pos">suggested</span>' : '') + '</div></div>' +
         '<select data-grp="' + i + '" aria-label="Branch for ' + esc(g.name) + '">' + opts(g.suggest) + '</select></div>').join('') + '</div>',
     footer: '<button type="button" class="btn" id="ba-apply">Apply</button><button type="button" class="btn secondary" id="ba-cancel">Cancel</button>',
   });
@@ -270,7 +270,7 @@ export function openAssignBranches(ctx) {
           n += res.updated;
         }
       }
-      closeDrawer('side'); ctx.toast('Assigned a branch to ' + plural(n, 'bill') + '.'); await ctx.refresh();
+      closeDrawer('side'); ctx.toast('Assigned a branch to ' + plural(n, 'expense') + '.'); await ctx.refresh();
     } catch (err) { $('ba-errors').innerHTML = '<div class="msg error">' + esc(friendly(err)) + '</div>'; btn.disabled = false; if (n) await ctx.refresh(); }
   });
 }

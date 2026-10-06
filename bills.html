@@ -3,19 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bills — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261007a">
+<title>Expenses — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css?v=20261007b">
 </head>
 <body>
 <main id="bl-root"><p class="muted">Loading…</p></main>
 
 <script type="module">
-import { initShell } from './js/shell.js?v=20261007a';
-import * as api from './js/billsApi.js?v=20261007a';
-import { startBillsPage } from './js/billsPage.js?v=20261007a';
+import { initShell } from './js/shell.js?v=20261007b';
+import * as api from './js/billsApi.js?v=20261007b';
+import { startBillsPage } from './js/billsPage.js?v=20261007b';
 
 // Everyone with a login can open this page; what each person sees and can do inside it is decided by
-// their Bills role (Admin / Finance / View only / Branch Manager) -- and enforced by the database, not by this page.
+// their Expenses role (Admin / Finance / View only / Branch Manager) -- and enforced by the database, not by this page.
+// (This module used to be called "Bills": the page address, bills.html, and the database names are unchanged on purpose so links and saved data keep working.)
 const employee = await initShell('bills');
 if (employee) {
   await startBillsPage({ root: document.getElementById('bl-root'), api, employee, search: location.search, hash: location.hash });

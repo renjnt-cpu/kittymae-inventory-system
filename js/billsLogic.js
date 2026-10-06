@@ -133,6 +133,8 @@ export const SAVED_VIEWS = [
   { id: 'high', label: 'High Amount', live: true, test: (b, c) => (b._amount || 0) >= c.highAmount },
   { id: 'rent', label: 'Rent Only', test: (b) => b._group === 'Rent' },
   { id: 'utilities', label: 'Utilities Only', test: (b) => b._group === 'Utilities' },
+  // Ren, 2026-10-07: "add salary in the category" -- everything in the Payroll group (today that is the Salaries category), next to Rent / Utilities
+  { id: 'salary', label: 'Salary Only', test: (b) => b._group === 'Payroll' },
   { id: 'nobranch', label: 'No Branch', test: (b) => !b.branch_id },
   { id: 'archived', label: 'Archived', live: true, test: (b) => !!b.archived_at },
 ];

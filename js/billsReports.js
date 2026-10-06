@@ -1,10 +1,10 @@
 // Bills Management -- the Reports tab: the eight reports (Monthly, Overdue, Due This Week, Paid, Unpaid,
 // Branch, Category, Recurring) each with a preview and CSV / Excel / PDF export, plus the branch and
 // category summaries with charts. Every export covers exactly what the filters above show.
-import { esc, money, moneyShort, fmtDate, plural, donut, hbars, stackedHbars, lineChart, COLORS, statusColor, tagBadge } from './billsUi.js?v=20261007a';
-import { monthlyTrend, groupTotals, statusCounts, STATUSES, sum } from './billsLogic.js?v=20261007a';
-import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './billsFilters.js?v=20261007a';
-import { REPORTS, buildReport, exportReport } from './billsExport.js?v=20261007a';
+import { esc, money, moneyShort, fmtDate, plural, donut, hbars, stackedHbars, lineChart, COLORS, statusColor, tagBadge } from './billsUi.js?v=20261007b';
+import { monthlyTrend, groupTotals, statusCounts, STATUSES, sum } from './billsLogic.js?v=20261007b';
+import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './billsFilters.js?v=20261007b';
+import { REPORTS, buildReport, exportReport } from './billsExport.js?v=20261007b';
 
 const $ = (id) => document.getElementById(id);
 const PREVIEW = {
@@ -27,8 +27,8 @@ function previewHtml(rep) {
 }
 function summaryLine(rep) {
   if (rep.def.kind === 'templates') return plural(rep.preview.length, 'template') + ' · ' + rep.preview.filter((r) => r.state === 'Active').length + ' active';
-  if (rep.def.kind === 'group') return plural(rep.preview.length, rep.def.id === 'branch' ? 'branch' : 'category', rep.def.id === 'branch' ? 'branches' : 'categories') + ' · ' + money(rep.total.total) + ' billed · ' + money(rep.total.unpaid) + ' outstanding';
-  return plural(rep.preview.length, 'bill') + ' · ' + money(rep.total.amount) + ' · ' + money(rep.total.remaining) + ' to pay';
+  if (rep.def.kind === 'group') return plural(rep.preview.length, rep.def.id === 'branch' ? 'branch' : 'category', rep.def.id === 'branch' ? 'branches' : 'categories') + ' · ' + money(rep.total.total) + ' total · ' + money(rep.total.unpaid) + ' outstanding';
+  return plural(rep.preview.length, 'expense') + ' · ' + money(rep.total.amount) + ' · ' + money(rep.total.remaining) + ' to pay';
 }
 
 export function renderReports(ctx, panel) {
@@ -51,9 +51,9 @@ export function renderReports(ctx, panel) {
     '<div class="bl-charts">' +
       '<div class="card bl-panel"><h3 class="bl-h">By branch <span class="muted">· paid / unpaid / overdue</span></h3>' +
         stackedHbars(byBranch.slice(0, 12).map((g) => ({ label: g.label, parts: { paid: g.paid, overdue: g.overdue, unpaid: Math.max(g.unpaid - g.overdue, 0) } })), seg, { format: moneyShort }) + '</div>' +
-      '<div class="card bl-panel"><h3 class="bl-h">By category <span class="muted">· amount billed</span></h3>' + hbars(byCat.slice(0, 12).map((g) => ({ label: g.label, value: g.total, sub: '(' + g.count + ')' })), { format: moneyShort }) + '</div>' +
-      '<div class="card bl-panel"><h3 class="bl-h">By status <span class="muted">· number of bills</span></h3>' + donut(STATUSES.filter((s) => counts[s]).map((s) => ({ label: s, value: counts[s], color: statusColor(s) })), { center: sum(Object.values(counts), (x) => x), centerSub: 'bills' }) + '</div>' +
-      '<div class="card bl-panel"><h3 class="bl-h">Billed vs paid <span class="muted">· last 12 months</span></h3>' + lineChart(trend, { format: moneyShort }) + '</div></div></div>';
+      '<div class="card bl-panel"><h3 class="bl-h">By category <span class="muted">· total amount</span></h3>' + hbars(byCat.slice(0, 12).map((g) => ({ label: g.label, value: g.total, sub: '(' + g.count + ')' })), { format: moneyShort }) + '</div>' +
+      '<div class="card bl-panel"><h3 class="bl-h">By status <span class="muted">· number of expenses</span></h3>' + donut(STATUSES.filter((s) => counts[s]).map((s) => ({ label: s, value: counts[s], color: statusColor(s) })), { center: sum(Object.values(counts), (x) => x), centerSub: 'expenses' }) + '</div>' +
+      '<div class="card bl-panel"><h3 class="bl-h">Total vs paid <span class="muted">· last 12 months</span></h3>' + lineChart(trend, { format: moneyShort }) + '</div></div></div>';
 
   const root = $('bl-reports');
   bindFilterBar(ctx, root, () => ctx.rerender());

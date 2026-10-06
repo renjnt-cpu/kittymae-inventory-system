@@ -3,7 +3,7 @@
 // Reads go straight to the tables (RLS decides what a person may see); every CHANGE goes
 // through a leave_* database function that re-checks who is calling. A function that finds a
 // problem returns {ok:false, errors:[...]} -- callers show those; anything else is an Error.
-import { supabase } from './supabaseClient.js?v=20261007a';
+import { supabase } from './supabaseClient.js?v=20261007b';
 
 async function rpc(name, params) {
   const { data, error } = await supabase.rpc(name, params);

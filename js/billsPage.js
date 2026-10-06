@@ -5,18 +5,18 @@
 // One loaded copy of the data (ctx) feeds every tab; a change anywhere goes through the database, then
 // ctx.refresh() reloads and redraws. Who may do what is decided by the database -- the page only hides
 // the buttons a person could not use.
-import { esc, drawersHtml, makeToast, closeDrawer, isDrawerOpen, drawerBody, friendly } from './billsUi.js?v=20261007a';
-import { enrichBills, daysToSunday } from './billsLogic.js?v=20261007a';
-import { defaultFilters } from './billsFilters.js?v=20261007a';
-import { renderDashboard } from './billsDashboard.js?v=20261007a';
-import { renderTable, newTableState, openAssignBranches } from './billsTable.js?v=20261007a';
-import { renderCalendar, renderPlanning, newCalState, newPlanState } from './billsCalendar.js?v=20261007a';
-import { renderRecurring, openTemplateForm } from './billsRecurring.js?v=20261007a';
-import { renderReports } from './billsReports.js?v=20261007a';
-import { renderLog, renderSettings, newLogState } from './billsAdmin.js?v=20261007a';
-import { openDetail, closeDetail, detailOpenId } from './billsDetail.js?v=20261007a';
-import { openBillForm, requestCloseForm, openPayment, openUpload, openSnooze } from './billsForm.js?v=20261007a';
-import { bellHtml, refreshBell } from './billsNotifications.js?v=20261007a';
+import { esc, drawersHtml, makeToast, closeDrawer, isDrawerOpen, drawerBody, friendly } from './billsUi.js?v=20261007b';
+import { enrichBills, daysToSunday } from './billsLogic.js?v=20261007b';
+import { defaultFilters } from './billsFilters.js?v=20261007b';
+import { renderDashboard } from './billsDashboard.js?v=20261007b';
+import { renderTable, newTableState, openAssignBranches } from './billsTable.js?v=20261007b';
+import { renderCalendar, renderPlanning, newCalState, newPlanState } from './billsCalendar.js?v=20261007b';
+import { renderRecurring, openTemplateForm } from './billsRecurring.js?v=20261007b';
+import { renderReports } from './billsReports.js?v=20261007b';
+import { renderLog, renderSettings, newLogState } from './billsAdmin.js?v=20261007b';
+import { openDetail, closeDetail, detailOpenId } from './billsDetail.js?v=20261007b';
+import { openBillForm, requestCloseForm, openPayment, openUpload, openSnooze } from './billsForm.js?v=20261007b';
+import { bellHtml, refreshBell } from './billsNotifications.js?v=20261007b';
 
 const $ = (id) => document.getElementById(id);
 
@@ -38,7 +38,7 @@ export function createBillsContext(api, employee) {
     const [access, cats, branches, bills, payments, attachments, templates, settings] = await Promise.all([
       api.getAccess(), api.listCategories(), api.listBranches(), api.listBills(), api.listPayments(), api.listAttachments(), api.listTemplates(), api.listSettings().catch(() => []),
     ]);
-    if (!access || access.role === 'No access') throw Object.assign(new Error('Bills tracking is restricted to Admin or accounts granted Bills access.'), { noAccess: true });
+    if (!access || access.role === 'No access') throw Object.assign(new Error('Expense tracking is restricted to Admin or accounts granted Expenses access.'), { noAccess: true });
     const first = !ctx.today;
     ctx.access = access; ctx.today = access.today;
     ctx.canWrite = !!access.write; ctx.canAdmin = !!access.admin; ctx.canAdd = !!(access.write || access.branch_only);
@@ -73,7 +73,7 @@ export function createBillsContext(api, employee) {
 }
 
 export async function startBillsPage({ root, api, employee, search, hash }) {
-  root.innerHTML = '<div id="bl-whoami" class="lv-whoami bl-whoami"></div><div class="lv-tabs" id="bl-tabs" role="tablist" aria-label="Bills sections"></div>' +
+  root.innerHTML = '<div id="bl-whoami" class="lv-whoami bl-whoami"></div><div class="lv-tabs" id="bl-tabs" role="tablist" aria-label="Expenses sections"></div>' +
     '<div id="bl-panel" role="tabpanel"><p class="muted">Loading…</p></div>' + drawersHtml();
   const panel = $('bl-panel');
   const ctx = createBillsContext(api, employee);
@@ -82,7 +82,7 @@ export async function startBillsPage({ root, api, employee, search, hash }) {
   const overdueCount = () => ctx.bills.filter((b) => b._eff === 'Overdue').length;
   const tabDefs = () => [
     { id: 'dashboard', label: 'Dashboard', show: true, render: renderDashboard },
-    { id: 'bills', label: 'Bills', show: true, badge: overdueCount(), render: renderTable },
+    { id: 'bills', label: 'Expenses', show: true, badge: overdueCount(), render: renderTable },
     { id: 'calendar', label: 'Calendar', show: true, render: renderCalendar },
     { id: 'planning', label: 'Cash Planning', show: true, render: renderPlanning },
     { id: 'recurring', label: 'Recurring', show: !ctx.access.branch_only, render: renderRecurring },
@@ -96,10 +96,10 @@ export async function startBillsPage({ root, api, employee, search, hash }) {
   function renderWhoami() {
     const role = ctx.access.role;
     const cls = { Admin: 'lv-orange', Finance: 'lv-blue', Viewer: 'lv-gray', 'Branch Manager': 'lv-green' }[role] || 'lv-gray';
-    const note = role === 'Viewer' ? 'You can see bills and reports but cannot change them.'
-      : role === 'Branch Manager' ? 'You see ' + esc((ctx.branchById[ctx.access.branch_id] || {}).name || 'your branch') + ' bills and can add bills and proof for it.' : '';
+    const note = role === 'Viewer' ? 'You can see expenses and reports but cannot change them.'
+      : role === 'Branch Manager' ? 'You see ' + esc((ctx.branchById[ctx.access.branch_id] || {}).name || 'your branch') + ' expenses and can add expenses and proof for it.' : '';
     $('bl-whoami').innerHTML = '<span>Signed in as <b>' + esc(ctx.access.name || (employee && employee.full_name) || '') + '</b> <span class="badge ' + cls + '">' + esc(role) + '</span>' + (note ? ' <span class="muted">' + note + '</span>' : '') + '</span>' +
-      '<span class="bl-whoami-right"><span id="bl-bell-slot">' + bellHtml(ctx) + '</span>' + (ctx.canAdd ? '<button type="button" class="btn small" id="bl-add-top">+ Add Bill</button>' : '') + '</span>';
+      '<span class="bl-whoami-right"><span id="bl-bell-slot">' + bellHtml(ctx) + '</span>' + (ctx.canAdd ? '<button type="button" class="btn small" id="bl-add-top">+ Add Expense</button>' : '') + '</span>';
     refreshBell(ctx);
     if ($('bl-add-top')) $('bl-add-top').addEventListener('click', () => ctx.openForm({}));
   }
@@ -182,7 +182,7 @@ export async function startBillsPage({ root, api, employee, search, hash }) {
   renderWhoami();
   const wanted = String(hash || '').replace('#', '');
   await showTab(visibleTab(wanted) ? wanted : 'dashboard');
-  if (params.get('open')) { const id = Number(params.get('open')); if (ctx.byId.has(id)) openDetail(ctx, id); else ctx.toast('That bill is no longer available.', true); }
+  if (params.get('open')) { const id = Number(params.get('open')); if (ctx.byId.has(id)) openDetail(ctx, id); else ctx.toast('That expense is no longer available.', true); }
   if (params.get('open')) { try { history.replaceState(null, '', location.pathname + '#' + activeTab); } catch (e) { /* harmless */ } }
 
   // once per day per browser tab, make sure today's reminders exist (the nightly job normally already did; this is idempotent)

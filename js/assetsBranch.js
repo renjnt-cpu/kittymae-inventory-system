@@ -1,10 +1,10 @@
 // Assets & Supplies Custodian -- the Branch Assets tab: what each branch has (by status), what is moving in and out, which departments hold
 // what, and the assets of the branch you pick. A branch supervisor sees their own branch; a custodian with the "every branch" permission sees
 // them all. A branch's list is the same register as the Assets tab -- there is no second copy of any asset.
-import { esc, plural, field, opts, emptyBox, branchChip, hbars, COLORS, statusColor, donut } from './assetsUi.js?v=20261007a';
-import { sum, group, uniqueSorted } from './assetsLogic.js?v=20261007a';
-import { assetTableHtml, assetColumns } from './assetsList.js?v=20261007a';
-import { bindActions } from './assetsActions.js?v=20261007a';
+import { esc, plural, field, opts, emptyBox, branchChip, hbars, COLORS, statusColor, donut } from './assetsUi.js?v=20261007b';
+import { sum, group, uniqueSorted } from './assetsLogic.js?v=20261007b';
+import { assetTableHtml, assetColumns } from './assetsList.js?v=20261007b';
+import { bindActions } from './assetsActions.js?v=20261007b';
 
 const $ = (id) => document.getElementById(id);
 const S = { branch: '', dept: '' };

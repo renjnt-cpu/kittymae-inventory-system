@@ -1,7 +1,7 @@
 // Bills Management -- the notification center: the bell with an unread count, and a drawer listing the
 // reminders (due today, due tomorrow, due in 3 / 7 days, overdue, recurring bill created). They are
 // personal -- the database only returns this person's own rows. Each one opens the bill it is about.
-import { esc, fmtDateTime, openDrawer, closeDrawer, drawerBody, isDrawerOpen } from './billsUi.js?v=20261007a';
+import { esc, fmtDateTime, openDrawer, closeDrawer, drawerBody, isDrawerOpen, say } from './billsUi.js?v=20261007b';
 
 const ICON = { overdue: '🔴', overdue_summary: '📋', due_today: '🟠', due_tomorrow: '🟡', recurring_generated: '🔁' };
 const icon = (t) => ICON[t] || (/^due_in_/.test(t) ? '🟡' : '🔔');
@@ -9,7 +9,7 @@ const unreadCount = (ctx) => ctx.data.notifications.filter((n) => !n.is_read).le
 
 export function bellHtml(ctx) {
   const n = unreadCount(ctx);
-  return '<button type="button" class="act-bell bl-bell" id="bl-bell" aria-label="Bill notifications, ' + n + ' unread" title="Bill notifications">🔔' + (n ? '<span class="act-badge">' + (n > 99 ? '99+' : n) + '</span>' : '') + '</button>';
+  return '<button type="button" class="act-bell bl-bell" id="bl-bell" aria-label="Expense notifications, ' + n + ' unread" title="Expense notifications">🔔' + (n ? '<span class="act-badge">' + (n > 99 ? '99+' : n) + '</span>' : '') + '</button>';
 }
 export function refreshBell(ctx) {
   const slot = document.getElementById('bl-bell-slot');
@@ -24,12 +24,12 @@ export function openNotifications(ctx) {
   const items = ctx.data.notifications.filter((n) => !showUnreadOnly || !n.is_read);
   const unread = unreadCount(ctx);
   openDrawer('side', {
-    title: 'Bill notifications', sub: unread ? unread + ' unread' : 'You are all caught up',
+    title: 'Expense notifications', sub: unread ? unread + ' unread' : 'You are all caught up',
     body: '<div class="lv-seg bl-seg-gap" role="group" aria-label="Show"><button type="button" class="lv-seg-btn' + (!showUnreadOnly ? ' lv-seg-on' : '') + '" data-show="all">All</button><button type="button" class="lv-seg-btn' + (showUnreadOnly ? ' lv-seg-on' : '') + '" data-show="unread">Unread</button></div>' +
       (items.length ? '<div class="bl-notes">' + items.map((n) =>
         '<div class="bl-note' + (n.is_read ? '' : ' bl-note-unread') + '" data-id="' + n.id + '" data-bill="' + (n.bill_id || '') + '" role="button" tabindex="0"><span class="bl-note-ico" aria-hidden="true">' + icon(n.notification_type) + '</span>' +
-        '<div><div class="act-title">' + esc(n.title) + '</div><div class="act-line">' + esc(n.message) + '</div><div class="act-when">' + esc(fmtDateTime(n.created_at)) + '</div></div></div>').join('') + '</div>'
-        : '<p class="muted">' + (showUnreadOnly ? 'No unread notifications.' : 'No notifications yet. Reminders appear here before bills are due.') + '</p>'),
+        '<div><div class="act-title">' + esc(say(n.title)) + '</div><div class="act-line">' + esc(say(n.message)) + '</div><div class="act-when">' + esc(fmtDateTime(n.created_at)) + '</div></div></div>').join('') + '</div>'
+        : '<p class="muted">' + (showUnreadOnly ? 'No unread notifications.' : 'No notifications yet. Reminders appear here before expenses are due.') + '</p>'),
     footer: unread ? '<button type="button" class="btn secondary" id="bn-all">Mark all as read</button>' : '',
   });
   const body = drawerBody('side');
@@ -40,7 +40,7 @@ export function openNotifications(ctx) {
     const billId = Number(el.dataset.bill);
     closeDrawer('side');
     if (!billId) { ctx.applyView('overdue'); return; } // "N bills are overdue" has no single bill: show the overdue list
-    if (ctx.byId.has(billId)) ctx.openDetail(billId); else ctx.toast('That bill is no longer in the list.', true);
+    if (ctx.byId.has(billId)) ctx.openDetail(billId); else ctx.toast('That expense is no longer in the list.', true);
   };
   body.querySelectorAll('.bl-note').forEach((el) => {
     el.addEventListener('click', () => go(el));

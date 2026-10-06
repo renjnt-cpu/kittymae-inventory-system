@@ -1,8 +1,8 @@
 // Refund Management -- the Analytics tab: how fast refunds are handled, the month-against-month report, and the
 // breakdowns by reason, branch, method and age. Everything is computed in the browser from the requests already loaded.
-import { esc, money, moneyShort, plural, kpiCard, hbars, columnPairs, changeText, REFUND_COLORS, COLORS } from './refundsUi.js?v=20261007a';
-import { refundPerformance, monthReport, monthlySeries, groupTotals, agingBuckets, MONTHS, monthName, addMonths, yearOf, monthOf } from './refundsLogic.js?v=20261007a';
-import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './refundsFilters.js?v=20261007a';
+import { esc, money, moneyShort, plural, kpiCard, hbars, columnPairs, changeText, REFUND_COLORS, COLORS } from './refundsUi.js?v=20261007b';
+import { refundPerformance, monthReport, monthlySeries, groupTotals, agingBuckets, MONTHS, monthName, addMonths, yearOf, monthOf } from './refundsLogic.js?v=20261007b';
+import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './refundsFilters.js?v=20261007b';
 
 const $ = (id) => document.getElementById(id);
 const AGE_COLORS = ['#9aa4ad', '#e0a030', '#e07b30', '#d9602a', '#a31515'];

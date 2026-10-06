@@ -1,9 +1,9 @@
 // Sales & Profit Dashboard -- the Reports tab (the eight reports, each exported for the period and filters chosen above) and the Dashboard Settings tab.
-import { api, esc, money, friendly, fmtDateTime, bucketLabel, defaultGrain, rangeText, PRESETS } from './sdCore.js?v=20261007a';
-import { panel, loadingBox, errorBox, toast } from './sdUi.js?v=20261007a';
-import { fetchAllRows, exportData } from './sdTable.js?v=20261007a';
-import { COLS } from './sdColumns.js?v=20261007a';
-import { KPI_LABELS } from './sdOverview.js?v=20261007a';
+import { api, esc, money, friendly, fmtDateTime, bucketLabel, defaultGrain, rangeText, PRESETS } from './sdCore.js?v=20261007b';
+import { panel, loadingBox, errorBox, toast } from './sdUi.js?v=20261007b';
+import { fetchAllRows, exportData } from './sdTable.js?v=20261007b';
+import { COLS } from './sdColumns.js?v=20261007b';
+import { KPI_LABELS } from './sdOverview.js?v=20261007b';
 
 // ---------------------------------------------------------------- Reports
 const REPORTS = [
@@ -11,7 +11,7 @@ const REPORTS = [
   { id: 'profit', title: 'Profit report', desc: 'For each day / week / month in the range: gross sales, discounts, refunds, net sales, cost of goods sold, gross profit, operating expenses and net profit.', custom: 'profit', need: 'profit' },
   { id: 'purchase', title: 'Purchase report', desc: 'Every delivery recorded in the period, with its price (or “price missing”).', kind: 'purchases', need: 'cost', sort: 'date' },
   { id: 'inventory', title: 'Inventory report', desc: 'Every SKU in stock with its stock status, value at cost and at selling price, and last sale.', kind: 'inventory', need: 'inventory', sort: 'retail_value' },
-  { id: 'expense', title: 'Expense report', desc: 'The business bills due in the period, with category, payee, amount, paid and unpaid.', kind: 'expenses', need: 'expenses', sort: 'date' },
+  { id: 'expense', title: 'Expense report', desc: 'The business expenses due in the period, with category, payee, amount, paid and unpaid.', kind: 'expenses', need: 'expenses', sort: 'date' },
   { id: 'capital', title: 'Capital report', desc: 'Owner capital contributions, withdrawals and asset purchases up to the end of the period (voided entries marked).', kind: 'capital', need: 'capital', sort: 'date', extra: { capital_scope: 'all' } },
   { id: 'payment', title: 'Payment report', desc: 'Every payment collected and refunded in the period, by method.', kind: 'payments', need: 'sales', sort: 'date' },
   { id: 'product', title: 'Product performance report', desc: 'Every product that sold in the period: quantity, sales, cost, profit, margin, returns.', kind: 'products', need: 'sales', sort: 'net' },

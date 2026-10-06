@@ -3,8 +3,8 @@
 // an employee sees only what they hold, a branch supervisor their own branch, a custodian every branch); every CHANGE goes through an
 // asset_* / supply_* / custodian_* database function that re-checks who is calling and what state the record is in. A function that finds
 // a problem returns {ok:false, errors:[...]} -- callers show those; anything else thrown is an Error.
-import { supabase } from './supabaseClient.js?v=20261007a';
-import { FILE_TYPES, MAX_FILE } from './assetsLogic.js?v=20261007a';
+import { supabase } from './supabaseClient.js?v=20261007b';
+import { FILE_TYPES, MAX_FILE } from './assetsLogic.js?v=20261007b';
 
 async function rpc(name, params) {
   const { data, error } = await supabase.rpc(name, params);

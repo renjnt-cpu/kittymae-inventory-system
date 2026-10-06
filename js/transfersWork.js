@@ -5,9 +5,9 @@
 //
 // Stock timing, as it has always been here: approving and preparing move NO stock. Releasing takes the pieces out of the source
 // branch. Receiving adds only the good pieces to the destination; damaged and missing pieces become open discrepancies.
-import { esc, qty, pcs, fmtBytes, openDrawer, closeDrawer, drawerBody, actionPanel, friendly, errorsText } from './transfersUi.js?v=20261007a';
-import { stockOf, FILE_KINDS, FILE_TYPES, MAX_FILE } from './transfersLogic.js?v=20261007a';
-import { flagInvalid } from './uiKit.js?v=20261007a';
+import { esc, qty, pcs, fmtBytes, openDrawer, closeDrawer, drawerBody, actionPanel, friendly, errorsText } from './transfersUi.js?v=20261007b';
+import { stockOf, FILE_KINDS, FILE_TYPES, MAX_FILE } from './transfersLogic.js?v=20261007b';
+import { flagInvalid } from './uiKit.js?v=20261007b';
 
 const $ = (id) => document.getElementById(id);
 const val = (id) => ($(id) ? $(id).value : '');

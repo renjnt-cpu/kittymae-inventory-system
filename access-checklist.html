@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Access Checklist — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261007a">
+<link rel="stylesheet" href="css/styles.css?v=20261007b">
 <style>
   .ac-item { padding:10px 0; border-bottom:1px solid #f0f0f0; }
   .ac-item:last-child { border-bottom:none; }
@@ -46,14 +46,14 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261007a';
+import { initShell, toast, esc } from './js/shell.js?v=20261007b';
 import {
   getEmployeesForChecklist, getAccessChecklist, setAccessChecklistItem, updateEmployeePosition, listScrapEntries,
   subscribeToChanges, getBranches, listProducts, listAllInventoryQty, listHrPositions, setEmployeePassword,
   listSales, listPackedOrders, listOnlineOrderCareAssignments,
-} from './js/api.js?v=20261007a';
-import { branchColor } from './js/branchColors.js?v=20261007a';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20261007a';
+} from './js/api.js?v=20261007b';
+import { branchColor } from './js/branchColors.js?v=20261007b';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20261007b';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 36) -- replaces this leaderboard's
 // old per-column header-click sort with the one shared control used everywhere else.
@@ -119,7 +119,7 @@ const CATEGORY_LABEL = {
   assets: 'Asset & Supplies Custodian',
   lbc: 'LBC Monitoring',
   refund: 'Refund Approval',
-  bills: 'Bills',
+  bills: 'Expenses',
 };
 // extra_page_access grants (e.g. Jessica on Transactions/Assets) upgrade whichever
 // category that page belongs to, rather than showing as a separate row.
@@ -207,8 +207,8 @@ function itemsForEmployee(emp) {
     : { label: 'Can only submit refund requests (cannot approve)', access: false, levels: [] };
 
   cat.bills = emp.bills_access
-    ? { label: 'Can see and add Bills', access: true, levels: ['edit'] }
-    : { label: 'Cannot see the Bills tracker', access: false, levels: [] };
+    ? { label: 'Can see and add Expenses', access: true, levels: ['edit'] }
+    : { label: 'Cannot see the Expenses tracker', access: false, levels: [] };
 
   // Order & Item Status (Record Movement) -- company-wide, any active employee can add
   // and update status; only Manager/Admin can delete (75_order_item_status_tracker.sql).

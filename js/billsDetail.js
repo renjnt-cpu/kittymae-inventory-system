@@ -1,8 +1,8 @@
 // Bills Management -- the bill "report card": every field, the payment history, files, reminder history
 // and a timeline, with the actions a person is allowed to take. Opens as a drawer from anywhere.
-import { esc, money, fmtDate, fmtDateTime, fmtBytes, kv, openDrawer, closeDrawer, drawerBody, drawerFooter, isDrawerOpen, actionPanel, friendly, errorsText, daysText, billBadges, statusBadge, payBadge, prioBadge, progressBar, setDrawerTitle } from './billsUi.js?v=20261007a';
-import { frequencyText } from './billsLogic.js?v=20261007a';
-import { billReportPdf } from './billsExport.js?v=20261007a';
+import { esc, money, fmtDate, fmtDateTime, fmtBytes, kv, openDrawer, closeDrawer, drawerBody, drawerFooter, isDrawerOpen, actionPanel, friendly, errorsText, daysText, billBadges, statusBadge, payBadge, prioBadge, progressBar, setDrawerTitle, say } from './billsUi.js?v=20261007b';
+import { frequencyText } from './billsLogic.js?v=20261007b';
+import { billReportPdf } from './billsExport.js?v=20261007b';
 
 const $ = (id) => document.getElementById(id);
 let currentId = null;
@@ -19,7 +19,7 @@ function logLine(l) {
   const field = l.field_name && l.field_name !== 'payment' && l.field_name !== 'archived_at' ? l.field_name.replace(/_/g, ' ') : '';
   const change = field && (l.before_value !== null || l.after_value !== null) ? ' — ' + esc(field) + ': ' + (l.before_value !== null && l.before_value !== undefined ? esc(short(l.before_value)) + ' → ' : '') + esc(short(l.after_value ?? '(cleared)'))
     : (l.field_name === 'payment' ? ' — ' + esc(short(l.after_value ?? l.before_value ?? '')) : '');
-  return '<b>' + esc(l.action) + '</b>' + change + (l.details && l.details.reason ? ' <span class="muted">(' + esc(short(l.details.reason)) + ')</span>' : '');
+  return '<b>' + esc(say(l.action)) + '</b>' + change + (l.details && l.details.reason ? ' <span class="muted">(' + esc(short(l.details.reason)) + ')</span>' : '');
 }
 
 function summaryHtml(ctx, b) {
@@ -35,7 +35,7 @@ function detailsHtml(ctx, b) {
   const tpl = b.recurring_template_id ? ctx.data.templates.find((t) => t.id === b.recurring_template_id) : null;
   const rem = (b.reminder_days || []).slice().sort((x, y) => y - x);
   return '<div class="drawer-section"><h4>Details</h4>' +
-    kv('Bill ID', '#' + b.id) + kv('Category', esc(b._cat)) + kv('Branch', esc(b._branch)) + kv('Provider / supplier', esc(b.provider_name || '—')) +
+    kv('Expense ID', '#' + b.id) + kv('Category', esc(b._cat)) + kv('Branch', esc(b._branch)) + kv('Provider / supplier', esc(b.provider_name || '—')) +
     kv('Account name', esc(b.account_name || '—')) + kv('Account number', esc(b.account_number || '—')) +
     kv('Payment type', esc(b.payment_type === 'Auto-Debit' ? 'Auto-debited' : 'Paid by hand')) +
     kv('Priority', prioBadge(b._prio) + ' <span class="muted">' + (b.priority_source === 'manual' ? 'set by hand' : 'automatic') + '</span>') +
@@ -65,7 +65,7 @@ function filesHtml(ctx, b) {
     (b._files.length ? b._files.map((f) => '<div class="lv-doc" data-file="' + f.id + '"><div><b>' + esc(f.file_name) + '</b><div class="muted">' + esc(f.kind) + ' · ' + esc(fmtBytes(f.file_size || 0)) + ' · ' + esc(f.uploaded_by_name || '') + ' · ' + esc(fmtDate(String(f.created_at).slice(0, 10))) + '</div></div>' +
       '<div class="lv-doc-actions"><button type="button" class="btn small secondary" data-act="viewfile" data-id="' + f.id + '">View</button>' +
       (ctx.canWrite ? '<button type="button" class="btn small secondary" data-act="rmfile" data-id="' + f.id + '">Remove</button>' : '') + '</div></div>').join('')
-      : (b.attachment_path ? '<p class="muted">An older photo is attached to this bill.</p>' : '<p class="muted">No proof attached yet.</p>')) +
+      : (b.attachment_path ? '<p class="muted">An older photo is attached to this expense.</p>' : '<p class="muted">No proof attached yet.</p>')) +
     (ctx.canWrite || own ? '<div class="lv-upload"><button type="button" class="btn small" data-act="upload">+ Upload proof</button></div>' : '') + '</div>';
 }
 
@@ -75,12 +75,12 @@ function actionsHtml(ctx, b) {
     more.push('<button type="button" class="btn small secondary" data-act="note">Add Note</button>');
     if (b._open) more.push('<button type="button" class="btn small secondary" data-act="snooze">Snooze Reminder</button>');
     more.push('<button type="button" class="btn small secondary" data-act="dup">Duplicate Next Month</button>');
-    if (b.is_recurring || b.due_date) more.push('<button type="button" class="btn small secondary" data-act="gen">' + (b.is_recurring ? 'Generate Next Bill' : 'Make It Recurring & Generate Next') + '</button>');
+    if (b.is_recurring || b.due_date) more.push('<button type="button" class="btn small secondary" data-act="gen">' + (b.is_recurring ? 'Generate Next Expense' : 'Make It Recurring & Generate Next') + '</button>');
   }
   more.push('<button type="button" class="btn small secondary" data-act="print">Print</button>', '<button type="button" class="btn small secondary" data-act="pdf">Download PDF</button>');
   if (ctx.canAdmin && (b._livePays.length || b._eff === 'Paid' || b._eff === 'Auto-Debited')) more.push('<button type="button" class="btn small secondary" data-act="unpaid">Mark Unpaid</button>');
-  if (ctx.canWrite && b._eff === 'Cancelled') more.push('<button type="button" class="btn small secondary" data-act="restore">Restore Bill</button>');
-  else if (ctx.canWrite && !b.archived_at && !b._livePays.length && b._eff !== 'Paid') more.push('<button type="button" class="btn small secondary" data-act="cancel">Cancel Bill</button>');
+  if (ctx.canWrite && b._eff === 'Cancelled') more.push('<button type="button" class="btn small secondary" data-act="restore">Restore Expense</button>');
+  else if (ctx.canWrite && !b.archived_at && !b._livePays.length && b._eff !== 'Paid') more.push('<button type="button" class="btn small secondary" data-act="cancel">Cancel Expense</button>');
   if (ctx.canWrite) more.push('<button type="button" class="btn small secondary" data-act="archive">' + (b.archived_at ? 'Unarchive' : 'Archive') + '</button>');
   if (ctx.canDelete) more.push('<button type="button" class="btn small secondary bl-danger-btn" data-act="delete">Delete…</button>');
   return '<details class="exp bl-more"><summary><span class="exp-arrow" aria-hidden="true">▸</span>More actions</summary><div class="exp-body"><div class="lv-row-actions">' + more.join('') + '</div></div></details>';
@@ -129,9 +129,9 @@ function printCard(ctx, b, log, reminders) {
   // the printable copy sits directly under <body> so the print stylesheet can hide the whole app around it
   let area = $('bl-print-root');
   if (!area) { area = document.createElement('div'); area.id = 'bl-print-root'; area.className = 'bl-print-area'; document.body.appendChild(area); }
-  area.innerHTML = '<h2>' + esc(b.name) + '</h2><p>Bill #' + b.id + ' · ' + esc(b._cat) + ' · ' + esc(b._branch) + ' · ' + esc(b._eff) + ' · Priority ' + esc(b._prio) + '</p>' +
+  area.innerHTML = '<h2>' + esc(b.name) + '</h2><p>Expense #' + b.id + ' · ' + esc(b._cat) + ' · ' + esc(b._branch) + ' · ' + esc(b._eff) + ' · Priority ' + esc(b._prio) + '</p>' +
     summaryHtml(ctx, b) + detailsHtml(ctx, b) + paymentsHtml({ ...ctx, canAdmin: false }, b) + '<div class="drawer-section"><h4>Timeline</h4>' + timelineHtml(log, reminders) + '</div>' +
-    '<p class="muted">Kittymae Jewels — Bills Management · printed ' + esc(ctx.today) + '</p>';
+    '<p class="muted">Kittymae Jewels — Expense Management · printed ' + esc(ctx.today) + '</p>';
   document.body.classList.add('bl-printing');
   const done = () => { document.body.classList.remove('bl-printing'); area.innerHTML = ''; window.removeEventListener('afterprint', done); };
   window.addEventListener('afterprint', done);
@@ -140,7 +140,7 @@ function printCard(ctx, b, log, reminders) {
 
 export async function openDetail(ctx, id, opts = {}) {
   const b = ctx.byId.get(Number(id));
-  if (!b) { ctx.toast('That bill is no longer available.', true); return; }
+  if (!b) { ctx.toast('That expense is no longer available.', true); return; }
   const keepScroll = opts.keep && isDrawerOpen('detail') && currentId === b.id ? drawerBody('detail').scrollTop : 0;
   currentId = b.id;
   openDrawer('detail', { title: b.name, sub: '#' + b.id + ' · ' + b._cat + ' · ' + b._branch, body: bodyHtml(ctx, b), footer: footerHtml(ctx, b) });
@@ -170,27 +170,27 @@ export async function openDetail(ctx, id, opts = {}) {
     print: () => printCard(ctx, b, log, reminders),
     pdf: async () => { try { await billReportPdf(ctx, b, log.length ? log : await ctx.api.listActivity(b.id).catch(() => [])); } catch (err) { ctx.toast(err, true); } },
     viewfile: (el) => openFile(ctx, el.dataset.id),
-    note: () => actionPanel('detail', { title: 'Add a note', message: 'The note is added to the bill with your name and today’s date.', fields: '<textarea id="bl-act-note" rows="3" maxlength="500"></textarea>', okLabel: 'Add Note',
+    note: () => actionPanel('detail', { title: 'Add a note', message: 'The note is added to the expense with your name and today’s date.', fields: '<textarea id="bl-act-note" rows="3" maxlength="500"></textarea>', okLabel: 'Add Note',
       onOk: async () => { const t = $('bl-act-note').value.trim(); if (!t) throw new Error('Write the note first.'); await after(await ctx.api.addNote(b.id, t), 'Note added.'); } }),
     dup: () => actionPanel('detail', { title: 'Duplicate for next month?', message: 'Makes a copy of “' + esc(b.name) + '” due one month after ' + esc(b.due_date ? fmtDate(b.due_date) : 'its due date') + ' — no payments or notes are copied.', okLabel: 'Duplicate',
       onOk: async () => { const res = await ctx.api.duplicateBill(b.id); if (res && res.ok === false) throw new Error(errorsText(res)); ctx.toast('Duplicated.'); await ctx.refresh(); ctx.openDetail(res.id); } }),
-    gen: () => actionPanel('detail', { title: b.is_recurring ? 'Generate the next bill?' : 'Make this recurring?', message: b.is_recurring ? 'Creates the next bill in this series (copying the amount, branch and account). If it already exists you will be told.' : 'This bill will repeat monthly from now on (you can change the schedule in the Recurring tab), and the next one is created now.', okLabel: 'Generate',
-      onOk: async () => { const res = await ctx.api.generateNext(b.id); if (res && res.ok === false) throw new Error(errorsText(res)); ctx.toast('Created the bill due ' + fmtDate(res.due_date) + '.'); await ctx.refresh(); ctx.openDetail(res.id); } }),
+    gen: () => actionPanel('detail', { title: b.is_recurring ? 'Generate the next expense?' : 'Make this recurring?', message: b.is_recurring ? 'Creates the next expense in this series (copying the amount, branch and account). If it already exists you will be told.' : 'This expense will repeat monthly from now on (you can change the schedule in the Recurring tab), and the next one is created now.', okLabel: 'Generate',
+      onOk: async () => { const res = await ctx.api.generateNext(b.id); if (res && res.ok === false) throw new Error(errorsText(res)); ctx.toast('Created the expense due ' + fmtDate(res.due_date) + '.'); await ctx.refresh(); ctx.openDetail(res.id); } }),
     archive: () => b.archived_at
-      ? actionPanel('detail', { title: 'Unarchive this bill?', message: 'It will show in the dashboard and lists again.', okLabel: 'Unarchive', onOk: async () => after(await ctx.api.archiveBill(b.id, false), 'Bill unarchived.') })
-      : actionPanel('detail', { title: 'Archive this bill?', message: 'Archived bills are hidden from the dashboard, alerts, calendar and normal lists, but kept for records. You can unarchive it anytime.', okLabel: 'Archive', onOk: async () => after(await ctx.api.archiveBill(b.id, true), 'Bill archived.') }),
-    cancel: () => actionPanel('detail', { title: 'Cancel this bill?', message: 'Use this when the bill will not be paid (cancelled service, wrong bill). It stops counting in totals and reminders.', fields: '<textarea id="bl-act-reason" rows="2" maxlength="500" placeholder="Why is it cancelled? (required)"></textarea>', okLabel: 'Cancel Bill', danger: true,
-      onOk: async () => { const t = $('bl-act-reason').value.trim(); if (!t) throw new Error('Tell us why this bill is being cancelled.'); await after(await ctx.api.setCancelled(b.id, true, t), 'Bill cancelled.'); } }),
-    restore: () => actionPanel('detail', { title: 'Restore this bill?', message: 'It will count as unpaid again.', okLabel: 'Restore', onOk: async () => after(await ctx.api.setCancelled(b.id, false, null), 'Bill restored.') }),
-    unpaid: () => actionPanel('detail', { title: 'Mark this bill as unpaid?', message: 'All recorded payments on this bill are voided (kept in the history, no longer counted).', fields: '<textarea id="bl-act-reason" rows="2" maxlength="500" placeholder="Why? (required)"></textarea>', okLabel: 'Mark Unpaid', danger: true,
-      onOk: async () => { const t = $('bl-act-reason').value.trim(); if (!t) throw new Error('A reason is required.'); await after(await ctx.api.markUnpaid(b.id, t), 'Bill marked unpaid.'); } }),
-    void: (el) => actionPanel('detail', { title: 'Void this payment?', message: 'The payment stays in the history but no longer counts toward the bill.', fields: '<textarea id="bl-act-reason" rows="2" maxlength="500" placeholder="Why? (required)"></textarea>', okLabel: 'Void Payment', danger: true,
+      ? actionPanel('detail', { title: 'Unarchive this expense?', message: 'It will show in the dashboard and lists again.', okLabel: 'Unarchive', onOk: async () => after(await ctx.api.archiveBill(b.id, false), 'Expense unarchived.') })
+      : actionPanel('detail', { title: 'Archive this expense?', message: 'Archived expenses are hidden from the dashboard, alerts, calendar and normal lists, but kept for records. You can unarchive it anytime.', okLabel: 'Archive', onOk: async () => after(await ctx.api.archiveBill(b.id, true), 'Expense archived.') }),
+    cancel: () => actionPanel('detail', { title: 'Cancel this expense?', message: 'Use this when the expense will not be paid (cancelled service, wrong expense). It stops counting in totals and reminders.', fields: '<textarea id="bl-act-reason" rows="2" maxlength="500" placeholder="Why is it cancelled? (required)"></textarea>', okLabel: 'Cancel Expense', danger: true,
+      onOk: async () => { const t = $('bl-act-reason').value.trim(); if (!t) throw new Error('Tell us why this expense is being cancelled.'); await after(await ctx.api.setCancelled(b.id, true, t), 'Expense cancelled.'); } }),
+    restore: () => actionPanel('detail', { title: 'Restore this expense?', message: 'It will count as unpaid again.', okLabel: 'Restore', onOk: async () => after(await ctx.api.setCancelled(b.id, false, null), 'Expense restored.') }),
+    unpaid: () => actionPanel('detail', { title: 'Mark this expense as unpaid?', message: 'All recorded payments on this expense are voided (kept in the history, no longer counted).', fields: '<textarea id="bl-act-reason" rows="2" maxlength="500" placeholder="Why? (required)"></textarea>', okLabel: 'Mark Unpaid', danger: true,
+      onOk: async () => { const t = $('bl-act-reason').value.trim(); if (!t) throw new Error('A reason is required.'); await after(await ctx.api.markUnpaid(b.id, t), 'Expense marked unpaid.'); } }),
+    void: (el) => actionPanel('detail', { title: 'Void this payment?', message: 'The payment stays in the history but no longer counts toward the expense.', fields: '<textarea id="bl-act-reason" rows="2" maxlength="500" placeholder="Why? (required)"></textarea>', okLabel: 'Void Payment', danger: true,
       onOk: async () => { const t = $('bl-act-reason').value.trim(); if (!t) throw new Error('A reason is required to void a payment.'); await after(await ctx.api.voidPayment(Number(el.dataset.id), t), 'Payment voided.'); } }),
-    rmfile: (el) => actionPanel('detail', { title: 'Remove this file?', message: 'It is removed from the bill. The change is recorded in the history.', okLabel: 'Remove', danger: true, onOk: async () => after(await ctx.api.deleteAttachment(Number(el.dataset.id)), 'File removed.') }),
-    delete: () => actionPanel('detail', { title: 'Delete this bill for good?', danger: true, okLabel: 'Delete Bill',
-      message: 'This permanently deletes “' + esc(b.name) + '”' + (b._pays.length ? ' and its ' + b._pays.length + ' payment record' + (b._pays.length === 1 ? '' : 's') : '') + '. The deletion is kept in the history. <b>Archiving</b> is usually the better choice — it hides the bill but keeps everything.',
+    rmfile: (el) => actionPanel('detail', { title: 'Remove this file?', message: 'It is removed from the expense. The change is recorded in the history.', okLabel: 'Remove', danger: true, onOk: async () => after(await ctx.api.deleteAttachment(Number(el.dataset.id)), 'File removed.') }),
+    delete: () => actionPanel('detail', { title: 'Delete this expense for good?', danger: true, okLabel: 'Delete Expense',
+      message: 'This permanently deletes “' + esc(b.name) + '”' + (b._pays.length ? ' and its ' + b._pays.length + ' payment record' + (b._pays.length === 1 ? '' : 's') : '') + '. The deletion is kept in the history. <b>Archiving</b> is usually the better choice — it hides the expense but keeps everything.',
       fields: '<label class="lv-confirm"><input type="checkbox" id="bl-act-sure"> I understand this cannot be undone.</label>',
-      onOk: async () => { if (!$('bl-act-sure').checked) throw new Error('Tick the box to confirm.'); const res = await ctx.api.deleteBill(b.id); if (res && res.ok === false) throw new Error(errorsText(res)); closeDetail(); ctx.toast('Bill deleted.'); await ctx.refresh(); } }),
+      onOk: async () => { if (!$('bl-act-sure').checked) throw new Error('Tick the box to confirm.'); const res = await ctx.api.deleteBill(b.id); if (res && res.ok === false) throw new Error(errorsText(res)); closeDetail(); ctx.toast('Expense deleted.'); await ctx.refresh(); } }),
   };
   const root = $('bl-detail-drawer');
   root.querySelectorAll('[data-act]').forEach((el) => el.addEventListener('click', (e) => {

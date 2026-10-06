@@ -1,10 +1,10 @@
 // Sales & Profit Dashboard -- the Overview tab: 17 KPI cards (each with the previous comparable period, the change, and a green / red / gray arrow that follows
 // what the change MEANS: lower expenses are good, higher refunds are not), the sales trend, the profit breakdown, channel / product / expense / stock / capital panels,
 // and the detailed sales table. Click a KPI card to see the transactions behind it.
-import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS, rangeText, fmtDateTime } from './sdCore.js?v=20261007a';
-import { kpiCard, panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, hbars, donut, lineChart, waterfall, trendLabels, seriesOf, C, PALETTE, kvRow, closeDrawer } from './sdUi.js?v=20261007a';
-import { createTable } from './sdTable.js?v=20261007a';
-import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007a';
+import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS, rangeText, fmtDateTime } from './sdCore.js?v=20261007b';
+import { kpiCard, panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, hbars, donut, lineChart, waterfall, trendLabels, seriesOf, C, PALETTE, kvRow, closeDrawer } from './sdUi.js?v=20261007b';
+import { createTable } from './sdTable.js?v=20261007b';
+import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007b';
 
 // ---------------------------------------------------------------- the 17 cards
 // (There is deliberately no "Cash Available" card: it came from the Finance > Transactions ledger, which does not see the real money -- Ren, 2026-10-07.)
@@ -31,8 +31,8 @@ const KPIS = [
     card: (d) => ({ v: d.purchases, f: money, sub: int(d.purchase_units) + ' pcs · ' + int(d.purchase_deliveries) + ' deliveries', warn: d.purchase_unpriced > 0 ? { text: int(d.purchase_unpriced) + ' unpriced', tone: 'orange' } : null }) }),
   mk({ key: 'cogs', row: 2, label: 'COGS (Capital Used)', show: (c) => c.sales && (c.profit || c.cost), good: 'neutral', hint: 'Cost of Goods Sold: what the products you actually sold cost — not what you purchased.',
     card: (d) => ({ v: d.cogs, f: money, sub: 'Cost of what was sold', warn: covWarn(d.coverage), unknown: d.cogs === null || d.cogs === undefined }) }),
-  mk({ key: 'opex', row: 2, label: 'Operating Expenses', need: 'expenses', good: 'down', hint: 'Business bills due in the period (rent, utilities, salaries, services…). Personal bills and supplier payments are not included.',
-    card: (d) => ({ v: d.opex, f: money, sub: int(d.opex_bills) + ' bills due', warn: d.opex_no_amount > 0 ? { text: int(d.opex_no_amount) + ' with no amount', tone: 'orange' } : null }) }),
+  mk({ key: 'opex', row: 2, label: 'Operating Expenses', need: 'expenses', good: 'down', hint: 'Business expenses due in the period (rent, utilities, salaries, services…). Personal expenses and supplier payments are not included.',
+    card: (d) => ({ v: d.opex, f: money, sub: int(d.opex_bills) + ' expenses due', warn: d.opex_no_amount > 0 ? { text: int(d.opex_no_amount) + ' with no amount', tone: 'orange' } : null }) }),
   mk({ key: 'inventory_value', row: 2, label: 'Inventory Value', show: (c) => c.cost || c.inventory, good: 'neutral', hint: 'Stock on hand × supplier price (cost). Selling-price value is shown underneath.',
     card: (d, can) => {
       const noHist = d.inventory_units === null || d.inventory_units === undefined;
@@ -44,8 +44,8 @@ const KPIS = [
     } }),
   mk({ key: 'receivables', row: 2, label: 'Accounts Receivable', need: 'sales', good: 'down', hint: 'COD parcels that were delivered but the courier has not remitted yet (LBC Monitoring).',
     card: (d) => ({ v: d.receivables, f: money, sub: int(d.receivable_parcels) + ' COD parcels not remitted' }) }),
-  mk({ key: 'payables', row: 2, label: 'Accounts Payable', need: 'expenses', good: 'down', hint: 'What is still owed on business bills (unpaid balances).',
-    card: (d) => ({ v: d.payables, f: money, sub: int(d.payable_bills) + ' unpaid bills' }) }),
+  mk({ key: 'payables', row: 2, label: 'Accounts Payable', need: 'expenses', good: 'down', hint: 'What is still owed on business expenses (unpaid balances).',
+    card: (d) => ({ v: d.payables, f: money, sub: int(d.payable_bills) + ' unpaid expenses' }) }),
 
   mk({ key: 'items_sold', row: 3, label: 'Items Sold', need: 'sales', good: 'up', hint: 'Pieces sold, less pieces returned.',
     card: (d) => ({ v: d.items_sold, f: int, sub: int(d.units_returned) + ' returned' }) }),
@@ -68,10 +68,10 @@ const DRILL = {
   total_orders: { kind: 'sales', extra: { row_kind: 'Sale' }, sort: 'date', note: 'The completed sales in the period, one line per item.' },
   total_purchases: { kind: 'purchases', extra: {}, sort: 'total', note: 'Deliveries recorded in the ERP in the period.' },
   cogs: { kind: 'sales', extra: { row_kind: 'Sale,Return' }, sort: 'cogs', note: 'Cost of goods sold = pieces sold × supplier price. Returns give the cost back.' },
-  opex: { kind: 'expenses', extra: {}, sort: 'amount', note: 'Business bills due in the period.' },
+  opex: { kind: 'expenses', extra: {}, sort: 'amount', note: 'Business expenses due in the period.' },
   inventory_value: { kind: 'inventory', extra: {}, sort: 'retail_value', note: 'Stock by SKU (today’s quantities).' },
   receivables: { kind: 'receivables', extra: {}, sort: 'ship_date', note: 'Delivered COD parcels the courier has not remitted yet.' },
-  payables: { kind: 'payables', extra: {}, sort: 'due_date', note: 'Business bills with an unpaid balance (today).' },
+  payables: { kind: 'payables', extra: {}, sort: 'due_date', note: 'Business expenses with an unpaid balance (today).' },
   items_sold: { kind: 'sales', extra: { row_kind: 'Sale,Return' }, sort: 'qty', note: 'Pieces sold and returned.' },
   aov: { kind: 'sales', extra: { row_kind: 'Sale' }, sort: 'net', note: 'Completed sales in the period.' },
   refunds: { kind: 'sales', extra: { row_kind: 'Return,Refund' }, sort: 'refund', note: 'Returned orders and refunds that reduced sales. Refunds that only hand back money that was never part of a sale (excess payment, item unavailable) are on the Payments tab.' },
@@ -190,9 +190,9 @@ export function renderOverview(root, ctx) {
 
     // Expenses by category
     if (can.expenses) {
-      const el = slot(grid, panel('Expenses by Category', '', { cls: 'sd-span-5', sub: 'Business bills due in the period', actions: '<button type="button" class="act-link" data-tab="expenses">See expenses</button>' }));
+      const el = slot(grid, panel('Expenses by Category', '', { cls: 'sd-span-5', sub: 'Business expenses due in the period', actions: '<button type="button" class="act-link" data-tab="expenses">See expenses</button>' }));
       fill(el, () => api.expenseSummary(f), (x) => x.by_category.length
-        ? donut(x.by_category.slice(0, 8).map((r, i) => ({ label: r.category, value: r.amount, color: PALETTE[i % PALETTE.length] })), { center: moneyShort(x.cur.total), centerSub: 'expenses', format: moneyShort }) : emptyBox('No bills are due in this period.'), draw);
+        ? donut(x.by_category.slice(0, 8).map((r, i) => ({ label: r.category, value: r.amount, color: PALETTE[i % PALETTE.length] })), { center: moneyShort(x.cur.total), centerSub: 'expenses', format: moneyShort }) : emptyBox('No expenses are due in this period.'), draw);
     }
 
     // Inventory summary

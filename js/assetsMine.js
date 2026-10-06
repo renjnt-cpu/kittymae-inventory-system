@@ -1,8 +1,8 @@
 // Assets & Supplies Custodian -- "My Company Assets": what is issued to the signed-in person, whether they have confirmed receiving it,
 // a way to report a problem, what they have held before, and (if they may) their supply requests. Every employee with a login can open this;
 // nobody sees anyone else's property here.
-import { esc, plural, dt, dash, conditionBadge, statusBadge, flowBadge, emptyBox, chips, qty, branchName } from './assetsUi.js?v=20261007a';
-import { REQUEST_OPEN, dayOf } from './assetsLogic.js?v=20261007a';
+import { esc, plural, dt, dash, conditionBadge, statusBadge, flowBadge, emptyBox, chips, qty, branchName } from './assetsUi.js?v=20261007b';
+import { REQUEST_OPEN, dayOf } from './assetsLogic.js?v=20261007b';
 
 const $ = (id) => document.getElementById(id);
 

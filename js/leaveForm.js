@@ -5,8 +5,8 @@
 // final approval, owner auto-approval) all come back from the database functions.
 import {
   esc, fmtDate, rangeText, num, daysText, fmtBytes, errorsText, statusBadge, DURATION_TYPES, DOC_KINDS, kv,
-} from './leaveUi.js?v=20261007a';
-import { fileProblem } from './leaveDetail.js?v=20261007a';
+} from './leaveUi.js?v=20261007b';
+import { fileProblem } from './leaveDetail.js?v=20261007b';
 
 const $ = (id) => document.getElementById(id);
 let ctx = null;

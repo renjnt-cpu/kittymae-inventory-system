@@ -1,8 +1,8 @@
 // Bills Management -- the Calendar tab (month / week / agenda) and the Cash Planning tab (what has to be
 // paid, week by week, with the recurring bills that are still to be created counted in as "projected").
-import { esc, money, moneyShort, fmtDate, daysText, statusBadge, prioBadge, tagBadge, kpiCard, stackedColumns, openDrawer, closeDrawer, plural, COLORS } from './billsUi.js?v=20261007a';
-import { matchesScope, monthCells, weekDates, groupByDue, weekday, addDays, ymd, yearOf, monthOf, monthName, addMonths, weekBuckets, projectTemplates, PRIORITIES, sum, daysBetween, PRIORITY_RANK } from './billsLogic.js?v=20261007a';
-import { exportPlan } from './billsExport.js?v=20261007a';
+import { esc, money, moneyShort, fmtDate, daysText, statusBadge, prioBadge, tagBadge, kpiCard, stackedColumns, openDrawer, closeDrawer, plural, COLORS } from './billsUi.js?v=20261007b';
+import { matchesScope, monthCells, weekDates, groupByDue, weekday, addDays, ymd, yearOf, monthOf, monthName, addMonths, weekBuckets, projectTemplates, PRIORITIES, sum, daysBetween, PRIORITY_RANK } from './billsLogic.js?v=20261007b';
+import { exportPlan } from './billsExport.js?v=20261007b';
 
 const $ = (id) => document.getElementById(id);
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -36,7 +36,7 @@ function monthGridHtml(ctx, byDay, y, m) {
     cells.map((cell) => {
       const list = byDay[cell.date] || [];
       const tot = sum(list.filter((b) => b._open), (b) => b._remaining);
-      return '<div class="bl-cal-cell' + (cell.inMonth ? '' : ' bl-cal-out') + (cell.date === ctx.today ? ' bl-cal-istoday' : '') + '" data-day="' + cell.date + '" tabindex="0" role="button" aria-label="' + esc(dayLabel(cell.date) + ', ' + plural(list.length, 'bill')) + '">' +
+      return '<div class="bl-cal-cell' + (cell.inMonth ? '' : ' bl-cal-out') + (cell.date === ctx.today ? ' bl-cal-istoday' : '') + '" data-day="' + cell.date + '" tabindex="0" role="button" aria-label="' + esc(dayLabel(cell.date) + ', ' + plural(list.length, 'expense')) + '">' +
         '<div class="bl-cal-top"><span class="bl-cal-num">' + Number(cell.date.slice(8)) + '</span>' + (tot ? '<span class="bl-cal-tot">' + moneyShort(tot) + '</span>' : '') + '</div>' +
         '<div class="bl-cal-chips">' + list.slice(0, 3).map(chip).join('') + (list.length > 3 ? '<button type="button" class="bl-cal-more" data-day="' + cell.date + '">+' + (list.length - 3) + ' more</button>' : '') + '</div>' +
         '<div class="bl-cal-dots">' + list.slice(0, 6).map(dot).join('') + '</div></div>';
@@ -52,19 +52,19 @@ function weekHtml(ctx, byDay) {
 }
 function agendaHtml(ctx, bills, from, to) {
   const list = bills.filter((b) => b.due_date >= from && b.due_date <= to).sort((a, b) => a.due_date.localeCompare(b.due_date) || b._remaining - a._remaining);
-  if (!list.length) return '<p class="muted">No bills fall due in this period.</p>';
+  if (!list.length) return '<p class="muted">No expenses fall due in this period.</p>';
   const days = [...new Set(list.map((b) => b.due_date))];
   return days.map((d) => {
     const rows = list.filter((b) => b.due_date === d);
-    return '<div class="bl-agenda-day"><h4>' + esc(dayLabel(d)) + (d === ctx.today ? ' <span class="bl-tag bl-tag-blue badge">Today</span>' : '') + ' <span class="muted">· ' + plural(rows.length, 'bill') + ' · ' + money(sum(rows, (b) => b._amount)) + '</span></h4>' +
+    return '<div class="bl-agenda-day"><h4>' + esc(dayLabel(d)) + (d === ctx.today ? ' <span class="bl-tag bl-tag-blue badge">Today</span>' : '') + ' <span class="muted">· ' + plural(rows.length, 'expense') + ' · ' + money(sum(rows, (b) => b._amount)) + '</span></h4>' +
       rows.map((b) => '<div class="bl-agenda-row" data-open="' + b.id + '" role="button" tabindex="0"><span class="bl-dot bl-cal-' + (SLUG[b._eff] || 'gray') + '"></span><div><b>' + esc(b.name) + '</b><div class="muted">' + esc(b._cat) + ' · ' + esc(b._branch) + '</div></div><div class="bl-agenda-right">' + statusBadge(b._eff) + '<b>' + money(b._amount) + '</b></div></div>').join('') + '</div>';
   }).join('');
 }
 
 function openDay(ctx, date, bills) {
   const list = bills.filter((b) => b.due_date === date).sort((a, b) => b._remaining - a._remaining);
-  openDrawer('side', { title: dayLabel(date), sub: plural(list.length, 'bill') + ' · ' + money(sum(list, (b) => b._amount)),
-    body: list.length ? list.map((b) => '<div class="bl-agenda-row" data-open="' + b.id + '" role="button" tabindex="0"><span class="bl-dot bl-cal-' + (SLUG[b._eff] || 'gray') + '"></span><div><b>' + esc(b.name) + '</b><div class="muted">' + esc(b._cat) + ' · ' + esc(b._branch) + '</div></div><div class="bl-agenda-right">' + statusBadge(b._eff) + '<b>' + money(b._amount) + '</b></div></div>').join('') : '<p class="muted">No bills fall due on this day.</p>', footer: '' });
+  openDrawer('side', { title: dayLabel(date), sub: plural(list.length, 'expense') + ' · ' + money(sum(list, (b) => b._amount)),
+    body: list.length ? list.map((b) => '<div class="bl-agenda-row" data-open="' + b.id + '" role="button" tabindex="0"><span class="bl-dot bl-cal-' + (SLUG[b._eff] || 'gray') + '"></span><div><b>' + esc(b.name) + '</b><div class="muted">' + esc(b._cat) + ' · ' + esc(b._branch) + '</div></div><div class="bl-agenda-right">' + statusBadge(b._eff) + '<b>' + money(b._amount) + '</b></div></div>').join('') : '<p class="muted">No expenses fall due on this day.</p>', footer: '' });
   $('bl-side-body').querySelectorAll('[data-open]').forEach((el) => el.addEventListener('click', () => { closeDrawer('side'); ctx.openDetail(Number(el.dataset.open)); }));
 }
 
@@ -82,7 +82,7 @@ export function renderCalendar(ctx, panel) {
     '<div class="bl-cal-legend">' + [['paid', 'Paid'], ['unpaid', 'Unpaid'], ['soon', 'Due soon'], ['today', 'Due today'], ['overdue', 'Overdue'], ['partial', 'Partly paid']].map((x) => '<span><span class="bl-dot bl-cal-' + x[0] + '"></span> ' + x[1] + '</span>').join('') + '</div>' +
     (c.view === 'month' ? monthGridHtml(ctx, byDay, c.y, c.m) + '<div class="bl-cal-agenda card"><h3 class="bl-h">' + esc(monthTitle) + '</h3>' + agendaHtml(ctx, bills, from, to) + '</div>'
       : c.view === 'week' ? '<div class="card bl-panel">' + weekHtml(ctx, byDay) + '</div>'
-      : '<div class="card bl-panel"><h3 class="bl-h">' + esc(monthTitle) + ' · ' + plural(monthBills.length, 'bill') + ' · ' + money(sum(monthBills, (b) => b._amount)) + '</h3>' + agendaHtml(ctx, bills, from, to) + '</div>') + '</div>';
+      : '<div class="card bl-panel"><h3 class="bl-h">' + esc(monthTitle) + ' · ' + plural(monthBills.length, 'expense') + ' · ' + money(sum(monthBills, (b) => b._amount)) + '</h3>' + agendaHtml(ctx, bills, from, to) + '</div>') + '</div>';
 
   const root = $('bl-cal');
   bindBranchCategory(ctx, root);
@@ -149,21 +149,21 @@ export function renderPlanning(ctx, panel) {
 
   panel.innerHTML = '<div id="bl-plan">' + branchCategoryBar(ctx,
     '<div class="field"><label>Look ahead</label><select id="bl-plan-weeks">' + [4, 8, 13].map((n) => '<option value="' + n + '"' + (p.weeks === n ? ' selected' : '') + '>' + n + ' weeks</option>').join('') + '</select></div>' +
-    '<div class="bl-checks"><label class="bl-chk"><input type="checkbox" id="bl-plan-proj"' + (p.projected ? ' checked' : '') + '> Include recurring bills not created yet (projected)</label></div>' +
+    '<div class="bl-checks"><label class="bl-chk"><input type="checkbox" id="bl-plan-proj"' + (p.projected ? ' checked' : '') + '> Include recurring expenses not created yet (projected)</label></div>' +
     '<div class="field"><label>&nbsp;</label><details class="bl-menu bl-exportmenu"><summary class="btn small secondary">Export plan ▾</summary><div class="bl-menu-pop"><button type="button" data-exp="csv">CSV</button><button type="button" data-exp="xlsx">Excel (.xlsx)</button><button type="button" data-exp="pdf">PDF</button></div></details></div>') +
     '<div class="bl-kpis">' +
-      kpiCard({ label: 'Overdue now', value: money(wk.overdue.total), sub: plural(wk.overdue.count, 'bill'), tone: wk.overdue.count ? 'red' : 'green' }) +
+      kpiCard({ label: 'Overdue now', value: money(wk.overdue.total), sub: plural(wk.overdue.count, 'expense'), tone: wk.overdue.count ? 'red' : 'green' }) +
       kpiCard({ label: 'Next 7 days', value: money(thisWeek), sub: 'today to ' + (wk.buckets[0] ? fmtDate(wk.buckets[0].to) : ''), tone: 'orange' }) +
-      kpiCard({ label: 'Next 4 weeks', value: money(sum(first4, (k) => k.total)), sub: plural(sum(first4, (k) => k.count), 'bill'), tone: 'yellow' }) +
+      kpiCard({ label: 'Next 4 weeks', value: money(sum(first4, (k) => k.total)), sub: plural(sum(first4, (k) => k.count), 'expense'), tone: 'yellow' }) +
       kpiCard({ label: 'Whole look-ahead', value: money(horizon + wk.overdue.total), sub: 'overdue + ' + p.weeks + ' weeks' + (projTotal ? ' · ' + money(projTotal) + ' projected' : ''), tone: 'blue' }) +
-      kpiCard({ label: 'Must pay first', value: money(mustPay), sub: 'overdue + Critical / High', tone: 'red', hint: 'Overdue bills plus anything marked Critical or High' }) + '</div>' +
-    (behind.length ? '<div class="msg lv-warn bl-nudge"><span><b>' + plural(behind.length, 'recurring bill') + '</b> ' + (behind.length === 1 ? 'is' : 'are') + ' behind schedule (about ' + money(sum(behind, (t) => Number(t.default_amount || 0))) + ') — the bill was never created, so it is not counted below.</span> <button type="button" class="btn small" data-go-recurring="1">Review in Recurring</button></div>' : '') +
+      kpiCard({ label: 'Must pay first', value: money(mustPay), sub: 'overdue + Critical / High', tone: 'red', hint: 'Overdue expenses plus anything marked Critical or High' }) + '</div>' +
+    (behind.length ? '<div class="msg lv-warn bl-nudge"><span><b>' + plural(behind.length, 'recurring expense') + '</b> ' + (behind.length === 1 ? 'is' : 'are') + ' behind schedule (about ' + money(sum(behind, (t) => Number(t.default_amount || 0))) + ') — the expense was never created, so it is not counted below.</span> <button type="button" class="btn small" data-go-recurring="1">Review in Recurring</button></div>' : '') +
     '<div class="card bl-panel"><h3 class="bl-h">Cash needed by week <span class="muted">· split by priority</span></h3>' + stackedColumns(cols, PR_SEG, { format: moneyShort }) +
-      (wk.later.count || wk.undated.count ? '<p class="muted">Not in the chart: ' + (wk.later.count ? plural(wk.later.count, 'bill') + ' (' + money(wk.later.total) + ') due after week ' + p.weeks : '') + (wk.later.count && wk.undated.count ? ' · ' : '') + (wk.undated.count ? plural(wk.undated.count, 'bill') + ' (' + money(wk.undated.total) + ') with no due date' : '') + '.</p>' : '') + '</div>' +
+      (wk.later.count || wk.undated.count ? '<p class="muted">Not in the chart: ' + (wk.later.count ? plural(wk.later.count, 'expense') + ' (' + money(wk.later.total) + ') due after week ' + p.weeks : '') + (wk.later.count && wk.undated.count ? ' · ' : '') + (wk.undated.count ? plural(wk.undated.count, 'expense') + ' (' + money(wk.undated.total) + ') with no due date' : '') + '.</p>' : '') + '</div>' +
     '<div class="card bl-panel"><h3 class="bl-h">Day by day · next 14 days</h3><div class="bl-days14">' + day14.map((x) =>
-      '<div class="bl-day14' + (x.total ? ' bl-day14-on' : '') + (x.crit ? ' bl-day14-crit' : '') + (x.d === ctx.today ? ' bl-day14-today' : '') + '"><span class="muted">' + DOW[weekday(x.d)] + '</span><b>' + Number(x.d.slice(8)) + '</b><span>' + (x.total ? moneyShort(x.total) : '—') + '</span><span class="muted">' + (x.count ? plural(x.count, 'bill') : '') + '</span></div>').join('') + '</div></div>' +
+      '<div class="bl-day14' + (x.total ? ' bl-day14-on' : '') + (x.crit ? ' bl-day14-crit' : '') + (x.d === ctx.today ? ' bl-day14-today' : '') + '"><span class="muted">' + DOW[weekday(x.d)] + '</span><b>' + Number(x.d.slice(8)) + '</b><span>' + (x.total ? moneyShort(x.total) : '—') + '</span><span class="muted">' + (x.count ? plural(x.count, 'expense') : '') + '</span></div>').join('') + '</div></div>' +
     '<div class="card bl-panel"><h3 class="bl-h">Week by week</h3>' + weekBlocks.map((k, i) =>
-      '<details class="exp bl-weekblock"' + (i < 2 ? ' open' : '') + '><summary><span class="exp-arrow" aria-hidden="true">▸</span><span class="bl-wk-title"><b>' + esc(k.title) + '</b> <span class="muted">' + esc(k.range) + '</span></span><span class="bl-wk-total"><b>' + money(k.total) + '</b> <span class="muted">· ' + plural(k.count, 'bill') + ' · running total ' + money(k.cum) + '</span></span></summary>' +
+      '<details class="exp bl-weekblock"' + (i < 2 ? ' open' : '') + '><summary><span class="exp-arrow" aria-hidden="true">▸</span><span class="bl-wk-title"><b>' + esc(k.title) + '</b> <span class="muted">' + esc(k.range) + '</span></span><span class="bl-wk-total"><b>' + money(k.total) + '</b> <span class="muted">· ' + plural(k.count, 'expense') + ' · running total ' + money(k.cum) + '</span></span></summary>' +
         '<div class="exp-body">' + (k.bills.length ? k.bills.map(item).join('') : '<p class="muted">Nothing due this week.</p>') + '</div></details>').join('') + '</div></div>';
 
   const root = $('bl-plan');

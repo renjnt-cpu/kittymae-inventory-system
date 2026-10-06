@@ -1,11 +1,11 @@
 // Sales & Profit Dashboard -- the Capital tab: owner capital (initial, additional, withdrawals), equipment, stock at cost, receivables and payables.
 // Capital is kept apart from sales and from stock. An entry is never deleted: a wrong one is voided with a reason, and every change is in the audit trail.
 // There is deliberately no cash balance and no "estimated owner equity" (which was built on it): the Finance > Transactions ledger does not see the real money -- Ren, 2026-10-07.
-import { api, esc, money, int, fmtDate, friendly, todayIn } from './sdCore.js?v=20261007a';
-import { panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, closeDrawer, toast, drawerBody } from './sdUi.js?v=20261007a';
-import { createTable } from './sdTable.js?v=20261007a';
-import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007a';
-import { stats } from './sdTabs.js?v=20261007a';
+import { api, esc, money, int, fmtDate, friendly, todayIn } from './sdCore.js?v=20261007b';
+import { panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, closeDrawer, toast, drawerBody } from './sdUi.js?v=20261007b';
+import { createTable } from './sdTable.js?v=20261007b';
+import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007b';
+import { stats } from './sdTabs.js?v=20261007b';
 
 const TYPES = [
   { id: 'INITIAL_CAPITAL', label: 'Initial capital', hint: 'The money the owner first put into the business.' },
@@ -37,7 +37,7 @@ export function renderCapital(root, ctx) {
         { label: 'Inventory sold, at cost (COGS)', html: oc.cogs === null || oc.cogs === undefined ? badge('Cost data missing', 'orange') : esc(money(oc.cogs)), sub: 'Cost of what was sold in the period' },
         { label: 'Current inventory capital', html: c.inventory_cost_value === null || c.inventory_cost_value === undefined ? badge('Cost data missing', 'orange') : esc(money(c.inventory_cost_value)), sub: 'Stock at supplier price · ' + int(c.inventory_units) + ' pcs' },
         { label: 'Receivables', html: c.receivables === null || c.receivables === undefined ? '<span class="sd-dash">—</span>' : esc(money(c.receivables)), sub: 'COD not yet remitted' },
-        { label: 'Payables', html: c.payables === null || c.payables === undefined ? '<span class="sd-dash">—</span>' : esc(money(c.payables)), sub: 'Unpaid business bills' },
+        { label: 'Payables', html: c.payables === null || c.payables === undefined ? '<span class="sd-dash">—</span>' : esc(money(c.payables)), sub: 'Unpaid business expenses' },
         { label: 'Equipment / assets', html: esc(money(c.equipment)), sub: 'Asset purchases recorded here' },
       ]) + (c.notes || []).map((n) => '<p class="muted sd-note">' + esc(n) + '</p>').join('');
     }).catch((err) => { sum.querySelector('.sd-panel-body').innerHTML = err.denied ? lockedBox(err.message) : errorBox(friendly(err)); });

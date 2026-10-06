@@ -1,7 +1,7 @@
 // Sales & Profit Dashboard -- shared plumbing: money / number formatting (never NaN or undefined on screen), date-range maths
 // (the previous comparable period), the green / red / gray rules for the KPI change arrows, and every database call.
 // Every figure on the dashboard is worked out by the database (migrations 141-148); nothing here recomputes a business number.
-import { supabase } from './supabaseClient.js?v=20261007a';
+import { supabase } from './supabaseClient.js?v=20261007b';
 
 // ---------------------------------------------------------------- formatting
 export const esc = (s) => (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

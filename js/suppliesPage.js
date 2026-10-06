@@ -2,12 +2,12 @@
 // no serial number, only a stock level per branch, and every change to a level is one permanent row in the stock ledger (received, issued,
 // transferred, adjusted, damaged, returned) with the balance before and after. Stock can never go below zero, and the same click twice never
 // counts twice. A supply is never deleted -- it can be deactivated once its stock is zero.
-import { esc, plural, field, opts, qty, dash, money, tagBadge, stockBadge, emptyBox, branchName, branchChip, openDrawer, closeDrawer, drawerBody, kv, setDetailHandlers, friendly, errorsText, val, categoryOptions, personOptions, branchOptions, fmtDateTime, actionPanel, isDrawerOpen } from './assetsUi.js?v=20261007a';
-import { SUPPLY_TYPES, uniqueSorted, stockOf, dayOf } from './assetsLogic.js?v=20261007a';
-import { exportSupplies } from './assetsReports.js?v=20261007a';
-import { exportMenu, pagerHtml } from './assetsList.js?v=20261007a';
-import { applySort, sortControlHtml, wireSortControl } from './uiKit.js?v=20261007a';
-import { flagInvalid } from './uiKit.js?v=20261007a';
+import { esc, plural, field, opts, qty, dash, money, tagBadge, stockBadge, emptyBox, branchName, branchChip, openDrawer, closeDrawer, drawerBody, kv, setDetailHandlers, friendly, errorsText, val, categoryOptions, personOptions, branchOptions, fmtDateTime, actionPanel, isDrawerOpen } from './assetsUi.js?v=20261007b';
+import { SUPPLY_TYPES, uniqueSorted, stockOf, dayOf } from './assetsLogic.js?v=20261007b';
+import { exportSupplies } from './assetsReports.js?v=20261007b';
+import { exportMenu, pagerHtml } from './assetsList.js?v=20261007b';
+import { applySort, sortControlHtml, wireSortControl } from './uiKit.js?v=20261007b';
+import { flagInvalid } from './uiKit.js?v=20261007b';
 
 const $ = (id) => document.getElementById(id);
 export const newSuppliesState = () => ({ q: '', category: '', branch: '', state: '', inactive: false, sort: { field: 'name', dir: 'asc' }, page: 1, pageSize: 50 });

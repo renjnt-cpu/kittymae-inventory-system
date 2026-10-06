@@ -1,10 +1,10 @@
 // Sales & Profit Dashboard -- the Sales, Products, Channels, Purchases, Inventory, Expenses and Payments tabs.
 // Each tab asks the database for its own figures (so a slow or denied panel never blocks the others) and draws them with the shared charts and the shared table.
-import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS } from './sdCore.js?v=20261007a';
-import { panel, lockedBox, loadingBox, errorBox, emptyBox, hbars, donut, lineChart, columnChart, trendLabels, seriesOf, C, PALETTE, badge } from './sdUi.js?v=20261007a';
-import { createTable, staticTable } from './sdTable.js?v=20261007a';
-import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007a';
-import { openDrill } from './sdOverview.js?v=20261007a';
+import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS } from './sdCore.js?v=20261007b';
+import { panel, lockedBox, loadingBox, errorBox, emptyBox, hbars, donut, lineChart, columnChart, trendLabels, seriesOf, C, PALETTE, badge } from './sdUi.js?v=20261007b';
+import { createTable, staticTable } from './sdTable.js?v=20261007b';
+import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007b';
+import { openDrill } from './sdOverview.js?v=20261007b';
 
 // ---------------------------------------------------------------- shared bits
 /** A row of figures; `chip` compares this period with the previous one. */
@@ -206,22 +206,22 @@ export function renderExpenses(root, ctx) {
   function draw() {
     const f = filters.server(), r = filters.range(); grain = grain || defaultGrain(r.from, r.to);
     root.innerHTML = '<div id="sd-ex-sum"></div><div class="sd-grid" id="sd-ex-grid"></div><div id="sd-ex-table"></div>';
-    const sum = add(root.querySelector('#sd-ex-sum'), panel('Expense Summary', '', { sub: 'Business bills due in the period', actions: '<button type="button" class="btn small secondary" id="sd-ex-open">See unpaid bills (payables)</button>' }));
+    const sum = add(root.querySelector('#sd-ex-sum'), panel('Expense Summary', '', { sub: 'Business expenses due in the period', actions: '<button type="button" class="btn small secondary" id="sd-ex-open">See unpaid expenses (payables)</button>' }));
     fill(sum, () => api.expenseSummary(f), (s) => { const c = s.cur, p = s.prev;
       return stats([
         { label: 'Total expenses', html: esc(money(c.total)), cmp: p ? { cur: c.total, prev: p.total, good: 'down' } : null, f: money, warn: c.no_amount > 0 ? int(c.no_amount) + ' with no amount' : '' },
-        { label: 'Bills', html: esc(int(c.bills)), cmp: p ? { cur: c.bills, prev: p.bills, good: 'neutral' } : null, f: int },
+        { label: 'Expenses', html: esc(int(c.bills)), cmp: p ? { cur: c.bills, prev: p.bills, good: 'neutral' } : null, f: int },
         { label: 'Paid so far', html: esc(money(c.paid)) }, { label: 'Still unpaid', html: esc(money(c.unpaid)) },
       ]) + '<p class="muted sd-note">' + esc(s.basis) + '</p>'; }, draw);
     root.querySelector('#sd-ex-open').addEventListener('click', () => openDrill('payables', ctx));
     const grid = root.querySelector('#sd-ex-grid');
     const cat = add(grid, panel('Expenses by Category', '', { cls: 'sd-span-6', sub: 'Biggest first' })), top = add(grid, panel('Top Expense Categories', '', { cls: 'sd-span-6', sub: 'Share of the total' }));
     api.expenseSummary(f).then((s) => {
-      cat.querySelector('.sd-panel-body').innerHTML = s.by_category.length ? donut(s.by_category.slice(0, 8).map((x, i) => ({ label: x.category, value: x.amount, color: PALETTE[i % PALETTE.length] })), { center: moneyShort(s.cur.total), centerSub: 'expenses', format: moneyShort }) : emptyBox('No bills are due in this period.');
-      top.querySelector('.sd-panel-body').innerHTML = s.by_category.length ? hbars(s.by_category.slice(0, 8).map((x) => ({ label: x.category, value: x.amount, sub: x.pct === null || x.pct === undefined ? '' : x.pct + '%' })), { format: moneyShort, color: C.opex }) : emptyBox('No bills are due in this period.'); })
+      cat.querySelector('.sd-panel-body').innerHTML = s.by_category.length ? donut(s.by_category.slice(0, 8).map((x, i) => ({ label: x.category, value: x.amount, color: PALETTE[i % PALETTE.length] })), { center: moneyShort(s.cur.total), centerSub: 'expenses', format: moneyShort }) : emptyBox('No expenses are due in this period.');
+      top.querySelector('.sd-panel-body').innerHTML = s.by_category.length ? hbars(s.by_category.slice(0, 8).map((x) => ({ label: x.category, value: x.amount, sub: x.pct === null || x.pct === undefined ? '' : x.pct + '%' })), { format: moneyShort, color: C.opex }) : emptyBox('No expenses are due in this period.'); })
       .catch((err) => { [cat, top].forEach((e) => { e.querySelector('.sd-panel-body').innerHTML = err.denied ? lockedBox(err.message) : errorBox(friendly(err)); }); });
-    const tr = add(grid, panel('Expense Trend', '', { cls: 'sd-span-12', sub: 'Bills due over time', actions: grainSelect(grain) }));
-    const loadTrend = () => fill(tr, () => api.trend(f, grain), (t) => columnChart({ labels: trendLabels(t.points, t.grain), series: [{ label: 'Operating expenses', color: C.opex, values: seriesOf(t.points, 'opex') }], emptyText: 'No bills are due in this period.' }), draw);
+    const tr = add(grid, panel('Expense Trend', '', { cls: 'sd-span-12', sub: 'Expenses due over time', actions: grainSelect(grain) }));
+    const loadTrend = () => fill(tr, () => api.trend(f, grain), (t) => columnChart({ labels: trendLabels(t.points, t.grain), series: [{ label: 'Operating expenses', color: C.opex, values: seriesOf(t.points, 'opex') }], emptyText: 'No expenses are due in this period.' }), draw);
     loadTrend(); tr.querySelector('.sd-grain').addEventListener('change', (e) => { grain = e.target.value; loadTrend(); });
     mkTable(root.querySelector('#sd-ex-table'), ctx, 'expenses', { sort: { key: 'date', dir: 'desc' }, size: 25, title: 'Expenses', exportName: 'expenses', searchPlaceholder: 'Search category, description, payee…' });
   }

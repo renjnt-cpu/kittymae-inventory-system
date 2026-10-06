@@ -1,12 +1,12 @@
 // Transfers -- the Branches tab (what each branch holds, has promised to send, and is waiting to receive; what each branch has
 // received; who sends to whom) and the Discrepancies tab (every missing / damaged / wrong item, open or resolved).
 // Stock numbers are READ from the real inventory through the database; nothing is stored in Transfers.
-import { esc, qty, fmtDate, plural, tagBadge, routeText, branchBadge, emptyBox } from './transfersUi.js?v=20261007a';
-import { receivedByBranch, matchesScope, inPeriod, sum, DISC_TYPES } from './transfersLogic.js?v=20261007a';
-import { filterBarHtml, bindFilterBar, scopedPeriod, periodLabel, scopeLabel } from './transfersFilters.js?v=20261007a';
-import { DISC_COLUMNS, discRow, exportRows } from './transfersExport.js?v=20261007a';
-import { manilaDate } from './leaveUi.js?v=20261007a';
-import { bindActions } from './transfersActions.js?v=20261007a';
+import { esc, qty, fmtDate, plural, tagBadge, routeText, branchBadge, emptyBox } from './transfersUi.js?v=20261007b';
+import { receivedByBranch, matchesScope, inPeriod, sum, DISC_TYPES } from './transfersLogic.js?v=20261007b';
+import { filterBarHtml, bindFilterBar, scopedPeriod, periodLabel, scopeLabel } from './transfersFilters.js?v=20261007b';
+import { DISC_COLUMNS, discRow, exportRows } from './transfersExport.js?v=20261007b';
+import { manilaDate } from './leaveUi.js?v=20261007b';
+import { bindActions } from './transfersActions.js?v=20261007b';
 
 const $ = (id) => document.getElementById(id);
 

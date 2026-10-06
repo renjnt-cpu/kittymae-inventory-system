@@ -1,9 +1,9 @@
 // Assets & Supplies Custodian -- shared display helpers: status / condition badges, attention chips, the drawers every screen uses, the inline
 // confirmation panel (the app never uses confirm() / prompt()), pickers for people and branches, and a few chart helpers. KPI cards, number
 // formatting and the generic charts come from billsUi.js -- the same look across the modules is deliberate, and so is the shared (bl-) layout CSS.
-import { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText, plural, friendly, emptyBox, progressBar, donut, hbars, stackedHbars, COLORS, kpiCard, tagBadge } from './billsUi.js?v=20261007a';
-import { branchBadge, branchColor } from './branchColors.js?v=20261007a';
-import { money } from './assetsLogic.js?v=20261007a';
+import { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText, plural, friendly, emptyBox, progressBar, donut, hbars, stackedHbars, COLORS, kpiCard, tagBadge } from './billsUi.js?v=20261007b';
+import { branchBadge, branchColor } from './branchColors.js?v=20261007b';
+import { money } from './assetsLogic.js?v=20261007b';
 export { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText, plural, friendly, emptyBox, progressBar, donut, hbars, stackedHbars, COLORS, kpiCard, tagBadge, branchBadge, branchColor, money };
 
 export const qty = (n) => (n === null || n === undefined || n === '' ? '—' : Number(n).toLocaleString('en-PH', { maximumFractionDigits: 2 }));

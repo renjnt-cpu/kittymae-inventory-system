@@ -1,7 +1,7 @@
 // Bills Management -- shared display helpers: money and date text, status / priority badges, KPI cards,
 // the drawers every screen uses, the inline confirmation panel (the app never uses confirm() / prompt())
 // and the charts. Charts are plain SVG or CSS bars: no chart library, nothing loaded from the internet.
-import { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText } from './leaveUi.js?v=20261007a';
+import { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText } from './leaveUi.js?v=20261007b';
 export { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText };
 
 export const money = (n) => (n === null || n === undefined || n === '') ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -13,6 +13,12 @@ export const moneyShort = (n) => {
   return '₱' + Math.round(v);
 };
 export const plural = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
+/** History and reminders written before this module was renamed from "Bills" to "Expenses" still say "Bill" in the database (the history is permanent and is not
+ * rewritten), so they are shown with the new name -- every screen then reads the same. Only for wording the system wrote, never for names people typed. */
+export const say = (t) => String(t === null || t === undefined ? '' : t).replace(/\bBills\b/g, 'Expenses').replace(/\bbills\b/g, 'expenses')
+  .replace(/\bA bill\b/g, 'An expense').replace(/\ba bill\b/g, 'an expense').replace(/\bBill\b/g, 'Expense').replace(/\bbill\b/g, 'expense');
+/** The one name in the history that the system (not a person) wrote: the row for a change of the module's settings. */
+export const logName = (n) => (n === 'Bills settings' ? 'Expenses settings' : n);
 
 /** "Overdue by 5 days" / "Due today" / "Due in 3 days" */
 export function daysText(b) {
@@ -70,7 +76,7 @@ function drawer(name, title, wide) {
 }
 /** The toast area and the three drawers (bill detail, add / edit form, and one small side drawer for payments, uploads and settings forms). */
 export const drawersHtml = () => '<div id="bl-toast" class="bl-toast" aria-live="polite"></div>' +
-  drawer('detail', 'Bill', true) + drawer('form', 'Bill', true) + drawer('side', '', false);
+  drawer('detail', 'Expense', true) + drawer('form', 'Expense', true) + drawer('side', '', false);
 
 export function openDrawer(name, { title, sub, body, footer }) {
   $('bl-' + name + '-title').textContent = title || '';
@@ -221,12 +227,12 @@ export function lineChart(points, { format }) {
   const area = line('a') + ' L' + X(n - 1).toFixed(1) + ' ' + (H - padB) + ' L' + X(0).toFixed(1) + ' ' + (H - padB) + ' Z';
   const grid = [0.5, 1].map((f) => '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + Y(max * f).toFixed(1) + '" y2="' + Y(max * f).toFixed(1) + '" class="bl-grid"/><text x="' + padL + '" y="' + (Y(max * f) - 3).toFixed(1) + '" text-anchor="start" class="bl-axis">' + esc(moneyShort(max * f)) + '</text>').join('');
   const last = n - 1;
-  return '<svg class="bl-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Billed and paid by month">' + grid +
+  return '<svg class="bl-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Total and paid by month">' + grid +
     '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + (H - padB) + '" y2="' + (H - padB) + '" class="bl-grid"/>' +
     '<path d="' + area + '" class="bl-area"/><path d="' + line('a') + '" class="bl-line bl-line-a"/><path d="' + line('b') + '" class="bl-line bl-line-b"/>' +
-    points.map((p, i) => '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.a).toFixed(1) + '" r="' + (i === last ? 5 : 3) + '" class="bl-dot-a"><title>' + esc(p.label + ' · billed ' + fmt(p.a) + ' · paid ' + fmt(p.b)) + '</title></circle>' +
+    points.map((p, i) => '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.a).toFixed(1) + '" r="' + (i === last ? 5 : 3) + '" class="bl-dot-a"><title>' + esc(p.label + ' · total ' + fmt(p.a) + ' · paid ' + fmt(p.b)) + '</title></circle>' +
       '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.b).toFixed(1) + '" r="' + (i === last ? 5 : 3) + '" class="bl-dot-b"><title>' + esc(p.label + ' · paid ' + fmt(p.b)) + '</title></circle>' +
       '<text x="' + X(i).toFixed(1) + '" y="' + (H - padB + 15) + '" text-anchor="middle" class="bl-axis">' + esc(p.label) + '</text>').join('') +
     '<text x="' + X(last).toFixed(1) + '" y="' + (Y(points[last].a) - 9).toFixed(1) + '" text-anchor="end" class="bl-axis-val">' + esc(moneyShort(points[last].a)) + '</text></svg>' +
-    '<ul class="bl-legend bl-legend-row"><li><span class="bl-swatch" style="background:' + COLORS.billed + '"></span>Billed</li><li><span class="bl-swatch" style="background:' + COLORS.paid + '"></span>Paid</li></ul>';
+    '<ul class="bl-legend bl-legend-row"><li><span class="bl-swatch" style="background:' + COLORS.billed + '"></span>Total</li><li><span class="bl-swatch" style="background:' + COLORS.paid + '"></span>Paid</li></ul>';
 }
