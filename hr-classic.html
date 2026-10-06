@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HR — 201 File (classic editor) — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261007e">
+<link rel="stylesheet" href="css/styles.css?v=20261007f">
 </head>
 <body>
 <main>
@@ -15,12 +15,12 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261007e';
+import { initShell, toast, esc } from './js/shell.js?v=20261007f';
 import {
   listAllEmployee201Files, upsertEmployee201File, createEmployee, getBranches, updateEmployeeHireDate,
   listEmployee201Documents, uploadEmployee201Document, getEmployee201DocumentUrl, deleteEmployee201Document, listHrPositions,
   setEmployeePassword,
-} from './js/api.js?v=20261007e';
+} from './js/api.js?v=20261007f';
 
 // Roles mirror employees.role's own CHECK constraint exactly (Admin/Manager
 // picked here are rare via this form -- almost every new hire is Staff or Branch
@@ -111,7 +111,7 @@ if (employee) {
     await load();
     // Offboarding warning (Asset & Supplies Custodian): people who have left but still hold company property. Loaded on its own, so it
     // can never hold up or break the 201-File itself.
-    import('./js/hrAssets.js?v=20261007e').then((m) => m.offboardingBanner()).then((html) => { document.getElementById('hr-assets-alert').innerHTML = html; }).catch(() => {});
+    import('./js/hrAssets.js?v=20261007f').then((m) => m.offboardingBanner()).then((html) => { document.getElementById('hr-assets-alert').innerHTML = html; }).catch(() => {});
 
     async function load() {
       root.innerHTML = '<div class="muted">Loading…</div>';
@@ -234,7 +234,7 @@ if (employee) {
           leaveLoaded = true;
           const body = leaveBox.querySelector('.exp-body');
           try {
-            const { mountLeaveProfile } = await import('./js/leaveProfile.js?v=20261007e');
+            const { mountLeaveProfile } = await import('./js/leaveProfile.js?v=20261007f');
             await mountLeaveProfile(body, row.id);
           } catch (err) {
             leaveLoaded = false;
@@ -251,7 +251,7 @@ if (employee) {
           assetsLoaded = true;
           const body = assetsBox.querySelector('.exp-body');
           try {
-            const { mountAssetsProfile } = await import('./js/hrAssets.js?v=20261007e');
+            const { mountAssetsProfile } = await import('./js/hrAssets.js?v=20261007f');
             await mountAssetsProfile(body, row.id);
           } catch (err) {
             assetsLoaded = false;
@@ -260,7 +260,7 @@ if (employee) {
         });
         // someone who has already left: show straight away whether they still hold anything
         if (row.status === 'Inactive' || ['RES', 'TER', 'AWOL', 'DECEASED'].includes((row.file201 || {}).employment_status)) {
-          import('./js/hrAssets.js?v=20261007e').then((m) => m.afterSaveWarning(row.id)).then((msg) => {
+          import('./js/hrAssets.js?v=20261007f').then((m) => m.afterSaveWarning(row.id)).then((msg) => {
             if (!msg) return;
             const box = cell.querySelector('[data-assets-warning]');
             if (box) box.innerHTML = '<div class="msg error">' + esc(msg) + '</div>';
@@ -331,7 +331,7 @@ if (employee) {
           toast('hr-msg', 'Saved.', false);
           // Offboarding: if this save marks the person as no longer employed and they still hold company property, say so right away.
           if (['RES', 'TER', 'AWOL', 'DECEASED'].includes(ff.employmentStatus.value) || (ff.endOfEmploymentDate.value && ff.endOfEmploymentDate.value <= new Date().toISOString().slice(0, 10))) {
-            import('./js/hrAssets.js?v=20261007e').then((m) => m.afterSaveWarning(row.id)).then((msg) => { if (msg) toast('hr-msg', 'Saved. ' + msg, true); }).catch(() => {});
+            import('./js/hrAssets.js?v=20261007f').then((m) => m.afterSaveWarning(row.id)).then((msg) => { if (msg) toast('hr-msg', 'Saved. ' + msg, true); }).catch(() => {});
           }
           await load();
         } catch (err) {

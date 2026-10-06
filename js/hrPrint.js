@@ -1,7 +1,7 @@
 // HR 201 File -- print a 201 summary and export the employee list.  Both are recorded in the audit log.
 // Government ID numbers are always printed masked; salary is only printed when the person ticks it AND may see compensation.
-import { esc, $, openModal, toast, friendly, busy } from './hrUi.js?v=20261007e';
-import { GOV_FIELDS, FIELD_DEFS, fmtDate, fmtDateTime, money, statusLabel, spanText, directoryCsv, blank } from './hrLogic.js?v=20261007e';
+import { esc, $, openModal, toast, friendly, busy } from './hrUi.js?v=20261007f';
+import { GOV_FIELDS, FIELD_DEFS, fmtDate, fmtDateTime, money, statusLabel, spanText, directoryCsv, blank } from './hrLogic.js?v=20261007f';
 
 export function openPrint(ctx) {
   const ps = ctx.ps, k = ctx.access.keys;

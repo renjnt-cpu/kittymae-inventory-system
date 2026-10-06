@@ -1,7 +1,7 @@
 // HR 201 File -- the edit session: Edit Employee -> Review changes -> (access impact) -> Save.
 // Nothing is saved until the person confirms.  The database repeats every check (permissions, reason, confirmation, someone else's newer save).
-import { esc, $, badge, toast, friendly, confirmDialog, openModal, busy } from './hrUi.js?v=20261007e';
-import { diffFields, needsReason, affectsAccess, changesPayload, money, fmtDateTime, statusLabel, plural, FIELD_DEFS, blank, CRITICAL } from './hrLogic.js?v=20261007e';
+import { esc, $, badge, toast, friendly, confirmDialog, openModal, busy } from './hrUi.js?v=20261007f';
+import { diffFields, needsReason, affectsAccess, changesPayload, money, fmtDateTime, statusLabel, plural, FIELD_DEFS, blank, CRITICAL } from './hrLogic.js?v=20261007f';
 
 export const isDirty = (ps) => !!ps && ps.editing && diffFields(ps.original, ps.values).length > 0;
 

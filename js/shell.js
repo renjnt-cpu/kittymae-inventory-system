@@ -1,13 +1,13 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20261007e';
-import { listMyPermissions } from './api.js?v=20261007e';
-import { initActivityFeed } from './activityFeed.js?v=20261007e';
-import { localDateStr } from './uiKit.js?v=20261007e';
-import { showBirthdayBanner } from './birthdayBanner.js?v=20261007e';
-import { initAdminChat } from './adminChat.js?v=20261007e';
-import { initLeaveNotifications } from './leaveNotifications.js?v=20261007e';
+import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20261007f';
+import { listMyPermissions } from './api.js?v=20261007f';
+import { initActivityFeed } from './activityFeed.js?v=20261007f';
+import { localDateStr } from './uiKit.js?v=20261007f';
+import { showBirthdayBanner } from './birthdayBanner.js?v=20261007f';
+import { initAdminChat } from './adminChat.js?v=20261007f';
+import { initLeaveNotifications } from './leaveNotifications.js?v=20261007f';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.

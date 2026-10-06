@@ -1,12 +1,12 @@
 // HR 201 File -- one employee's profile: header with summary chips, the 12 tabs, view mode by default, and the edit session around them.
-import { esc, $, badge, chip, spinner, toast, friendly, confirmDialog, reasonDialog } from './hrUi.js?v=20261007e';
+import { esc, $, badge, chip, spinner, toast, friendly, confirmDialog, reasonDialog } from './hrUi.js?v=20261007f';
 import {
   visibleTabs, statusLabel, statusTone, fmtDateTime, fmtDate, spanText, initials, diffFields, FIELD_DEFS, plural, SEPARATED,
-} from './hrLogic.js?v=20261007e';
-import { rebuildOriginal, renderOverview, renderPersonal, renderEmployment, renderCompensation, renderGovernment, renderEmergency } from './hrTabs.js?v=20261007e';
-import { renderDocuments } from './hrDocs.js?v=20261007e';
-import { renderAccess, renderHistory, renderNotes, renderAudit, renderLeave } from './hrSide.js?v=20261007e';
-import { startEdit, cancelEdit, saveEdit, isDirty } from './hrEdit.js?v=20261007e';
+} from './hrLogic.js?v=20261007f';
+import { rebuildOriginal, renderOverview, renderPersonal, renderEmployment, renderCompensation, renderGovernment, renderEmergency } from './hrTabs.js?v=20261007f';
+import { renderDocuments } from './hrDocs.js?v=20261007f';
+import { renderAccess, renderHistory, renderNotes, renderAudit, renderLeave } from './hrSide.js?v=20261007f';
+import { startEdit, cancelEdit, saveEdit, isDirty } from './hrEdit.js?v=20261007f';
 
 const RENDER = {
   overview: renderOverview, personal: renderPersonal, employment: renderEmployment, compensation: renderCompensation, government: renderGovernment,
@@ -164,7 +164,7 @@ async function restore(ctx) {
 export function afterSaveChecks(ctx, diff) {
   const ps = ctx.ps;
   if (!diff.some((d) => ['employment_status', 'end_of_employment_date', 'status'].includes(d.field))) return;
-  import('./hrAssets.js?v=20261007e').then((m) => m.afterSaveWarning(ps.id)).then((msg) => {
+  import('./hrAssets.js?v=20261007f').then((m) => m.afterSaveWarning(ps.id)).then((msg) => {
     if (!msg || ctx.ps !== ps) return;
     ps.notices.push(msg); drawNotices(ctx); toast(msg, true);
   }).catch(() => {});

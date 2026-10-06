@@ -1,10 +1,10 @@
 // Sales & Profit Dashboard -- the Sales, Products, Channels, Purchases, Inventory, Expenses and Payments tabs.
 // Each tab asks the database for its own figures (so a slow or denied panel never blocks the others) and draws them with the shared charts and the shared table.
-import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS } from './sdCore.js?v=20261007e';
-import { panel, lockedBox, loadingBox, errorBox, emptyBox, hbars, donut, lineChart, columnChart, trendLabels, seriesOf, C, PALETTE, badge } from './sdUi.js?v=20261007e';
-import { createTable, staticTable } from './sdTable.js?v=20261007e';
-import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007e';
-import { openDrill } from './sdOverview.js?v=20261007e';
+import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS } from './sdCore.js?v=20261007f';
+import { panel, lockedBox, loadingBox, errorBox, emptyBox, hbars, donut, lineChart, columnChart, trendLabels, seriesOf, C, PALETTE, badge } from './sdUi.js?v=20261007f';
+import { createTable, staticTable } from './sdTable.js?v=20261007f';
+import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007f';
+import { openDrill } from './sdOverview.js?v=20261007f';
 
 // ---------------------------------------------------------------- shared bits
 /** A row of figures; `chip` compares this period with the previous one. */

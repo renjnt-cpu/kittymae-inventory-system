@@ -1,5 +1,5 @@
 // HR 201 File -- small UI building blocks: toasts, dialogs, badges, view / edit fields.  No business rules and no network here.
-import { esc, blank, norm, FIELD_DEFS, JOB_TITLES_BY_DEPT, statusLabel, fmtDate } from './hrLogic.js?v=20261007e';
+import { esc, blank, norm, FIELD_DEFS, JOB_TITLES_BY_DEPT, statusLabel, fmtDate } from './hrLogic.js?v=20261007f';
 
 export { esc };
 export const $ = (id) => document.getElementById(id);
