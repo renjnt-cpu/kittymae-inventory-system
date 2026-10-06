@@ -1,7 +1,7 @@
 // Data Fixes -- the one place these screens talk to the database (functions dq_*, migrations 152-157).
 // Every call comes back as a plain object: { ok, message, ... }. A network or database failure is turned into the same friendly sentence; the technical
 // reason is kept in `technical` for the browser console and is NEVER shown to a person.
-import { supabase } from './supabaseClient.js?v=20261006d';
+import { supabase } from './supabaseClient.js?v=20261007a';
 
 export const GENERIC_ERROR = 'We couldn\'t save this change. Please try again.';
 export const LOAD_ERROR = 'We couldn\'t load this right now. Please try again.';

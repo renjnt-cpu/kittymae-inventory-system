@@ -1,10 +1,11 @@
-// Sales & Profit Dashboard -- the Capital tab: owner capital (initial, additional, withdrawals), equipment, cash, and the estimated owner equity.
+// Sales & Profit Dashboard -- the Capital tab: owner capital (initial, additional, withdrawals), equipment, stock at cost, receivables and payables.
 // Capital is kept apart from sales and from stock. An entry is never deleted: a wrong one is voided with a reason, and every change is in the audit trail.
-import { api, esc, money, int, fmtDate, friendly, todayIn } from './sdCore.js?v=20261006d';
-import { panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, closeDrawer, toast, drawerBody } from './sdUi.js?v=20261006d';
-import { createTable, staticTable } from './sdTable.js?v=20261006d';
-import { COLS, ROW_TITLE } from './sdColumns.js?v=20261006d';
-import { stats } from './sdTabs.js?v=20261006d';
+// There is deliberately no cash balance and no "estimated owner equity" (which was built on it): the Finance > Transactions ledger does not see the real money -- Ren, 2026-10-07.
+import { api, esc, money, int, fmtDate, friendly, todayIn } from './sdCore.js?v=20261007a';
+import { panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, closeDrawer, toast, drawerBody } from './sdUi.js?v=20261007a';
+import { createTable } from './sdTable.js?v=20261007a';
+import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007a';
+import { stats } from './sdTabs.js?v=20261007a';
 
 const TYPES = [
   { id: 'INITIAL_CAPITAL', label: 'Initial capital', hint: 'The money the owner first put into the business.' },
@@ -14,34 +15,31 @@ const TYPES = [
   { id: 'OTHER', label: 'Other (memo only)', hint: 'Shown in the list but never used in any figure.' },
 ];
 
+// Suggestions for the "Payment account" box of a capital entry (free text -- how the owner paid the money in or took it out)
+const PAY_ACCOUNTS = ['Cash on hand', 'GCash', 'Maya', 'Bank transfer'];
+
 export function renderCapital(root, ctx) {
-  const { filters, can, meta } = ctx; let scope = 'all'; let table = null; let accounts = [];
+  const { filters, can, meta } = ctx; let scope = 'all'; let table = null;
   const tz = meta.tz;
   function draw() {
     const f = filters.server();
-    root.innerHTML = '<div id="sd-cp-sum"></div><div class="sd-grid" id="sd-cp-grid"></div><div id="sd-cp-table"></div>';
+    root.innerHTML = '<div id="sd-cp-sum"></div><div id="sd-cp-table"></div>';
     const sum = root.querySelector('#sd-cp-sum');
     sum.innerHTML = panel('Capital Overview', loadingBox(), { sub: 'As of the end of the selected period',
       actions: can.capital_manage ? '<button type="button" class="btn small" id="sd-cp-add">+ Add capital entry</button>' : '' });
     if (can.capital_manage) sum.querySelector('#sd-cp-add').addEventListener('click', () => openForm(null));
     Promise.all([api.capitalSummary(f), api.overview(f).catch(() => null)]).then(([c, ov]) => {
       const oc = (ov && ov.cur) || {};
-      accounts = Array.from(new Set(['Cash on hand', 'GCash', 'Maya', 'Bank transfer'].concat((c.cash_by_account || []).map((a) => a.account))));
       sum.querySelector('.sd-panel-body').innerHTML = stats([
         { label: 'Total capital contributions', html: esc(money(c.contributions)), sub: 'Initial + additional capital' },
         { label: 'Owner withdrawals', html: esc(money(c.withdrawals)) }, { label: 'Net capital contribution', html: esc(money(c.net_contribution)), sub: 'Contributions − withdrawals' },
         { label: 'Inventory purchased (period)', html: oc.purchases === null || oc.purchases === undefined ? '<span class="sd-dash">—</span>' : esc(money(oc.purchases)), sub: 'Deliveries priced in the period' },
         { label: 'Inventory sold, at cost (COGS)', html: oc.cogs === null || oc.cogs === undefined ? badge('Cost data missing', 'orange') : esc(money(oc.cogs)), sub: 'Cost of what was sold in the period' },
         { label: 'Current inventory capital', html: c.inventory_cost_value === null || c.inventory_cost_value === undefined ? badge('Cost data missing', 'orange') : esc(money(c.inventory_cost_value)), sub: 'Stock at supplier price · ' + int(c.inventory_units) + ' pcs' },
-        { label: 'Cash available', html: c.cash === null || c.cash === undefined ? badge('No bank statements', 'gray') : esc(money(c.cash)), sub: int(c.cash_accounts_with_data) + ' of ' + int(c.cash_accounts_total) + ' accounts have statement lines' },
         { label: 'Receivables', html: c.receivables === null || c.receivables === undefined ? '<span class="sd-dash">—</span>' : esc(money(c.receivables)), sub: 'COD not yet remitted' },
         { label: 'Payables', html: c.payables === null || c.payables === undefined ? '<span class="sd-dash">—</span>' : esc(money(c.payables)), sub: 'Unpaid business bills' },
         { label: 'Equipment / assets', html: esc(money(c.equipment)), sub: 'Asset purchases recorded here' },
-        { label: 'Estimated owner equity', html: c.estimated_equity === null || c.estimated_equity === undefined ? badge('Not enough data', 'orange') : esc(money(c.estimated_equity)), sub: 'Cash + receivables + stock at cost + equipment − payables' },
-      ]) + (c.estimated_equity === null || c.estimated_equity === undefined ? '<p class="muted sd-note"><b>Owner equity needs:</b> ' + esc((c.equity_missing || []).join('; ')) + '.</p>' : '') + (c.notes || []).map((n) => '<p class="muted sd-note">' + esc(n) + '</p>').join('');
-      const by = add(root.querySelector('#sd-cp-grid'), panel('Cash by Account', '<div id="sd-cp-cash"></div>', { cls: 'sd-span-12', sub: 'Latest balance of each account that has statement lines' }));
-      staticTable(by.querySelector('#sd-cp-cash'), { columns: [{ key: 'account', label: 'Account' }, { key: 'type', label: 'Type' }, { key: 'balance', label: 'Balance', type: 'money', total: 'balance' }, { key: 'as_of', label: 'As of', type: 'date' }],
-        rows: c.cash_by_account || [], totals: { balance: (c.cash_by_account || []).reduce((s, a) => s + Number(a.balance || 0), 0) }, title: 'Cash by account', exportName: 'cash-by-account', subtitle: () => filters.describe(), emptyText: 'No bank / e-wallet account has statement lines yet. Import statements under Finance → Transactions.' });
+      ]) + (c.notes || []).map((n) => '<p class="muted sd-note">' + esc(n) + '</p>').join('');
     }).catch((err) => { sum.querySelector('.sd-panel-body').innerHTML = err.denied ? lockedBox(err.message) : errorBox(friendly(err)); });
 
     const holder = root.querySelector('#sd-cp-table');
@@ -68,7 +66,7 @@ export function renderCapital(root, ctx) {
         '<div class="field"><label for="sd-cap-date">Date</label><input type="date" id="sd-cap-date" value="' + esc(row ? row.date : todayIn(tz)) + '" max="' + esc(todayIn(tz)) + '"></div>' +
         '<div class="field"><label for="sd-cap-type">Type</label><select id="sd-cap-type">' + typeOptions(row ? row.type : 'ADDITIONAL_CAPITAL') + '</select><span class="muted" id="sd-cap-hint"></span></div>' +
         '<div class="field"><label for="sd-cap-amount">Amount (₱)</label><input type="number" id="sd-cap-amount" min="0.01" step="0.01" inputmode="decimal" value="' + esc(row ? row.amount : '') + '"></div>' +
-        '<div class="field"><label for="sd-cap-account">Payment account</label><input type="text" id="sd-cap-account" list="sd-cap-accts" maxlength="80" value="' + esc(row ? row.account || '' : '') + '"><datalist id="sd-cap-accts">' + accounts.map((a) => '<option value="' + esc(a) + '">').join('') + '</datalist></div>' +
+        '<div class="field"><label for="sd-cap-account">Payment account</label><input type="text" id="sd-cap-account" list="sd-cap-accts" maxlength="80" value="' + esc(row ? row.account || '' : '') + '"><datalist id="sd-cap-accts">' + PAY_ACCOUNTS.map((a) => '<option value="' + esc(a) + '">').join('') + '</datalist></div>' +
         '<div class="field"><label for="sd-cap-ref">Reference number</label><input type="text" id="sd-cap-ref" maxlength="80" value="' + esc(row ? row.reference || '' : '') + '"></div>' +
         '<div class="field"><label for="sd-cap-notes">Notes</label><textarea id="sd-cap-notes" rows="3" maxlength="500">' + esc(row ? row.notes || '' : '') + '</textarea></div></div>',
       footer: '<button type="button" class="btn" id="sd-cap-save">' + (row ? 'Save changes' : 'Save entry') + '</button><button type="button" class="btn secondary" id="sd-cap-cancel">Cancel</button>' });
@@ -98,5 +96,4 @@ export function renderCapital(root, ctx) {
   }
   return { reload: draw };
 }
-function add(root, html) { const t = document.createElement('div'); t.innerHTML = html; const el = t.firstElementChild; root.appendChild(el); return el; }
 void emptyBox; void drawerBody;

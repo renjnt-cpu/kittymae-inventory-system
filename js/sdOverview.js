@@ -1,12 +1,13 @@
-// Sales & Profit Dashboard -- the Overview tab: 18 KPI cards (each with the previous comparable period, the change, and a green / red / gray arrow that follows
+// Sales & Profit Dashboard -- the Overview tab: 17 KPI cards (each with the previous comparable period, the change, and a green / red / gray arrow that follows
 // what the change MEANS: lower expenses are good, higher refunds are not), the sales trend, the profit breakdown, channel / product / expense / stock / capital panels,
 // and the detailed sales table. Click a KPI card to see the transactions behind it.
-import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS, rangeText, fmtDateTime } from './sdCore.js?v=20261006d';
-import { kpiCard, panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, hbars, donut, lineChart, waterfall, trendLabels, seriesOf, C, PALETTE, kvRow, closeDrawer } from './sdUi.js?v=20261006d';
-import { createTable } from './sdTable.js?v=20261006d';
-import { COLS, ROW_TITLE } from './sdColumns.js?v=20261006d';
+import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS, rangeText, fmtDateTime } from './sdCore.js?v=20261007a';
+import { kpiCard, panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, hbars, donut, lineChart, waterfall, trendLabels, seriesOf, C, PALETTE, kvRow, closeDrawer } from './sdUi.js?v=20261007a';
+import { createTable } from './sdTable.js?v=20261007a';
+import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007a';
 
-// ---------------------------------------------------------------- the 18 cards
+// ---------------------------------------------------------------- the 17 cards
+// (There is deliberately no "Cash Available" card: it came from the Finance > Transactions ledger, which does not see the real money -- Ren, 2026-10-07.)
 const prevText = (p, f) => 'Previous: ' + (p === null || p === undefined ? '—' : f(p));
 function mk(def) { return def; }
 const covWarn = (c) => c.unknown ? { text: 'Cost data missing', tone: 'orange' } : (c.partial ? { text: 'Partial · ' + (c.pct === null || c.pct === undefined ? '?' : Math.round(c.pct)) + '% costed', tone: 'yellow' } : null);
@@ -53,9 +54,6 @@ const KPIS = [
   mk({ key: 'capital_invested', row: 3, label: 'Total Capital Invested', need: 'capital', good: 'neutral', hint: 'Net owner contribution = initial + additional capital − owner withdrawals (Capital tab).',
     card: (d) => ({ v: d.capital_entries > 0 ? d.capital_net : null, f: money, sub: d.capital_entries > 0 ? 'Contributions ' + money(d.capital_contributions) + ' − withdrawals ' + money(d.capital_withdrawals) : 'Record capital on the Capital tab',
       warn: d.capital_entries > 0 ? null : { text: 'No capital entries', tone: 'gray' }, unknown: !(d.capital_entries > 0) }) }),
-  mk({ key: 'cash', row: 3, label: 'Cash Available', need: 'capital', good: 'up', hint: 'The latest balance of each bank / e-wallet account that has statement lines (Finance → Transactions).',
-    card: (d) => ({ v: d.cash, f: money, sub: int(d.cash_accounts_with_data) + ' of ' + int(d.cash_accounts_total) + ' accounts have statements',
-      warn: d.cash === null || d.cash === undefined ? { text: 'No bank statements', tone: 'gray' } : (d.cash_accounts_with_data < d.cash_accounts_total ? { text: 'Partial', tone: 'yellow' } : null), unknown: d.cash === null || d.cash === undefined }) }),
   mk({ key: 'refunds', row: 3, label: 'Refunds', need: 'sales', good: 'down', hint: 'Money taken back from sales: orders returned or cancelled after delivery, plus refunds recorded in the Refunds module that reduce sales.',
     card: (d) => ({ v: d.refunds, f: money, sub: int(d.orders_returned) + ' returned orders' }) }),
   mk({ key: 'discounts', row: 3, label: 'Discounts', need: 'sales', good: 'down', hint: 'Discounts given on completed sales.',
@@ -93,7 +91,7 @@ export function kpiCards(ov, settings) {
     const vt = v === null ? '—' : c.f(v), valueHtml = v === null ? '<span class="sd-dash">—</span>' : esc(vt);
     return kpiCard({ label: k.label, value: valueHtml, sub: esc(c.sub || ''), warn: c.warn, unknown: c.unknown || v === null,
       long: vt.length >= 16 ? 2 : vt.length >= 14 ? 1 : 0, chip: { dir: v === null ? 'na' : ch.dir, text: v === null ? 'Not available yet' : ch.text, tone: v === null ? 'gray' : tone }, prev: esc(prevText(pv, c.f)), hint: k.hint + (ch.dir !== 'na' && ch.diff !== null && k.kind !== 'pp' ? ' Change: ' + money(ch.diff) + '.' : ''),
-      go: DRILL[k.key] ? k.key : (k.key === 'capital_invested' || k.key === 'cash' ? k.key : null) });
+      go: DRILL[k.key] ? k.key : (k.key === 'capital_invested' ? k.key : null) });
   }));
   return rows.map((r) => r.length ? '<div class="sd-kpi-row">' + r.join('') + '</div>' : '').join('');
 }
@@ -101,7 +99,7 @@ export function kpiCards(ov, settings) {
 /** Opens the transactions behind a card. */
 export function openDrill(key, ctx) {
   const d = DRILL[key];
-  if (!d) { if (key === 'capital_invested' || key === 'cash') ctx.goTab('capital'); return; }
+  if (!d) { if (key === 'capital_invested') ctx.goTab('capital'); return; }
   const label = (KPIS.find((k) => k.key === key) || {}).label || 'Transactions';
   openDrawer({ wide: true, title: label, sub: rangeText(ctx.filters.range().from, ctx.filters.range().to), body: '<p class="muted">' + esc(d.note) + '</p><div id="sd-drill"></div>' });
   const can = ctx.can;
@@ -210,12 +208,11 @@ export function renderOverview(root, ctx) {
 
     // Capital summary
     if (can.capital) {
-      const el = slot(grid, panel('Capital Summary', '', { cls: 'sd-span-6', sub: 'Owner capital and where the money is', actions: '<button type="button" class="act-link" data-tab="capital">See capital</button>' }));
+      const el = slot(grid, panel('Capital Summary', '', { cls: 'sd-span-6', sub: 'Owner capital, stock and equipment', actions: '<button type="button" class="act-link" data-tab="capital">See capital</button>' }));
       fill(el, () => api.capitalSummary(f), (c) => '<div class="sd-mini">' + [['Capital contributions', money(c.contributions)], ['Owner withdrawals', money(c.withdrawals)], ['Net capital', money(c.net_contribution)],
-        ['Inventory (at cost)', c.inventory_cost_value === null || c.inventory_cost_value === undefined ? 'Cost data missing' : money(c.inventory_cost_value)], ['Cash available', c.cash === null || c.cash === undefined ? 'No bank statements' : money(c.cash)],
-        ['Receivables', c.receivables === null || c.receivables === undefined ? '—' : money(c.receivables)], ['Equipment / assets', money(c.equipment)], ['Estimated owner equity', c.estimated_equity === null || c.estimated_equity === undefined ? 'Not enough data' : money(c.estimated_equity)]]
-        .map((x) => '<div><span>' + esc(x[0]) + '</span><b>' + esc(x[1]) + '</b></div>').join('') + '</div>' +
-        (c.estimated_equity === null || c.estimated_equity === undefined ? '<p class="muted sd-note">Owner equity needs: ' + esc((c.equity_missing || []).join('; ')) + '.</p>' : ''), draw);
+        ['Inventory (at cost)', c.inventory_cost_value === null || c.inventory_cost_value === undefined ? 'Cost data missing' : money(c.inventory_cost_value)],
+        ['Receivables', c.receivables === null || c.receivables === undefined ? '—' : money(c.receivables)], ['Equipment / assets', money(c.equipment)]]
+        .map((x) => '<div><span>' + esc(x[0]) + '</span><b>' + esc(x[1]) + '</b></div>').join('') + '</div>', draw);
     }
 
     // Detailed sales table
@@ -229,6 +226,6 @@ export function renderOverview(root, ctx) {
   }
   return { reload: draw, overview: () => null };
 }
-/** The 18 cards by name, for the Visible KPI Cards setting. */
+/** The 17 cards by name, for the Visible KPI Cards setting. */
 export const KPI_LABELS = KPIS.map((k) => ({ key: k.key, label: k.label }));
 void badge; void fmtDateTime; void closeDrawer;

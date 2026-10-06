@@ -1,8 +1,8 @@
 // Bills Management -- the filter bar shared by the Dashboard, Bills, Calendar, Cash Planning and Reports tabs
 // (Month / Year / Branch / Category / Status), and the helpers that turn those choices into a list of bills.
 // One set of choices (ctx.filters) drives every tab, so switching tabs never changes what you are looking at.
-import { esc } from './billsUi.js?v=20261006d';
-import { inPeriod, matchesScope, matchesStatus, MONTHS, STATUSES, yearOf } from './billsLogic.js?v=20261006d';
+import { esc } from './billsUi.js?v=20261007a';
+import { inPeriod, matchesScope, matchesStatus, MONTHS, STATUSES, yearOf } from './billsLogic.js?v=20261007a';
 
 /** Bills for the chosen branch / category only -- used for "right now" numbers (overdue, due today, ...), which ignore the month. */
 export const scopedLive = (ctx) => ctx.bills.filter((b) => !b.archived_at && matchesScope(b, ctx.filters));

@@ -1,8 +1,8 @@
 // Assets & Supplies Custodian -- the Dashboard tab: KPI cards, "Attention needed" with quick actions, charts and recent activity.
 // The counts come from the database (custodian_dashboard), which counts only what this person may see -- a branch supervisor's numbers
 // are their branch's, a custodian's are every branch's. Clicking a card or a "View all" opens the matching list, already filtered.
-import { esc, kpiCard, donut, hbars, statusColor, fmtDateTime, plural, COLORS, emptyBox, alertItem } from './assetsUi.js?v=20261006d';
-import { peopleRows } from './assetsLogic.js?v=20261006d';
+import { esc, kpiCard, donut, hbars, statusColor, fmtDateTime, plural, COLORS, emptyBox, alertItem } from './assetsUi.js?v=20261007a';
+import { peopleRows } from './assetsLogic.js?v=20261007a';
 
 const SECTIONS = [
   { id: 'missing_unreturned', title: 'Missing, lost or unreturned assets', tone: 'red', go: 'view:lost', empty: 'Nothing is reported lost, missing or overdue for return.' },

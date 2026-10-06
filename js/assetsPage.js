@@ -5,30 +5,30 @@
 // One loaded copy of the data (ctx) feeds every tab; a change anywhere goes through the database, then ctx.refresh() reloads and redraws.
 // Who may do what is decided by the database; the page only hides the buttons a person could not use. Two kinds of record live here and are
 // never mixed: ASSETS (one individual item, one holder, a permanent history) and SUPPLIES (quantities in a stock ledger).
-import { esc, drawersHtml, makeToast, closeDrawer, isDrawerOpen, friendly, branchBadge } from './assetsUi.js?v=20261006d';
-import { DEFAULTS, makeCaps, enrichAssets, supplyRows, REQUEST_OPEN, OPEN_INCIDENT } from './assetsLogic.js?v=20261006d';
-import { manilaDate } from './leaveUi.js?v=20261006d';
-import { renderDashboard } from './assetsDashboard.js?v=20261006d';
-import { renderAssets, newAssetsState } from './assetsList.js?v=20261006d';
-import { renderPeople, newPeopleState } from './assetsPeople.js?v=20261006d';
-import { renderBranches } from './assetsBranch.js?v=20261006d';
-import { renderTransfers, renderReturns, renderRepairs, renderIncidents, renderDisposals, newFlowState } from './assetsFlows.js?v=20261006d';
-import { renderSupplies, newSuppliesState } from './suppliesPage.js?v=20261006d';
-import { renderIssuance, newIssuanceState } from './suppliesIssue.js?v=20261006d';
-import { renderRequests, newRequestsState } from './suppliesRequests.js?v=20261006d';
-import { renderReports } from './assetsReports.js?v=20261006d';
-import { renderAudit, renderSettings, newAuditState } from './assetsAdmin.js?v=20261006d';
-import { renderMine } from './assetsMine.js?v=20261006d';
-import { openAsset, closeAsset, assetOpenId } from './assetsDetail.js?v=20261006d';
-import { openAssetForm, requestCloseForm } from './assetsForm.js?v=20261006d';
-import * as work from './assetsWork.js?v=20261006d';
-import * as cases from './assetsCases.js?v=20261006d';
-import * as printing from './assetsPrint.js?v=20261006d';
-import { openScan } from './assetsQr.js?v=20261006d';
-import { openEmployee } from './assetsPeople.js?v=20261006d';
-import { openSupplyCard, supplyActions } from './suppliesPage.js?v=20261006d';
-import { openRequestCard, openRequestForm } from './suppliesRequests.js?v=20261006d';
-import { openIssueForm } from './suppliesIssue.js?v=20261006d';
+import { esc, drawersHtml, makeToast, closeDrawer, isDrawerOpen, friendly, branchBadge } from './assetsUi.js?v=20261007a';
+import { DEFAULTS, makeCaps, enrichAssets, supplyRows, REQUEST_OPEN, OPEN_INCIDENT } from './assetsLogic.js?v=20261007a';
+import { manilaDate } from './leaveUi.js?v=20261007a';
+import { renderDashboard } from './assetsDashboard.js?v=20261007a';
+import { renderAssets, newAssetsState } from './assetsList.js?v=20261007a';
+import { renderPeople, newPeopleState } from './assetsPeople.js?v=20261007a';
+import { renderBranches } from './assetsBranch.js?v=20261007a';
+import { renderTransfers, renderReturns, renderRepairs, renderIncidents, renderDisposals, newFlowState } from './assetsFlows.js?v=20261007a';
+import { renderSupplies, newSuppliesState } from './suppliesPage.js?v=20261007a';
+import { renderIssuance, newIssuanceState } from './suppliesIssue.js?v=20261007a';
+import { renderRequests, newRequestsState } from './suppliesRequests.js?v=20261007a';
+import { renderReports } from './assetsReports.js?v=20261007a';
+import { renderAudit, renderSettings, newAuditState } from './assetsAdmin.js?v=20261007a';
+import { renderMine } from './assetsMine.js?v=20261007a';
+import { openAsset, closeAsset, assetOpenId } from './assetsDetail.js?v=20261007a';
+import { openAssetForm, requestCloseForm } from './assetsForm.js?v=20261007a';
+import * as work from './assetsWork.js?v=20261007a';
+import * as cases from './assetsCases.js?v=20261007a';
+import * as printing from './assetsPrint.js?v=20261007a';
+import { openScan } from './assetsQr.js?v=20261007a';
+import { openEmployee } from './assetsPeople.js?v=20261007a';
+import { openSupplyCard, supplyActions } from './suppliesPage.js?v=20261007a';
+import { openRequestCard, openRequestForm } from './suppliesRequests.js?v=20261007a';
+import { openIssueForm } from './suppliesIssue.js?v=20261007a';
 
 const $ = (id) => document.getElementById(id);
 
