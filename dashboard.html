@@ -93,7 +93,7 @@ if (employee) {
     rows.forEach((r) => {
       const b = byBranch[r.branch_id] || (byBranch[r.branch_id] = { qty: 0, revenue: 0, name: r.branches?.name || 'Branch #' + r.branch_id });
       b.qty += r.qty;
-      b.revenue += r.qty * Number(r.unit_price || 0);
+      b.revenue += r.qty * Number(r.unit_price || 0) - Number(r.discount || 0);
     });
     const branchStats = Object.values(byBranch).sort((a, b) => b.revenue - a.revenue);
     document.getElementById('sales-tiles').innerHTML = branchStats.length
@@ -108,7 +108,7 @@ if (employee) {
     rows.forEach((r) => {
       const it = byItem[r.sku] || (byItem[r.sku] = { qty: 0, revenue: 0, name: r.products?.item_name || '' });
       it.qty += r.qty;
-      it.revenue += r.qty * Number(r.unit_price || 0);
+      it.revenue += r.qty * Number(r.unit_price || 0) - Number(r.discount || 0);
     });
     const topItems = Object.entries(byItem).map(([sku, v]) => ({ sku, ...v })).sort((a, b) => b.qty - a.qty).slice(0, 10);
     const box = document.getElementById('sales-top-items');

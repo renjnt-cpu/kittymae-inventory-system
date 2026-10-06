@@ -502,7 +502,7 @@ if (employee) {
         const e = byEmp[empId] || (byEmp[empId] = { name: employeeNameById[empId] || 'Unknown', groupIds: new Set(), qty: 0, amount: 0 });
         e.groupIds.add(r.sale_group_id);
         e.qty += Number(r.qty || 0);
-        e.amount += Number(r.unit_price || 0) * Number(r.qty || 0);
+        e.amount += Number(r.unit_price || 0) * Number(r.qty || 0) - Number(r.discount || 0);
       });
       const unranked = Object.values(byEmp).map((v) => ({ name: v.name, sales: v.groupIds.size, qty: v.qty, amount: v.amount }));
       const ranked = applySort(unranked, posLbSort, POS_LB_SORT_COMPARATORS);
