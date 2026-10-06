@@ -3,7 +3,7 @@
 // Reads go straight to the tables (RLS decides what a person may see); every CHANGE goes
 // through a leave_* database function that re-checks who is calling. A function that finds a
 // problem returns {ok:false, errors:[...]} -- callers show those; anything else is an Error.
-import { supabase } from './supabaseClient.js?v=20261007d';
+import { supabase } from './supabaseClient.js?v=20261007e';
 
 async function rpc(name, params) {
   const { data, error } = await supabase.rpc(name, params);
@@ -22,12 +22,17 @@ export const getDirectory = () => rpc('leave_directory');
 export async function listLeaveTypes() {
   return check(await supabase.from('leave_types').select('*').order('sort_order').order('name'));
 }
-export async function listBalances() {
-  return check(await supabase.from('employee_leave_balances')
-    .select('employee_id, leave_type_id, total_credits, used_credits, available_credits, updated_at'));
+// `employeeId` is optional: with it only that person's rows are read (the HR 201-File Overview card); without it, everything this person may see.
+export async function listBalances(employeeId) {
+  let q = supabase.from('employee_leave_balances')
+    .select('employee_id, leave_type_id, total_credits, used_credits, available_credits, updated_at');
+  if (employeeId) q = q.eq('employee_id', employeeId);
+  return check(await q);
 }
-export async function listRequests() {
-  return check(await supabase.from('leave_requests').select('*').order('created_at', { ascending: false }).limit(3000));
+export async function listRequests(employeeId) {
+  let q = supabase.from('leave_requests').select('*').order('created_at', { ascending: false }).limit(3000);
+  if (employeeId) q = q.eq('employee_id', employeeId);
+  return check(await q);
 }
 export async function getRequest(id) {
   return check(await supabase.from('leave_requests').select('*').eq('id', id).maybeSingle());

@@ -1,8 +1,8 @@
 // Transfers -- the filter bar shared by the Dashboard, Transfers, Discrepancies, Reports and Branch tabs (Month / Year / Source / Destination),
 // and the helpers that turn those choices into a list of transfers. One set of choices (ctx.filters) drives every tab, so switching tabs never
 // changes what you are looking at. The page opens on "all time": the old page showed everything, and a month default would look like missing records.
-import { esc } from './transfersUi.js?v=20261007d';
-import { inPeriod, matchesScope, MONTHS, yearOf } from './transfersLogic.js?v=20261007d';
+import { esc } from './transfersUi.js?v=20261007e';
+import { inPeriod, matchesScope, MONTHS, yearOf } from './transfersLogic.js?v=20261007e';
 
 /** Transfers for the chosen source / destination only -- used for "right now" numbers (in transit, waiting ...), which ignore the month. */
 export const scopedLive = (ctx) => ctx.transfers.filter((t) => matchesScope(t, ctx.filters));

@@ -1,8 +1,8 @@
 // HR 201 File -- the Add Employee wizard.  Basic info -> employment & access -> personal -> government IDs -> compensation -> emergency contact -> review.
 // A step is skipped when the person has no permission for its fields.  It never creates a sign-in and never makes up an Employee ID.
 // The final step checks for possible duplicates and shows the access the new person will receive; the database checks everything again.
-import { esc, $, badge, spinner, toast, friendly, confirmDialog, inputHtml, busy } from './hrUi.js?v=20261007d';
-import { FIELD_DEFS, ROLES, COMPANIES, money, fmtDate, statusLabel, blank, plural } from './hrLogic.js?v=20261007d';
+import { esc, $, badge, spinner, toast, friendly, confirmDialog, inputHtml, busy } from './hrUi.js?v=20261007e';
+import { FIELD_DEFS, ROLES, COMPANIES, money, fmtDate, statusLabel, blank, plural } from './hrLogic.js?v=20261007e';
 
 const plain = (id, label, value, o = {}) => '<div class="field hr-ef"><label for="hr-w-' + id + '">' + esc(label) + (o.required ? ' *' : '') + '</label><input id="hr-w-' + id + '" data-w="' + id + '" type="' + (o.type || 'text') + '" value="' + esc(value || '') +
   '"' + (o.placeholder ? ' placeholder="' + esc(o.placeholder) + '"' : '') + ' autocomplete="off" maxlength="' + (o.max || 120) + '">' + (o.hint ? '<span class="hr-hint">' + o.hint + '</span>' : '') + '</div>';
@@ -86,7 +86,7 @@ function draw(ctx, host, w) {
     el.addEventListener('input', upd); el.addEventListener('change', upd);
   });
   const department = host.querySelector('[data-field="department"]');
-  if (department) department.addEventListener('change', () => import('./hrLogic.js?v=20261007d').then((L) => { const dl = $('hr-dl-job_title'); if (dl) dl.innerHTML = [...new Set((ctx.positions || []).concat(L.JOB_TITLES_BY_DEPT[w.data.department] || []))].map((t) => '<option value="' + esc(t) + '">').join(''); }));
+  if (department) department.addEventListener('change', () => import('./hrLogic.js?v=20261007e').then((L) => { const dl = $('hr-dl-job_title'); if (dl) dl.innerHTML = [...new Set((ctx.positions || []).concat(L.JOB_TITLES_BY_DEPT[w.data.department] || []))].map((t) => '<option value="' + esc(t) + '">').join(''); }));
   if ($('hr-w-dup')) $('hr-w-dup').addEventListener('change', (e) => { w.ackDupes = e.target.checked; });
   if ($('hr-w-imp')) $('hr-w-imp').addEventListener('change', (e) => { w.ackImpact = e.target.checked; });
   $('hr-w-cancel').addEventListener('click', async () => {

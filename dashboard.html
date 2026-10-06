@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261007d">
-<link rel="stylesheet" href="css/dq.css?v=20261007d">
+<link rel="stylesheet" href="css/styles.css?v=20261007e">
+<link rel="stylesheet" href="css/dq.css?v=20261007e">
 </head>
 <body>
 <main>
@@ -36,9 +36,9 @@
 </main>
 
 <script type="module">
-import { initShell, esc, toast } from './js/shell.js?v=20261007d';
-import { getBranches, getInventory, listSales, subscribeToChanges } from './js/api.js?v=20261007d';
-import { branchButtonStyle } from './js/branchColors.js?v=20261007d';
+import { initShell, esc, toast } from './js/shell.js?v=20261007e';
+import { getBranches, getInventory, listSales, subscribeToChanges } from './js/api.js?v=20261007e';
+import { branchButtonStyle } from './js/branchColors.js?v=20261007e';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
@@ -47,9 +47,9 @@ if (employee) {
   // Needs Attention (Ren, 2026-10-06) -- the problems the Sales & Profit Dashboard finds that a Manager or Supervisor can fix (a product with no cost, a sold item
   // that needs matching, a purchase with no price ...), as simple tasks with a FIX NOW button. Shown only to people with the "Data Fixes" access; loaded on the side
   // and failure-proof, like the Leave card, so it can never hold up or break the dashboard. It never shows profit, capital, cash or any accounting figure.
-  import('./js/dqNeeds.js?v=20261007d').then((m) => m.renderNeedsAttention(document.getElementById('needs-attention'), { employee })).catch(() => {});
+  import('./js/dqNeeds.js?v=20261007e').then((m) => m.renderNeedsAttention(document.getElementById('needs-attention'), { employee })).catch(() => {});
   // Leave Management card -- loaded on the side and failure-proof, so it can never hold up or break the dashboard
-  import('./js/leaveWidget.js?v=20261007d').then((m) => m.renderLeaveWidget(document.getElementById('leave-widget'))).catch(() => {});
+  import('./js/leaveWidget.js?v=20261007e').then((m) => m.renderLeaveWidget(document.getElementById('leave-widget'))).catch(() => {});
   const branches = await getBranches();
   // Everyone can now VIEW every branch (read access is open on the underlying tables) —
   // Branch Supervisor/Staff just default to their own branch first since that's most

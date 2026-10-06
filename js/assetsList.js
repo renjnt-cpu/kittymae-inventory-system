@@ -1,11 +1,11 @@
 // Assets & Supplies Custodian -- the Assets tab: every asset in one register, with saved views, search, filters, sorting, paging and export.
 // The table collapses to one card per asset on a phone (the app-wide .table-scroll rule), and the sort control is a field + direction pair
 // rather than clickable headers so it still works there. Only ASSETS are listed here -- supplies have their own tab.
-import { esc, plural, statusBadge, conditionBadge, chips, branchChip, dt, dash, money, opts, field } from './assetsUi.js?v=20261007d';
-import { SAVED_VIEWS, viewById, matchesQuery, SORT_FIELDS, SORT_COMPARATORS, BLANK_Q, STATUSES, CONDITIONS, OWNERSHIP, COMPANIES, uniqueSorted, sum } from './assetsLogic.js?v=20261007d';
-import { actionButtons, bindActions } from './assetsActions.js?v=20261007d';
-import { exportAssetList } from './assetsReports.js?v=20261007d';
-import { applySort, sortControlHtml, wireSortControl } from './uiKit.js?v=20261007d';
+import { esc, plural, statusBadge, conditionBadge, chips, branchChip, dt, dash, money, opts, field } from './assetsUi.js?v=20261007e';
+import { SAVED_VIEWS, viewById, matchesQuery, SORT_FIELDS, SORT_COMPARATORS, BLANK_Q, STATUSES, CONDITIONS, OWNERSHIP, COMPANIES, uniqueSorted, sum } from './assetsLogic.js?v=20261007e';
+import { actionButtons, bindActions } from './assetsActions.js?v=20261007e';
+import { exportAssetList } from './assetsReports.js?v=20261007e';
+import { applySort, sortControlHtml, wireSortControl } from './uiKit.js?v=20261007e';
 
 const $ = (id) => document.getElementById(id);
 export const newAssetsState = () => ({ view: 'active', q: { ...BLANK_Q }, sort: { field: 'asset_number', dir: 'asc' }, page: 1, pageSize: 50, allCols: false, more: false, sel: new Set() });

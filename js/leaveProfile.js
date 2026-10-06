@@ -2,10 +2,11 @@
 // Shown to HR and the Final Approver (the 201-File page itself is already limited to them) and built
 // on exactly the same data, drawers and rules as the Leave Management page -- there is no second copy
 // of any leave logic here.
-import { esc, fmtDate, rangeText, num, daysText, statusBadge, tile, OPEN_STATUSES } from './leaveUi.js?v=20261007d';
-import { createLeaveContext, drawersHtml, bindDrawerEvents } from './leavePage.js?v=20261007d';
-import { openAdjust, openLedger } from './leaveCredits.js?v=20261007d';
-import * as api from './leaveApi.js?v=20261007d';
+import { esc, fmtDate, rangeText, num, daysText, statusBadge, tile } from './leaveUi.js?v=20261007e';
+import { summarizeLeave } from './leaveSummary.js?v=20261007e';
+import { createLeaveContext, drawersHtml, bindDrawerEvents } from './leavePage.js?v=20261007e';
+import { openAdjust, openLedger } from './leaveCredits.js?v=20261007e';
+import * as api from './leaveApi.js?v=20261007e';
 
 let ctx = null;
 let current = null;
@@ -40,23 +41,18 @@ export async function mountLeaveProfile(host, employeeId) {
 function draw(host, employeeId) {
   const c = ctx;
   const person = c.dirById[employeeId] || {};
-  const reqs = c.data.requests.filter((r) => r.employee_id === employeeId && r.status !== 'Draft')
-    .sort((a, b) => String(b.start_date).localeCompare(String(a.start_date)));
-  const bals = c.data.balances.filter((b) => b.employee_id === employeeId);
-  const creditTypes = c.types.filter((t) => t.active && t.requires_credit);
-  const balOf = (id) => bals.find((b) => b.leave_type_id === id) || { total_credits: 0, used_credits: 0, available_credits: 0 };
-  const sum = (key) => creditTypes.reduce((s, t) => s + Number(balOf(t.id)[key] || 0), 0);
-  const upcoming = reqs.filter((r) => r.status === 'Approved' && r.end_date >= c.today).sort((a, b) => a.start_date.localeCompare(b.start_date));
+  // the numbers come from leaveSummary.js -- the same function the HR 201-File Overview card uses, so the two always agree
+  const S = summarizeLeave({ types: c.types, balances: c.data.balances, requests: c.data.requests, today: c.today }, employeeId);
+  const { reqs, creditTypes, balOf, upcoming } = S;
   const own = employeeId === c.me.employee_id;
   const canAdjust = c.flags.hr && (!own || c.flags.final);
   const tName = (id) => (c.typeById[id] || {}).name || '—';
 
   host.innerHTML =
     '<div class="tiles" style="margin-bottom:12px;">' +
-      tile(esc(num(sum('available_credits'))), 'Available Leave Credits') + tile(esc(num(sum('used_credits'))), 'Used Leave Credits') +
-      tile(reqs.filter((r) => OPEN_STATUSES.includes(r.status)).length, 'Pending Requests') +
-      tile(reqs.filter((r) => ['Approved', 'Completed'].includes(r.status)).length, 'Approved Leave') +
-      tile(reqs.filter((r) => r.status === 'Rejected').length, 'Rejected Leave') + tile(upcoming.length, 'Upcoming Leave') + '</div>' +
+      tile(esc(num(S.available)), 'Available Leave Credits') + tile(esc(num(S.used)), 'Used Leave Credits') +
+      tile(S.pending, 'Pending Requests') + tile(S.approved, 'Approved Leave') +
+      tile(S.rejected, 'Rejected Leave') + tile(upcoming.length, 'Upcoming Leave') + '</div>' +
     '<div class="lv-row-actions" style="margin-bottom:12px;">' +
       (canAdjust ? '<button type="button" class="btn small" data-lp="add">Add Credit</button><button type="button" class="btn small secondary" data-lp="adjust">Adjust Credit</button>' : '') +
       '<button type="button" class="btn small secondary" data-lp="ledger">Credit History</button>' +

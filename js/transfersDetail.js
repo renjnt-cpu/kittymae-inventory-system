@@ -2,10 +2,10 @@
 // and after each step, read from the stock ledger), release, receiving, discrepancies, files, notes, the timeline and the audit trail,
 // with every action a person is allowed to take. It opens as a drawer from anywhere. Confirmations and reasons are inline panels
 // (the app never uses confirm() / prompt()).
-import { esc, qty, pcs, fmtDate, fmtDateTime, fmtBytes, kv, openDrawer, closeDrawer, drawerBody, isDrawerOpen, actionPanel, errorsText, friendly, statusBadge, priorityBadge, tagBadge, discBadge, routeCard, statusSteps, routeText } from './transfersUi.js?v=20261007d';
-import { stockOf, RESOLUTIONS, DISC_TYPES } from './transfersLogic.js?v=20261007d';
-import { transferSlipPdf } from './transfersExport.js?v=20261007d';
-import { flagInvalid } from './uiKit.js?v=20261007d';
+import { esc, qty, pcs, fmtDate, fmtDateTime, fmtBytes, kv, openDrawer, closeDrawer, drawerBody, isDrawerOpen, actionPanel, errorsText, friendly, statusBadge, priorityBadge, tagBadge, discBadge, routeCard, statusSteps, routeText } from './transfersUi.js?v=20261007e';
+import { stockOf, RESOLUTIONS, DISC_TYPES } from './transfersLogic.js?v=20261007e';
+import { transferSlipPdf } from './transfersExport.js?v=20261007e';
+import { flagInvalid } from './uiKit.js?v=20261007e';
 
 const $ = (id) => document.getElementById(id);
 const val = (id) => ($(id) ? $(id).value : '');

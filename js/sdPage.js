@@ -1,14 +1,14 @@
 // Sales & Profit Dashboard -- the page: title, filters, data-quality notes, the tabs, and the glue between them.
 // Who sees what is decided by the database (keys "dashboard.*" in the Position Access Matrix); this page only hides what it is told not to ask for.
-import { api, esc, friendly, fmtDateTime, int, money } from './sdCore.js?v=20261007d';
-import { mountShell, loadingBox, errorBox, lockedBox, badge, toast, openDrawer } from './sdUi.js?v=20261007d';
-import { createFilters } from './sdFilters.js?v=20261007d';
-import { renderOverview } from './sdOverview.js?v=20261007d';
-import { renderSales, renderProducts, renderChannels, renderPurchases, renderInventory, renderExpenses, renderPayments } from './sdTabs.js?v=20261007d';
-import { renderCapital } from './sdCapital.js?v=20261007d';
-import { renderReports, renderSettings } from './sdMore.js?v=20261007d';
-import { createTable } from './sdTable.js?v=20261007d';
-import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007d';
+import { api, esc, friendly, fmtDateTime, int, money } from './sdCore.js?v=20261007e';
+import { mountShell, loadingBox, errorBox, lockedBox, badge, toast, openDrawer } from './sdUi.js?v=20261007e';
+import { createFilters } from './sdFilters.js?v=20261007e';
+import { renderOverview } from './sdOverview.js?v=20261007e';
+import { renderSales, renderProducts, renderChannels, renderPurchases, renderInventory, renderExpenses, renderPayments } from './sdTabs.js?v=20261007e';
+import { renderCapital } from './sdCapital.js?v=20261007e';
+import { renderReports, renderSettings } from './sdMore.js?v=20261007e';
+import { createTable } from './sdTable.js?v=20261007e';
+import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007e';
 
 const TABS = [
   { id: 'overview', label: 'Overview', show: () => true, make: renderOverview },

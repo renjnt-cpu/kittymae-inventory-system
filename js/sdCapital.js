@@ -1,11 +1,11 @@
 // Sales & Profit Dashboard -- the Capital tab: owner capital (initial, additional, withdrawals), equipment, stock at cost, receivables and payables.
 // Capital is kept apart from sales and from stock. An entry is never deleted: a wrong one is voided with a reason, and every change is in the audit trail.
 // There is deliberately no cash balance and no "estimated owner equity" (which was built on it): the Finance > Transactions ledger does not see the real money -- Ren, 2026-10-07.
-import { api, esc, money, int, fmtDate, friendly, todayIn } from './sdCore.js?v=20261007d';
-import { panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, closeDrawer, toast, drawerBody } from './sdUi.js?v=20261007d';
-import { createTable } from './sdTable.js?v=20261007d';
-import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007d';
-import { stats } from './sdTabs.js?v=20261007d';
+import { api, esc, money, int, fmtDate, friendly, todayIn } from './sdCore.js?v=20261007e';
+import { panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, closeDrawer, toast, drawerBody } from './sdUi.js?v=20261007e';
+import { createTable } from './sdTable.js?v=20261007e';
+import { COLS, ROW_TITLE } from './sdColumns.js?v=20261007e';
+import { stats } from './sdTabs.js?v=20261007e';
 
 const TYPES = [
   { id: 'INITIAL_CAPITAL', label: 'Initial capital', hint: 'The money the owner first put into the business.' },

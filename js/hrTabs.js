@@ -3,10 +3,11 @@
 // Nothing here saves anything: edits go into ps.values and are saved through the review dialog (hrEdit.js).
 import {
   esc, $, badge, chip, viewField, inputHtml, bindEdit, spinner, emptyBox, lockIcon, eyeIcon, friendly, toast, confirmDialog, reasonDialog, openModal,
-} from './hrUi.js?v=20261007d';
+} from './hrUi.js?v=20261007e';
 import {
   FIELD_DEFS, GOV_FIELDS, money, fmtDate, fmtDateTime, statusLabel, statusTone, spanText, ageText, blank, historyText, plural, DOC_CATEGORIES,
-} from './hrLogic.js?v=20261007d';
+} from './hrLogic.js?v=20261007e';
+import { num, rangeText } from './leaveUi.js?v=20261007e';
 
 /** May this person change this field right now? (The database decides again when saving.) */
 export function canEditField(ctx, field) {
@@ -75,7 +76,7 @@ export function renderOverview(ctx, ps, panel) {
   const sep = ['RES', 'TER', 'AWOL', 'DECEASED'].includes(f.employment_status);
   const docsOn = row.docs_required !== null && row.docs_required !== undefined && k['hr.view_documents'];
   const idsOn = d.government_ids ? GOV_FIELDS.filter((g) => d.government_ids[g.on]).length : null;
-  const card = (title, big, small, opts = {}) => '<div class="hr-card' + (opts.tone ? ' hr-tone-' + opts.tone : '') + '"><h5>' + esc(title) + '</h5><span class="big">' + big + '</span>' +
+  const card = (title, big, small, opts = {}) => '<div class="hr-card' + (opts.tone ? ' hr-tone-' + opts.tone : '') + '"' + (opts.attr || '') + '><h5>' + esc(title) + '</h5><span class="big">' + big + '</span>' +
     (small ? '<span class="small">' + small + '</span>' : '') + (opts.go ? '<button type="button" class="btn small secondary go" data-tab-go="' + opts.go + '">' + esc(opts.goLabel || 'Open') + '</button>' : '') + '</div>';
   const missing = row.profile_missing || [];
   const cards = [
@@ -91,7 +92,8 @@ export function renderOverview(ctx, ps, panel) {
     ...(d.compensation ? [card('Compensation', '<span class="hr-secret">Protected</span>', (d.compensation.salary_on_file ? 'Basic salary on file' : 'No basic salary on file') + ' · ' + esc(d.compensation.payment_mode || 'no payment mode'), { go: 'compensation', goLabel: 'Open (logged)' })] : []),
     card('Emergency contact', esc(f.emergency_contact_name || 'Missing'), f.emergency_contact_name ? esc([f.emergency_contact_relationship, f.emergency_contact_number].filter(Boolean).join(' · ')) : 'Add one so someone can be reached', { tone: f.emergency_contact_name ? '' : 'warn', go: 'emergency' }),
     card('System access', esc(e.role === 'None' ? 'Position-based' : e.role), 'System account ' + esc(e.status === 'Active' ? 'Active' : 'INACTIVE') + ' · ' + (d.flags.has_login ? 'has a sign-in' : 'no sign-in yet'), { tone: e.status !== 'Active' ? 'bad' : '', go: k['hr.view_access'] ? 'access' : '' }),
-    card('Leave', 'Leave record', 'Credits, requests and history', { go: 'leave' }),
+    // the numbers come from Leave Management (filled in just below, once they have loaded)
+    card('Leave', '<span class="muted" style="font-size:14px;font-weight:normal;">Loading…</span>', 'Credits, requests and upcoming leave', { go: 'leave', goLabel: 'Open Leave', attr: ' data-leave-card' }),
   ];
   const alerts = [];
   if (f.archived_at) alerts.push('<div class="hr-notice warn"><b>Archived</b> ' + esc(fmtDate(String(f.archived_at).slice(0, 10))) + (f.archived_by_name ? ' by ' + esc(f.archived_by_name) : '') + (f.archive_reason ? ' — ' + esc(f.archive_reason) : '') + '. The record is kept; sign-in access is not changed by archiving.</div>');
@@ -100,6 +102,50 @@ export function renderOverview(ctx, ps, panel) {
   if (d.flags.position_differs_from_job_title && k['hr.view_access']) alerts.push('<div class="hr-notice warn">The system position (<b>' + esc(e.position || 'none') + '</b>) differs from the 201 job title (<b>' + esc(f.job_title || 'none') + '</b>). Nothing was changed automatically — see the Access &amp; Permissions tab.</div>');
   panel.innerHTML = alerts.join('') + '<div class="hr-grid">' + cards.join('') + '</div>';
   panel.querySelectorAll('[data-tab-go]').forEach((b) => b.addEventListener('click', () => ctx.showTab(b.dataset.tabGo)));
+  fillLeaveCard(ctx, ps, panel);
+}
+
+/** What the Leave card says, from one person's Leave Management summary (see leaveSummary.js; the Leave tab shows the same numbers). */
+export function describeLeave(S) {
+  if (S.noAccess) return { big: 'Not available', small: 'Your account cannot see leave records. Ask HR or an Admin if you need them.', tone: '' };
+  const lines = [];
+  const hasCredits = S.total > 0 || S.available > 0;
+  const bits = ['Used ' + num(S.used)];
+  if (S.pending > 0) bits.push(plural(S.pending, 'pending request'));
+  if (S.upcoming.length > 0) bits.push(S.upcoming.length + ' upcoming');
+  if (hasCredits || S.pending > 0 || S.upcoming.length > 0 || S.reqs.length > 0) lines.push(esc(bits.join(' · ')));
+  if (S.onLeaveToday) lines.push('<b>On leave today</b>');
+  if (S.next) lines.push('Next leave: ' + esc(S.typeName(S.next.leave_type_id)) + ', ' + esc(rangeText(S.next.start_date, S.next.end_date)));
+  if (S.withCredits.length) {
+    const shown = S.withCredits.slice(0, 4).map((b) => esc(b.name) + ' ' + esc(num(b.available_credits)));
+    lines.push(shown.join(' · ') + (S.withCredits.length > 4 ? ' · +' + (S.withCredits.length - 4) + ' more' : ''));
+  }
+  if (!lines.length) lines.push('No leave credits or requests on file yet.');
+  return {
+    big: hasCredits ? esc(num(S.available)) + ' <span class="muted" style="font-size:12px;font-weight:normal;">credits available</span>' : 'No credits yet',
+    small: lines.join('<br>'),
+    tone: S.pending > 0 ? 'warn' : (S.available > 0 ? 'ok' : ''),
+  };
+}
+
+/** Fills the Leave card on the Overview. What was loaded last time shows straight away and is refreshed in the background. */
+async function fillLeaveCard(ctx, ps, panel) {
+  const paint = (info) => {
+    if (ctx.ps !== ps || ps.tab !== 'overview') return;
+    const box = panel.querySelector('[data-leave-card]');
+    if (!box) return;
+    box.className = 'hr-card' + (info.tone ? ' hr-tone-' + info.tone : '');
+    box.querySelector('.big').innerHTML = info.big;
+    box.querySelector('.small').innerHTML = info.small;
+  };
+  if (ps.leaveInfo) paint(ps.leaveInfo);
+  try {
+    const { loadLeaveSummary } = await import('./leaveSummary.js?v=20261007e');
+    ps.leaveInfo = describeLeave(await loadLeaveSummary(ps.id));
+    paint(ps.leaveInfo);
+  } catch (err) {
+    if (!ps.leaveInfo) paint({ big: 'Not available', small: 'The leave numbers could not be loaded (' + esc(friendly(err)) + '). Open the Leave tab to try again.', tone: '' });
+  }
 }
 
 // ================================================================= Personal Information
@@ -126,10 +172,10 @@ export function renderEmployment(ctx, ps, panel) {
   afterDraw(ctx, ps, panel, (field) => {
     if (field === 'department') {
       const dl = $('hr-dl-job_title'); if (!dl) return;
-      import('./hrLogic.js?v=20261007d').then((L) => { dl.innerHTML = [...new Set((ctx.positions || []).concat(L.JOB_TITLES_BY_DEPT[val(ps, 'department')] || []))].map((t) => '<option value="' + esc(t) + '">').join(''); });
+      import('./hrLogic.js?v=20261007e').then((L) => { dl.innerHTML = [...new Set((ctx.positions || []).concat(L.JOB_TITLES_BY_DEPT[val(ps, 'department')] || []))].map((t) => '<option value="' + esc(t) + '">').join(''); });
     }
   });
-  import('./hrAssets.js?v=20261007d').then((m) => m.mountAssetsProfile($('hr-assets-host'), ps.id)).catch((err) => {
+  import('./hrAssets.js?v=20261007e').then((m) => m.mountAssetsProfile($('hr-assets-host'), ps.id)).catch((err) => {
     const h = $('hr-assets-host'); if (h) h.innerHTML = '<p class="muted">Company assets could not be loaded (' + esc(friendly(err)) + ').</p>';
   });
 }
