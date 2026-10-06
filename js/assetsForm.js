@@ -3,9 +3,9 @@
 // condition changes through "Change condition" -- each of those writes the permanent history. A possible duplicate (same serial number or
 // tag) is flagged with "POSSIBLE DUPLICATE ASSET" and needs a deliberate "these are different assets" before it saves; a blank serial number
 // is never treated as a duplicate.
-import { esc, field, opts, openDrawer, closeDrawer, drawerBody, isDrawerOpen, actionPanel, errorsText, friendly, branchOptions, categoryOptions, personOptions, val, statusBadge } from './assetsUi.js?v=20261004h';
-import { CONDITIONS, OWNERSHIP, COMPANIES, uniqueSorted } from './assetsLogic.js?v=20261004h';
-import { flagInvalid as flag } from './uiKit.js?v=20261004h';
+import { esc, field, opts, openDrawer, closeDrawer, drawerBody, isDrawerOpen, actionPanel, errorsText, friendly, branchOptions, categoryOptions, personOptions, val, statusBadge } from './assetsUi.js?v=20261006a';
+import { CONDITIONS, OWNERSHIP, COMPANIES, uniqueSorted } from './assetsLogic.js?v=20261006a';
+import { flagInvalid as flag } from './uiKit.js?v=20261006a';
 
 const $ = (id) => document.getElementById(id);
 let dirty = false, ctxRef = null;

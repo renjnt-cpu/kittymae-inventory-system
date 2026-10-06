@@ -1,9 +1,9 @@
 // Bills Management -- the eight reports and their exports (CSV, Excel, PDF). Everything is built in the
 // browser from the bills already loaded; nothing is sent anywhere. The Excel / PDF libraries load from
 // cdnjs only when someone clicks Export (pinned and integrity-checked in leaveExport.js).
-import { exportCsv, exportXlsx, exportPdf, download, ensureLib } from './leaveExport.js?v=20261004h';
-import { groupTotals, sum, monthName, frequencyText, nextGenerationDate, round2 } from './billsLogic.js?v=20261004h';
-import { daysText } from './billsUi.js?v=20261004h';
+import { exportCsv, exportXlsx, exportPdf, download, ensureLib } from './leaveExport.js?v=20261006a';
+import { groupTotals, sum, monthName, frequencyText, nextGenerationDate, round2 } from './billsLogic.js?v=20261006a';
+import { daysText } from './billsUi.js?v=20261006a';
 
 const FOOTER = 'Kittymae Jewels - Bills Management';
 const col = (key, label, type) => ({ key, label, type: type || 'text' });

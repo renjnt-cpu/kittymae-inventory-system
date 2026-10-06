@@ -2,11 +2,11 @@
 // sorting, grouping, paging, bulk changes and export; plus the one-time "assign branches" helper.
 // The table collapses to one card per bill on a phone (the app-wide .table-scroll rule), and the sort
 // control is a field + direction pair rather than clickable headers so it still works there.
-import { esc, money, fmtDate, fmtDateTime, daysShort, daysText, statusBadge, payBadge, prioBadge, tagBadge, openDrawer, closeDrawer, drawerBody, friendly, errorsText, plural } from './billsUi.js?v=20261004h';
-import { SAVED_VIEWS, viewById, matchesScope, inPeriod, matchesStatus, matchesQuery, SORT_FIELDS, SORT_COMPARATORS, PRIORITIES, suggestBranch, sum, uniqueSorted, round2 } from './billsLogic.js?v=20261004h';
-import { filterBarHtml, bindFilterBar, periodLabel } from './billsFilters.js?v=20261004h';
-import { exportBillList } from './billsExport.js?v=20261004h';
-import { applySort, sortControlHtml, wireSortControl } from './uiKit.js?v=20261004h';
+import { esc, money, fmtDate, fmtDateTime, daysShort, daysText, statusBadge, payBadge, prioBadge, tagBadge, openDrawer, closeDrawer, drawerBody, friendly, errorsText, plural } from './billsUi.js?v=20261006a';
+import { SAVED_VIEWS, viewById, matchesScope, inPeriod, matchesStatus, matchesQuery, SORT_FIELDS, SORT_COMPARATORS, PRIORITIES, suggestBranch, sum, uniqueSorted, round2 } from './billsLogic.js?v=20261006a';
+import { filterBarHtml, bindFilterBar, periodLabel } from './billsFilters.js?v=20261006a';
+import { exportBillList } from './billsExport.js?v=20261006a';
+import { applySort, sortControlHtml, wireSortControl } from './uiKit.js?v=20261006a';
 
 const $ = (id) => document.getElementById(id);
 export const newTableState = () => ({ view: 'all', q: { search: '', paymentStatus: '', recurring: '', priority: '', dueToday: false, dueWeek: false, overdueOnly: false, min: '', max: '', addedBy: '' },

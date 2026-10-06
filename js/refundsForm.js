@@ -3,9 +3,9 @@
 // Forms open in drawers (never a permanent column); nothing here uses confirm() or prompt() -- confirmations are inline panels.
 // The database re-checks every rule (order exists, amount within the order, duplicates, payment never above the approved amount);
 // when it says "ask first", the question appears here as an inline panel and the request is sent again with the answer.
-import { esc, money, fmtDate, fmtBytes, plural, openDrawer, closeDrawer, drawerBody, actionPanel, friendly, errorsText } from './refundsUi.js?v=20261004h';
-import { METHODS, NEEDS_REFERENCE, PRIORITIES, COMM_METHODS, FILE_TYPES, MAX_FILE, suggestPriority, refundableLeft, round2 } from './refundsLogic.js?v=20261004h';
-import { flagInvalid } from './uiKit.js?v=20261004h';
+import { esc, money, fmtDate, fmtBytes, plural, openDrawer, closeDrawer, drawerBody, actionPanel, friendly, errorsText } from './refundsUi.js?v=20261006a';
+import { METHODS, NEEDS_REFERENCE, PRIORITIES, COMM_METHODS, FILE_TYPES, MAX_FILE, suggestPriority, refundableLeft, round2 } from './refundsLogic.js?v=20261006a';
+import { flagInvalid } from './uiKit.js?v=20261006a';
 
 const $ = (id) => document.getElementById(id);
 const val = (id) => { const el = $(id); return el ? el.value : ''; };

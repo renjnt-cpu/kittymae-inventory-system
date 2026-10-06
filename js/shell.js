@@ -1,13 +1,13 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20261004h';
-import { listMyPermissions } from './api.js?v=20261004h';
-import { initActivityFeed } from './activityFeed.js?v=20261004h';
-import { localDateStr } from './uiKit.js?v=20261004h';
-import { showBirthdayBanner } from './birthdayBanner.js?v=20261004h';
-import { initAdminChat } from './adminChat.js?v=20261004h';
-import { initLeaveNotifications } from './leaveNotifications.js?v=20261004h';
+import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20261006a';
+import { listMyPermissions } from './api.js?v=20261006a';
+import { initActivityFeed } from './activityFeed.js?v=20261006a';
+import { localDateStr } from './uiKit.js?v=20261006a';
+import { showBirthdayBanner } from './birthdayBanner.js?v=20261006a';
+import { initAdminChat } from './adminChat.js?v=20261006a';
+import { initLeaveNotifications } from './leaveNotifications.js?v=20261006a';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -103,6 +103,7 @@ export async function initShell(activePage) {
 
   const ALL_PAGE_DEFS = {
     dashboard: { label: 'Dashboard', href: 'dashboard.html' },
+    'sales-dashboard': { label: 'Sales & Profit Dashboard', href: 'sales-dashboard.html' },
     'online-orders': { label: 'Online Orders', href: 'online-orders.html' },
     'online-orders-kmco': { label: 'Online Orders — Kittymae.co', href: 'online-orders-kmco.html' },
     products: { label: 'SKU Catalog', href: 'products.html' },
@@ -129,6 +130,9 @@ export async function initShell(activePage) {
     scopedIds.forEach((id) => pages.push({ id, ...ALL_PAGE_DEFS[id] }));
   } else {
     pages.push({ id: 'dashboard', ...ALL_PAGE_DEFS.dashboard });
+    // Sales & Profit Dashboard (Ren, 2026-10-06): shown only to people holding the "dashboard.view" key (Position Access Matrix > Dashboard). Regular sales staff never
+    // get it; what a person sees inside it follows the other dashboard.* keys and is enforced by the database (migrations 141-148), not by this menu.
+    if ((employee.permissions || []).includes('dashboard.view')) pages.push({ id: 'sales-dashboard', ...ALL_PAGE_DEFS['sales-dashboard'] });
     // Branches (POS Walk-In/Layaway/Scrap/Subasta) removed from the ERP (Ren,
     // 2026-09-28: "remove branches in ERP since theres already in the POS") -- the
     // kittymae-pos app's own branches.html has byte-identical functionality and, unlike
@@ -220,7 +224,7 @@ export async function initShell(activePage) {
   // group here would simply never appear in the sidebar, so every id pushed above
   // must have a home in exactly one group.
   const NAV_GROUPS = [
-    { label: 'Overview', ids: ['dashboard'] },
+    { label: 'Overview', ids: ['dashboard', 'sales-dashboard'] },
     { label: 'Sales', ids: ['online-orders', 'online-orders-kmco', 'refunds'] },
     { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers', 'pull-out'] },
     { label: 'Operations', ids: ['lbc', 'assets'] },

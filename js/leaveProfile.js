@@ -2,10 +2,10 @@
 // Shown to HR and the Final Approver (the 201-File page itself is already limited to them) and built
 // on exactly the same data, drawers and rules as the Leave Management page -- there is no second copy
 // of any leave logic here.
-import { esc, fmtDate, rangeText, num, daysText, statusBadge, tile, OPEN_STATUSES } from './leaveUi.js?v=20261004h';
-import { createLeaveContext, drawersHtml, bindDrawerEvents } from './leavePage.js?v=20261004h';
-import { openAdjust, openLedger } from './leaveCredits.js?v=20261004h';
-import * as api from './leaveApi.js?v=20261004h';
+import { esc, fmtDate, rangeText, num, daysText, statusBadge, tile, OPEN_STATUSES } from './leaveUi.js?v=20261006a';
+import { createLeaveContext, drawersHtml, bindDrawerEvents } from './leavePage.js?v=20261006a';
+import { openAdjust, openLedger } from './leaveCredits.js?v=20261006a';
+import * as api from './leaveApi.js?v=20261006a';
 
 let ctx = null;
 let current = null;

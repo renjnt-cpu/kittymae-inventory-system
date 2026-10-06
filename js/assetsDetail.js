@@ -2,9 +2,9 @@
 // movement history, repairs, lost / damaged reports, files and photos, money (only for people who may see it) and the audit trail -- and
 // every action a person is allowed to take on it. It opens as a drawer from anywhere. Details are view-only here; editing opens the form,
 // and changing WHO holds an asset is never an edit -- it goes through Assign / Return / Transfer so the history stays true.
-import { esc, kv, fmtDateTime, fmtBytes, dt, dash, money, qty, statusBadge, conditionBadge, flowBadge, chips, toneChip, branchChip, tagBadge, openDrawer, closeDrawer, drawerBody, isDrawerOpen, actionPanel, errorsText, friendly, branchName, field, val, must, setDetailHandlers } from './assetsUi.js?v=20261004h';
-import { OPEN_REPAIR, OPEN_INCIDENT, repairCostFlag, daysBetween, dayOf } from './assetsLogic.js?v=20261004h';
-import { menuItems } from './assetsActions.js?v=20261004h';
+import { esc, kv, fmtDateTime, fmtBytes, dt, dash, money, qty, statusBadge, conditionBadge, flowBadge, chips, toneChip, branchChip, tagBadge, openDrawer, closeDrawer, drawerBody, isDrawerOpen, actionPanel, errorsText, friendly, branchName, field, val, must, setDetailHandlers } from './assetsUi.js?v=20261006a';
+import { OPEN_REPAIR, OPEN_INCIDENT, repairCostFlag, daysBetween, dayOf } from './assetsLogic.js?v=20261006a';
+import { menuItems } from './assetsActions.js?v=20261006a';
 
 const $ = (id) => document.getElementById(id);
 let currentId = null, activePane = 'overview';

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261004h">
+<link rel="stylesheet" href="css/styles.css?v=20261006a">
 </head>
 <body>
 <main>
@@ -34,16 +34,16 @@
 </main>
 
 <script type="module">
-import { initShell, esc, toast } from './js/shell.js?v=20261004h';
-import { getBranches, getInventory, listSales, subscribeToChanges } from './js/api.js?v=20261004h';
-import { branchButtonStyle } from './js/branchColors.js?v=20261004h';
+import { initShell, esc, toast } from './js/shell.js?v=20261006a';
+import { getBranches, getInventory, listSales, subscribeToChanges } from './js/api.js?v=20261006a';
+import { branchButtonStyle } from './js/branchColors.js?v=20261006a';
 
 const money = (n) => n === null || n === undefined ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
 
 const employee = await initShell('dashboard');
 if (employee) {
   // Leave Management card -- loaded on the side and failure-proof, so it can never hold up or break the dashboard
-  import('./js/leaveWidget.js?v=20261004h').then((m) => m.renderLeaveWidget(document.getElementById('leave-widget'))).catch(() => {});
+  import('./js/leaveWidget.js?v=20261006a').then((m) => m.renderLeaveWidget(document.getElementById('leave-widget'))).catch(() => {});
   const branches = await getBranches();
   // Everyone can now VIEW every branch (read access is open on the underlying tables) —
   // Branch Supervisor/Staff just default to their own branch first since that's most

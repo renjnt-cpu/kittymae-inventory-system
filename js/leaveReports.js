@@ -1,8 +1,8 @@
 // Leave Management -- Reports (spec section 23). HR / Final Approver / Auditor only: the tab is not
 // even shown to anyone else, and the data it reads is the same all-employees data the database
 // already limits to those roles. Ten reports, the filters the spec lists, and CSV / Excel / PDF export.
-import { esc, fmtDate, num, daysText, addDays, manilaDate, yearOf, OPEN_STATUSES } from './leaveUi.js?v=20261004h';
-import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261004h';
+import { esc, fmtDate, num, daysText, addDays, manilaDate, yearOf, OPEN_STATUSES } from './leaveUi.js?v=20261006a';
+import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261006a';
 
 const $ = (id) => document.getElementById(id);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];

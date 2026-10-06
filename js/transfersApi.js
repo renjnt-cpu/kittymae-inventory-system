@@ -3,8 +3,8 @@
 // inventory, never copied); every CHANGE goes through a transfer_* database function that re-checks who is calling and
 // re-checks the stock on the server. A function that finds a problem returns {ok:false, errors:[...]} -- callers show those;
 // anything else thrown is an Error.
-import { supabase } from './supabaseClient.js?v=20261004h';
-import { FILE_TYPES, MAX_FILE } from './transfersLogic.js?v=20261004h';
+import { supabase } from './supabaseClient.js?v=20261006a';
+import { FILE_TYPES, MAX_FILE } from './transfersLogic.js?v=20261006a';
 
 async function rpc(name, params) {
   const { data, error } = await supabase.rpc(name, params);

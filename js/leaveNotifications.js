@@ -1,8 +1,8 @@
 // Leave Management -- the header "Leave notifications" bell, mounted on every ERP page by shell.js.
 // Personal to the signed-in person (the database only returns their own rows); the older 🔔
 // Activity bell next to it is the company-wide broadcast feed and is unrelated.
-import { listNotifications, markNotificationsRead, markAllNotificationsRead, subscribe } from './leaveApi.js?v=20261004h';
-import { esc, fmtDateTime } from './leaveUi.js?v=20261004h';
+import { listNotifications, markNotificationsRead, markAllNotificationsRead, subscribe } from './leaveApi.js?v=20261006a';
+import { esc, fmtDateTime } from './leaveUi.js?v=20261006a';
 
 export async function initLeaveNotifications({ employee, headerEl }) {
   const bell = document.createElement('button');

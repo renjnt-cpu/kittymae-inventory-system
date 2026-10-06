@@ -1,11 +1,11 @@
 // Leave Management -- Leave Credits: every employee's balances, HR's manual adjustments and the
 // immutable credit ledger. Anyone with view_all can read; only HR can change (the database
 // refuses anyone else, and HR cannot change their own credits -- only the Final Approver can).
-import { esc, fmtDate, fmtDateTime, manilaDate, num, daysText, errorsText, kv } from './leaveUi.js?v=20261004h';
+import { esc, fmtDate, fmtDateTime, manilaDate, num, daysText, errorsText, kv } from './leaveUi.js?v=20261006a';
 import {
   activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber,
-} from './uiKit.js?v=20261004h';
-import { openSide, closeSide, sideBody, confirmPanel } from './leaveSide.js?v=20261004h';
+} from './uiKit.js?v=20261006a';
+import { openSide, closeSide, sideBody, confirmPanel } from './leaveSide.js?v=20261006a';
 
 const $ = (id) => document.getElementById(id);
 const cf = { search: '', department: 'all', show: 'all', sort: { field: 'name', dir: 'asc' } };
