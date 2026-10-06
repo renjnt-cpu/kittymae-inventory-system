@@ -1,9 +1,9 @@
 // Sales & Profit Dashboard -- the Reports tab (the eight reports, each exported for the period and filters chosen above) and the Dashboard Settings tab.
-import { api, esc, money, friendly, fmtDateTime, bucketLabel, defaultGrain, rangeText, PRESETS } from './sdCore.js?v=20261006a';
-import { panel, loadingBox, errorBox, toast } from './sdUi.js?v=20261006a';
-import { fetchAllRows, exportData } from './sdTable.js?v=20261006a';
-import { COLS } from './sdColumns.js?v=20261006a';
-import { KPI_LABELS } from './sdOverview.js?v=20261006a';
+import { api, esc, money, friendly, fmtDateTime, bucketLabel, defaultGrain, rangeText, PRESETS } from './sdCore.js?v=20261006d';
+import { panel, loadingBox, errorBox, toast } from './sdUi.js?v=20261006d';
+import { fetchAllRows, exportData } from './sdTable.js?v=20261006d';
+import { COLS } from './sdColumns.js?v=20261006d';
+import { KPI_LABELS } from './sdOverview.js?v=20261006d';
 
 // ---------------------------------------------------------------- Reports
 const REPORTS = [
@@ -85,6 +85,9 @@ export function renderSettings(root, ctx) {
       '<div class="field"><label for="sd-s-over">Overstock threshold (pieces per SKU)</label><input type="number" id="sd-s-over" min="1" max="100000" step="1" value="' + esc(s.overstock_units) + '"' + dis + '></div>' +
       '<div class="field"><label>Default currency</label><div class="sd-readonly">PHP (₱) — Philippine peso</div></div>' +
       '<div class="field"><label for="sd-s-tz">Timezone</label><select id="sd-s-tz"' + dis + '>' + Array.from(new Set(TZS.concat(s.timezone ? [s.timezone] : []))).map((z) => '<option' + (s.timezone === z ? ' selected' : '') + '>' + esc(z) + '</option>').join('') + '</select><span class="muted">Every date on the dashboard follows this clock.</span></div>' +
+      '<div class="field"><label for="sd-s-from">Start raising data tasks from</label><input type="date" id="sd-s-from" value="' + esc(s.issues_from || '') + '"' + dis + '><span class="muted">Sales and purchases on or after this day can become “Needs Attention” tasks for Managers and Supervisors (a product with no cost, a sold item to match, a purchase with no price). Earlier ones are left alone.</span></div>' +
+      '<div class="field sd-wide"><label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" id="sd-s-cat"' + (s.issues_track_category === false ? '' : ' checked') + dis + '> Ask for a category when a sold product has none</label>' +
+        '<label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" id="sd-s-sup"' + (s.issues_track_supplier ? ' checked' : '') + dis + '> Ask for a supplier when a sold product has none</label><span class="muted">Supplier requests are off until your supplier list is set up. Anything fixed stays fixed; turning these off closes the matching tasks.</span></div>' +
       '<fieldset class="field sd-wide sd-kpi-pick"><legend>Visible KPI cards</legend>' + KPI_LABELS.map((k) => '<label><input type="checkbox" data-kpi="' + k.key + '"' + (kp.has(k.key) ? ' checked' : '') + dis + '> ' + esc(k.label) + '</label>').join('') + '</fieldset>' +
       '</form>', { sub: can.settings ? 'Saved settings apply to everyone who opens the dashboard.' : 'You can see these settings, but only people with the Dashboard Settings permission can change them.',
       actions: can.settings ? '<button type="button" class="btn" id="sd-set-save">Save settings</button>' : '' }) + '<div id="sd-set-hist"></div>';
@@ -93,6 +96,7 @@ export function renderSettings(root, ctx) {
       const btn = e.currentTarget; btn.disabled = true; const $ = (id) => root.querySelector('#' + id); const msg = $('sd-set-msg'); msg.innerHTML = '';
       const vals = { default_date_range: $('sd-s-range').value, default_branch_id: $('sd-s-branch').value === '' ? null : Number($('sd-s-branch').value), low_stock_threshold: Number($('sd-s-low').value),
         slow_moving_days: Number($('sd-s-slow').value), dead_stock_days: Number($('sd-s-dead').value), overstock_units: Number($('sd-s-over').value), timezone: $('sd-s-tz').value,
+        issues_from: $('sd-s-from').value, issues_track_category: $('sd-s-cat').checked, issues_track_supplier: $('sd-s-sup').checked,
         visible_kpis: [...root.querySelectorAll('[data-kpi]')].filter((c) => c.checked).map((c) => c.dataset.kpi) };
       if (!meta.all_branches) delete vals.default_branch_id;
       try { const res = await api.saveSettings(vals); meta.settings = res.settings; toast(Object.keys(res.changed || {}).length ? 'Settings saved.' : 'Nothing changed.'); ctx.onSettingsSaved(); }

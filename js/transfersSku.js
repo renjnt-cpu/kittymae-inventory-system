@@ -1,9 +1,9 @@
 // Transfers -- the SKU Trace tab: pick a SKU from the SKU Catalog (read-only here; the catalog stays the master) and see where it is
 // right now by branch, what is promised or on the way, every transfer it has been on, and its whole stock-ledger history (sales,
 // adjustments, transfers ...). Links go to the SKU Catalog and Item Monitoring -- this screen never copies either of them.
-import { esc, qty, fmtDate, plural, friendly, tagBadge, statusBadge, routeText, emptyBox } from './transfersUi.js?v=20261006a';
-import { stockOf, sum } from './transfersLogic.js?v=20261006a';
-import { exportRows } from './transfersExport.js?v=20261006a';
+import { esc, qty, fmtDate, plural, friendly, tagBadge, statusBadge, routeText, emptyBox } from './transfersUi.js?v=20261006d';
+import { stockOf, sum } from './transfersLogic.js?v=20261006d';
+import { exportRows } from './transfersExport.js?v=20261006d';
 
 const $ = (id) => document.getElementById(id);
 export const newSkuState = () => ({ sku: '', product: null, ledger: [], loaded: false, q: '', results: [], msg: '' });

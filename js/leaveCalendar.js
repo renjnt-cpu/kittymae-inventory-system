@@ -4,7 +4,7 @@
 //  * Company Calendar (HR / Final Approver / Auditor): approved leave for everyone, with
 //    Department / Employee / Leave Type filters; clicking an entry opens the request.
 // Day, Week and Month views; on a phone the month grid shrinks to dots with an agenda list below.
-import { esc, statusBadge, fmtDate, rangeText, daysText, addDays } from './leaveUi.js?v=20261006a';
+import { esc, statusBadge, fmtDate, rangeText, daysText, addDays } from './leaveUi.js?v=20261006d';
 
 const $ = (id) => document.getElementById(id);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];

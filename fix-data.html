@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fix Product Data — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css?v=20261006d">
+<link rel="stylesheet" href="css/dq.css?v=20261006d">
+</head>
+<body>
+<main>
+  <div id="fix-root"><p class="muted">Loading…</p></div>
+</main>
+
+<script type="module">
+import { initShell } from './js/shell.js?v=20261006d';
+import { startFixPage } from './js/dqFix.js?v=20261006d';
+
+const employee = await initShell('fix-data');
+if (employee) {
+  try { await startFixPage({ root: document.getElementById('fix-root'), employee }); }
+  catch (err) { document.getElementById('fix-root').innerHTML = '<div class="msg error">We couldn\'t open this page right now. Please try again, or contact Admin if the problem continues.</div>'; console.error(err); }
+}
+</script>
+</body>
+</html>

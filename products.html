@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SKU Catalog — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261006a">
+<link rel="stylesheet" href="css/styles.css?v=20261006d">
 </head>
 <body>
 <main>
@@ -13,15 +13,15 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261006a';
+import { initShell, toast, esc } from './js/shell.js?v=20261006d';
 import {
   listProducts, updateProduct, getBranches, listAllInventoryQty, subscribeToChanges,
   requestProductEdit, listProductEditRequests, approveProductEdit, rejectProductEdit,
   setProductStatus, listProductLastChanges,
-} from './js/api.js?v=20261006a';
-import { branchColor } from './js/branchColors.js?v=20261006a';
-import { supabase } from './js/supabaseClient.js?v=20261006a';
-import { openSkuMovement } from './js/skuMovement.js?v=20261006a';
+} from './js/api.js?v=20261006d';
+import { branchColor } from './js/branchColors.js?v=20261006d';
+import { supabase } from './js/supabaseClient.js?v=20261006d';
+import { openSkuMovement } from './js/skuMovement.js?v=20261006d';
 
 // "History" on a SKU row: the read-only movement history (transfers, sales, adjustments ... with stock before / after) -- see js/skuMovement.js.
 const showHistory = (sku) => openSkuMovement(supabase, sku, { transferUrl: 'transfers.html?open=' });
@@ -54,6 +54,14 @@ if (employee) {
   // whether it applies immediately or goes through approval is isAdmin/needsApproval
   // below.
   const canEdit = canManage || employee.role === 'Branch Supervisor';
+  // Who gets the "Cost missing" notice, badge and filter: people the Position Access Matrix lets fix product costs (Data Fixes > datafix.cost).
+  const canFixCost = (employee.permissions || []).includes('datafix.cost');
+  // Supplier Price in the catalog (Ren, 2026-10-06: "in SKU catalog add supplier price in sku catalog details and give lian access and edit per item"):
+  // the "Sup. Price" column is for people holding catalog.cost_view or catalog.cost_edit (Admin by role; Lianessa by name -- Access Matrix > Operations), and the
+  // field in the Edit row is for catalog.cost_edit. The amounts come from catalog_costs(), which only answers those people, and a change is saved by
+  // catalog_cost_save() (checked, audited, closes the product's "Missing Product Cost" task). The menu below only decides what is SHOWN; the database decides what is allowed.
+  const canEditCost = (employee.permissions || []).includes('catalog.cost_edit');
+  const canViewCost = canEditCost || (employee.permissions || []).includes('catalog.cost_view');
   const isAdmin = employee.role === 'Admin';
   // Only Admin's edit applies immediately (Ren, 2026-09-18: "give me editable all item
   // only me so that if theres an error coming i can edit immediately") -- Manager and
@@ -82,6 +90,7 @@ if (employee) {
 
   root.innerHTML =
     '<p class="muted">New SKUs and stock now come in through <a href="item-monitoring.html">Item Monitoring → Record Factory Purchase</a> instead of here.</p>' +
+    '<div id="prod-cost-notice"></div>' +
     '<div class="card">' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
         '<div class="field" style="min-width:220px;"><label>Search</label><input type="text" id="f-search" placeholder="SKU, Sub SKU, or product name…"></div>' +
@@ -90,6 +99,8 @@ if (employee) {
         // Grams filter (Ren, 2026-10-04: "add sku catalog in per grams ... only those with per grams") -- "With gram weight"
         // keeps only SKUs that have an Est. Gram value; "Per Gram pricing" keeps only the SKUs priced as rate x weight.
         '<div class="field"><label>Grams</label><select id="f-grams"><option value="all">All</option><option value="weighed">With gram weight only</option><option value="pergram">Per Gram pricing only</option></select></div>' +
+        // Cost filter (Ren, 2026-10-06) -- only for people who may fix costs: just the products waiting for a cost, see missingCost below.
+        (canFixCost ? '<div class="field"><label>Cost</label><select id="f-cost"><option value="all">All</option><option value="missing">Cost missing only</option></select></div>' : '') +
         // Show the stock per branch as pieces (default) or as grams -- see gramsOf above.
         '<div class="field"><label>Show Qty In</label><select id="f-unit"><option value="pcs" selected>Pieces</option><option value="grams">Grams</option></select></div>' +
         // One Sort control, same as every other module (Ren's 2026-09-21 Filter + Sort
@@ -98,7 +109,7 @@ if (employee) {
         // competing controls.
         '<div class="field"><label>Sort By</label><select id="f-sort-branch">' +
           '<option value="sku" selected>SKU</option><option value="item_name">Item Name</option>' +
-          '<option value="category">Category</option><option value="price">Price</option><option value="total_pcs">Total Pcs (All Branches)</option>' +
+          '<option value="category">Category</option><option value="price">Price</option>' + (canViewCost ? '<option value="sup_price">Supplier Price</option>' : '') + '<option value="total_pcs">Total Pcs (All Branches)</option>' +
           '<optgroup label="Pcs at Branch">' + branches.map((b) => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('') + '</optgroup>' +
         '</select></div>' +
         // Descending default (Ren, 2026-09-24: "for SKU always show the direction in
@@ -137,6 +148,13 @@ if (employee) {
   let pendingEditRequests = []; // every Pending row this employee can see (RLS: all for Admin/Manager, own for a Supervisor)
   let qtyBySku = {}; // { sku: { branchId: qty_available } }, from listAllInventoryQty()
   let lastChangeBySku = {}; // { sku: { changer, changed_at, action } }, from listProductLastChanges() -- who last touched each SKU (Ren, 2026-09-21: "update admin name on the side who is last edited it")
+  // Ren, 2026-10-06: "show in the sku catalog the missing cost so lianessa can see and able to click the product who is missing cost".
+  // The SKUs that have an OPEN "Missing Product Cost" task -- the very same task records the Dashboard's Needs Attention section shows (dq_open_skus), so the
+  // count, the badges and the Dashboard can never disagree. Only SKUs, never an amount, and only for people allowed to fix costs.
+  // null = not loaded / not allowed -> no notice, no badges, no filter effect.
+  let missingCost = null;
+  // sku -> supplier price (per piece) for every product that has one; null = still loading, false = could not be loaded. Only for people who may see it.
+  let costs = null;
   let filterBranchId = null; // set by clicking a branch column header -- only SKUs with pcs > 0 there
   let searchTimer = null;
   let productsRealtimeTimer = null;
@@ -150,10 +168,12 @@ if (employee) {
   // ?q=<sku or name> opens the catalog already searched (used by the "Open in SKU Catalog" link on the Transfers SKU Trace)
   const presetSearch = new URLSearchParams(location.search).get('q');
   if (presetSearch) document.getElementById('f-search').value = presetSearch.slice(0, 80);
-  await Promise.all([loadProducts(), loadDiscontinued(), loadPendingEditRequests(), loadLastChanges()]);
+  await Promise.all([loadProducts(), loadDiscontinued(), loadPendingEditRequests(), loadLastChanges(), loadMissingCost(), loadCosts()]);
   document.getElementById('f-category').addEventListener('change', render);
   document.getElementById('f-grams').addEventListener('change', render);
   document.getElementById('f-unit').addEventListener('change', render);
+  const costSelect = document.getElementById('f-cost'); // only exists for people who can edit products
+  if (costSelect) costSelect.addEventListener('change', render);
   // Split by table so a search keystroke's debounce isn't sharing a timer with
   // inventory's -- a sale/stock-in elsewhere shouldn't cancel/delay a pending search,
   // and vice versa.
@@ -168,7 +188,8 @@ if (employee) {
       clearTimeout(productsRealtimeTimer);
       // Any products change (a direct edit, an approval, Discontinue/Reactivate) also
       // logs to product_change_log, so "last edited by" needs a refresh here too.
-      productsRealtimeTimer = setTimeout(async () => { await Promise.all([loadProducts(), loadDiscontinued(), loadLastChanges()]); }, 500);
+      // (also re-checks which SKUs still have no cost -- the SKU 26 sheet sync fills Supplier Price in and fires products changes)
+      productsRealtimeTimer = setTimeout(async () => { await Promise.all([loadProducts(), loadDiscontinued(), loadLastChanges(), loadMissingCost(), loadCosts()]); }, 500);
     }
   });
 
@@ -184,6 +205,7 @@ if (employee) {
     document.getElementById('f-status').value = 'all';
     document.getElementById('f-category').value = 'all';
     document.getElementById('f-grams').value = 'all';
+    if (costSelect) costSelect.value = 'all';
     document.getElementById('f-unit').value = 'pcs';
     document.getElementById('f-sort-branch').value = 'sku';
     document.getElementById('f-sort-dir').value = 'desc';
@@ -206,6 +228,59 @@ if (employee) {
       rows.forEach((r) => { lastChangeBySku[r.sku] = r; });
       render();
     } catch (err) { /* a failed lookup here shouldn't block the catalog from showing */ }
+  }
+
+  /** Every product's supplier price, for the "Sup. Price" column and the Edit row. Only people who hold the key get an answer; anyone else (or a failed
+   * lookup) simply has no cost column data -- it must never stop the catalog itself from showing. */
+  async function loadCosts() {
+    if (!canViewCost) return;
+    try {
+      const { data, error } = await supabase.rpc('catalog_costs');
+      costs = !error && data && data.ok ? new Map(Object.entries(data.costs || {}).map(([k, v]) => [k, Number(v)])) : false;
+    } catch (err) { costs = false; }
+    render();
+  }
+  // (a function declaration, not a const: render() can run before this line is reached while the page is still loading)
+  function costCellHtml(p) {
+    if (costs === null) return '<span class="muted">…</span>';
+    if (costs === false) return '—';
+    const c = costs.get(p.sku);
+    if (c > 0) return money(c);
+    return canEditCost
+      ? '<button type="button" class="badge lv-orange" data-act="edit-cost" data-sku="' + esc(p.sku) + '" style="border:0;cursor:pointer;font-family:inherit;" title="No supplier price yet — click to add it">Add supplier price</button>'
+      : '<span class="badge lv-orange">Missing</span>';
+  }
+
+  /** Which SKUs have an open Missing Product Cost task (see missingCost above). A failed lookup, or a person who may not fix costs,
+   * just leaves the notice and badges off -- it must never stop the catalog itself from showing. */
+  async function loadMissingCost() {
+    if (!canFixCost) return;
+    try {
+      const { data, error } = await supabase.rpc('dq_open_skus', { p_type: 'MISSING_PRODUCT_COST' });
+      missingCost = !error && data && data.ok ? new Set(data.skus || []) : null;
+    } catch (err) { missingCost = null; }
+    render();
+  }
+
+  /** The banner above the filters: how many products are waiting for a cost, a button that goes straight to the fix screen, and a
+   * one-click way to list just those here. The count, the filter and the badges all read the same missingCost set. */
+  function renderCostNotice() {
+    const box = document.getElementById('prod-cost-notice');
+    if (!box) return;
+    const n = missingCost ? missingCost.size : 0;
+    if (!canFixCost || !missingCost || !n) { box.innerHTML = ''; return; }
+    const costSel = document.getElementById('f-cost');
+    const listing = !!costSel && costSel.value === 'missing';
+    box.innerHTML = '<div class="msg lv-warn" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">' +
+      '<div><b>⚠ ' + n.toLocaleString('en-PH') + ' product' + (n === 1 ? ' needs' : 's need') + ' cost information.</b> ' +
+        'Click <b>Cost missing</b> on a product to fix it, or fix them one after another.</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;"><a class="btn small" style="text-decoration:none;display:inline-block;" href="fix-data.html?type=cost">FIX COSTS</a>' +
+      '<button type="button" class="btn small secondary" id="cost-toggle">' + (listing ? 'Show all products' : 'Show only these') + '</button></div>' +
+    '</div>';
+    box.querySelector('#cost-toggle').addEventListener('click', () => {
+      if (costSel) costSel.value = listing ? 'all' : 'missing';
+      render();
+    });
   }
 
   /** Ren, 2026-09-21: "update admin name on the side who is last edited it" -- whoever
@@ -360,6 +435,7 @@ if (employee) {
 
   function render() {
     let rows = allProducts; // already scoped to the current search + status at the query level
+    renderCostNotice();
 
     // Searching a branch name auto-applies "Sort by Branch" for that branch, ascending
     // (fewest pcs first), and syncs the two dropdowns to show what's driving it -- the
@@ -386,6 +462,11 @@ if (employee) {
     const gramsFilter = document.getElementById('f-grams').value;
     if (gramsFilter === 'weighed') rows = rows.filter((p) => Number(p.gross_weight_g) > 0);
     else if (gramsFilter === 'pergram') rows = rows.filter((p) => p.pricing_mode === 'Per Gram');
+
+    // Cost filter (editors only): just the SKUs with no cost yet. Looked up fresh here, not captured earlier, so it works before
+    // the one-time wiring below has run.
+    const costFilterEl = document.getElementById('f-cost');
+    if (costFilterEl && costFilterEl.value === 'missing' && missingCost) rows = rows.filter((p) => missingCost.has(p.sku));
 
     // Click a branch column header to filter down to just the SKUs actually stocked
     // there (pcs > 0) -- click it again to clear. Applied before the tiles below so
@@ -428,6 +509,8 @@ if (employee) {
       category: (a, b) => String(a.category || '').localeCompare(String(b.category || '')),
       price: (a, b) => Number(effectivePrice(a) || 0) - Number(effectivePrice(b) || 0),
       total_pcs: (a, b) => totalPcsFor(a) - totalPcsFor(b),
+      // Supplier Price (only offered to people who may see it): a product with no cost counts as 0, so "Ascending" brings the ones still missing a cost to the top.
+      sup_price: (a, b) => ((costs && costs.get(a.sku)) || 0) - ((costs && costs.get(b.sku)) || 0),
     };
     const dirMul = document.getElementById('f-sort-dir').value === 'asc' ? 1 : -1;
     const genericCmp = GENERIC_SORT_COMPARATORS[sortKey];
@@ -464,7 +547,7 @@ if (employee) {
     // branch, same as always.
     const sortedBranchId = !genericCmp && sortKey !== 'none' ? Number(sortKey) : null;
     const displayBranches = sortedBranchId != null ? branches.filter((b) => b.id === sortedBranchId) : branches;
-    const colCount = 9 + displayBranches.length;
+    const colCount = 9 + displayBranches.length + (canViewCost ? 1 : 0);
     // SKUs in the list that have pcs somewhere but no Est. Gram -- only matters (and is only shown) in grams mode
     const noWeightStocked = inGrams ? rows.filter((p) => !(Number(p.gross_weight_g) > 0) && Object.values(qtyBySku[p.sku] || {}).some((q) => Number(q) > 0)).length : 0;
     const pendingSkus = new Set(pendingEditRequests.map((r) => r.sku));
@@ -478,11 +561,14 @@ if (employee) {
       return '<tr data-row-id="' + esc(p.sku) + '">' +
           '<td data-label="SKU"><b>' + esc(p.sku) + '</b>' +
             (pendingSkus.has(p.sku) ? ' <span class="badge pending" title="An edit request for this SKU is awaiting Admin or Branch Supervisor approval">Pending Edit</span>' : '') +
+            // Clickable: opens the focused "Fix Product Cost" screen for exactly this product (Save & Next carries on with the others).
+            (missingCost && missingCost.has(p.sku) ? ' <a class="badge lv-orange" href="fix-data.html?type=cost&sku=' + encodeURIComponent(p.sku) + '" style="text-decoration:none;cursor:pointer;" title="This product has no cost yet — click to fix it">Cost missing</a>' : '') +
           '</td>' +
           '<td data-label="Product Name">' + esc(p.item_name) + lastChangeCellHtml(p.sku) + '</td>' +
           '<td data-label="Category">' + esc(p.category || '—') + '</td>' +
           '<td data-label="Sub SKU">' + esc(p.sub_sku || '—') + '</td>' +
           '<td data-label="Price">' + priceCellHtml(p) + '</td>' +
+          (canViewCost ? '<td data-label="Sup. Price">' + costCellHtml(p) + '</td>' : '') +
           '<td data-label="Est. Gram">' + weight(p.gross_weight_g) + '</td>' +
           '<td data-label="' + (inGrams ? 'Total Grams' : 'Total Pcs') + '"><b>' + (inGrams ? (hasGrams ? gramsNum(gramsOf(p, totalPcs)) : '—') : totalPcs.toLocaleString('en-PH')) + '</b></td>' +
           '<td data-label="Status"><span class="badge ' + (p.product_status === 'Active' ? 'ok' : 'low') + '">' + esc(p.product_status) + '</span></td>' +
@@ -493,7 +579,8 @@ if (employee) {
           }).join('') +
           '<td data-label="Actions" style="white-space:nowrap;">' +
             '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="history">History</button> ' +
-            (canEdit ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="edit">Edit</button> ' : '') +
+            (canEdit ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="edit">Edit</button> '
+              : canEditCost ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="edit">Edit cost</button> ' : '') +
             (canDiscontinue
               ? (p.product_status === 'Active'
                   ? '<button class="btn small secondary" data-sku="' + esc(p.sku) + '" data-act="discontinue">Discontinue</button>'
@@ -519,7 +606,7 @@ if (employee) {
       (sortedBranchId != null ? '<p class="muted" style="margin:0 0 8px;">Sorted by ' + (inGrams ? 'grams' : 'pcs') + ' at <b>' + esc((branches.find((b) => b.id === sortedBranchId) || {}).name) + '</b> — only that branch\'s column is shown; pick a different Sort By to see every branch again.</p>' : '') +
       (branchMatch ? '<p class="muted" style="margin:0 0 8px;">🔎 Sorted by <b>' + esc(branchMatch.name) + '</b>, fewest pcs first — clear the search to sort another way.</p>' : '') +
       countNotice + '<div class="table-scroll table-mini"><table><thead><tr style="white-space:nowrap;">' +
-      '<th>SKU</th><th>Product Name</th><th>Category</th><th>Sub SKU</th><th>Price</th><th>Est. Gram</th><th>' + (inGrams ? 'Total Grams' : 'Total Pcs') + '</th><th>Status</th>' + branchThs + '<th></th>' +
+      '<th>SKU</th><th>Product Name</th><th>Category</th><th>Sub SKU</th><th>Price</th>' + (canViewCost ? '<th>Sup. Price</th>' : '') + '<th>Est. Gram</th><th>' + (inGrams ? 'Total Grams' : 'Total Pcs') + '</th><th>Status</th>' + branchThs + '<th></th>' +
       '</tr></thead><tbody>' + renderRows.map(rowHtml).join('') + '</tbody></table></div>';
 
     list.querySelectorAll('[data-branch-filter]').forEach((th) => th.addEventListener('click', () => {
@@ -530,9 +617,11 @@ if (employee) {
 
     list.querySelectorAll('[data-act="history"]').forEach((btn) => btn.addEventListener('click', () => showHistory(btn.dataset.sku)));
 
-    if (!canEdit) return;
+    if (!canEdit && !canEditCost) return;
 
     list.querySelectorAll('[data-act="edit"]').forEach((btn) => btn.addEventListener('click', () => openEdit(btn.dataset.sku, rows)));
+    // "Add supplier price" in the Sup. Price column opens the same Edit row with the cursor already in the cost box
+    list.querySelectorAll('[data-act="edit-cost"]').forEach((btn) => btn.addEventListener('click', () => openEdit(btn.dataset.sku, rows, true)));
 
     if (!canDiscontinue) return;
 
@@ -551,49 +640,102 @@ if (employee) {
   /** Opens an inline edit form pre-filled with the SKU's current values, same pattern
    * as Bills' edit-in-place row. SKU itself is never editable — it's the primary key
    * every other table (inventory, ledger, transfers) references by. */
-  function openEdit(sku, rows) {
+  function openEdit(sku, rows, focusCost) {
     const p = rows.find((r) => r.sku === sku);
     const cell = document.querySelector('tr[data-edit-for="' + sku + '"]');
     const isOpen = cell.style.display !== 'none';
     document.querySelectorAll('.edit-row').forEach((r) => { r.style.display = 'none'; r.querySelector('td').innerHTML = ''; });
     if (isOpen) return;
     cell.style.display = '';
+    // The Supplier Price box (catalog.cost_edit): its own save, separate from the product fields -- see the submit handler.
+    // It is only drawn once the costs have loaded, so an empty box can never be mistaken for "no cost" while the real one is still on its way.
+    const costKnown = costs instanceof Map;
+    const showCostBox = canEditCost && costKnown;
+    const currentCost = costKnown && costs.get(sku) > 0 ? costs.get(sku) : null;
     cell.querySelector('td').innerHTML =
       '<form class="edit-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
-        (needsApproval ? '<p class="muted" style="width:100%;margin:0 0 4px;">Submitted for Admin or Branch Supervisor approval -- won\'t apply until reviewed.</p>' : '') +
-        '<div class="field"><label>Product Name</label><input type="text" name="itemName" value="' + esc(p.item_name) + '" required></div>' +
-        '<div class="field"><label>Category</label><input type="text" name="category" value="' + esc(p.category || '') + '"></div>' +
-        '<div class="field"><label>Sub SKU</label><input type="text" name="subSku" value="' + esc(p.sub_sku || '') + '"></div>' +
-        '<div class="field"><label>Price (PHP)</label><input type="number" name="price" step="0.01" min="0" value="' + (p.system_selling_price ?? '') + '" title="Used when Pricing is Per Piece"></div>' +
-        '<div class="field"><label>Est. Gram</label><input type="number" name="grossWeightG" step="0.001" min="0" value="' + (p.gross_weight_g ?? '') + '"></div>' +
-        '<div class="field"><label>Pricing</label><select name="pricingMode"><option value="Per Piece"' + (p.pricing_mode !== 'Per Gram' ? ' selected' : '') + '>Per Piece</option><option value="Per Gram"' + (p.pricing_mode === 'Per Gram' ? ' selected' : '') + '>Per Gram</option></select></div>' +
-        '<div class="field"><label>Price per Gram (PHP)</label><input type="number" name="pricePerGram" step="0.01" min="0" value="' + (p.current_gold_rate_per_g ?? '') + '" title="Used when Pricing is Per Gram -- selling price = this x Est. Gram"></div>' +
-        '<button class="btn small" type="submit">' + (needsApproval ? 'Submit for Approval' : 'Save') + '</button> ' +
+        // People who may only fix costs on the Fix Product Data screen (and cannot type one here) are pointed there; everyone who can type it here needs no pointer.
+        (!canEditCost && missingCost && missingCost.has(sku) ? '<p class="msg lv-warn" style="width:100%;margin:0 0 4px;"><b>No cost yet.</b> <a href="fix-data.html?type=cost&sku=' + encodeURIComponent(sku) + '">Fix this product\'s cost</a> -- it is not changed on this form.</p>' : '') +
+        (canEditCost && !costKnown ? '<p class="muted" style="width:100%;margin:0 0 4px;">The supplier price is not available right now. Close this and try again in a moment.</p>' : '') +
+        (canEdit && needsApproval ? '<p class="muted" style="width:100%;margin:0 0 4px;">' + (showCostBox
+          ? 'Product changes are submitted for Admin or Branch Supervisor approval and won\'t apply until reviewed. The supplier price is saved right away.'
+          : 'Submitted for Admin or Branch Supervisor approval -- won\'t apply until reviewed.') + '</p>' : '') +
+        (!canEdit ? '<div class="field" style="min-width:220px;"><label>Product</label><div>' + esc(p.item_name) + ' <span class="muted">' + esc(sku) + '</span></div></div>' : '') +
+        (canEdit
+          ? '<div class="field"><label>Product Name</label><input type="text" name="itemName" value="' + esc(p.item_name) + '" required></div>' +
+            '<div class="field"><label>Category</label><input type="text" name="category" value="' + esc(p.category || '') + '"></div>' +
+            '<div class="field"><label>Sub SKU</label><input type="text" name="subSku" value="' + esc(p.sub_sku || '') + '"></div>' +
+            '<div class="field"><label>Price (PHP)</label><input type="number" name="price" step="0.01" min="0" value="' + (p.system_selling_price ?? '') + '" title="Used when Pricing is Per Piece"></div>' +
+            '<div class="field"><label>Est. Gram</label><input type="number" name="grossWeightG" step="0.001" min="0" value="' + (p.gross_weight_g ?? '') + '"></div>' +
+            '<div class="field"><label>Pricing</label><select name="pricingMode"><option value="Per Piece"' + (p.pricing_mode !== 'Per Gram' ? ' selected' : '') + '>Per Piece</option><option value="Per Gram"' + (p.pricing_mode === 'Per Gram' ? ' selected' : '') + '>Per Gram</option></select></div>' +
+            '<div class="field"><label>Price per Gram (PHP)</label><input type="number" name="pricePerGram" step="0.01" min="0" value="' + (p.current_gold_rate_per_g ?? '') + '" title="Used when Pricing is Per Gram -- selling price = this x Est. Gram"></div>'
+          : '') +
+        (showCostBox
+          ? '<div class="field"><label>Supplier Price (PHP)</label><input type="text" name="supplierPrice" inputmode="decimal" autocomplete="off" value="' + (currentCost != null ? currentCost.toFixed(2) : '') + '" placeholder="' + (currentCost != null ? '' : 'No supplier price yet') + '" title="What the supplier charges for one piece. Leave it empty to keep it as it is.">' +
+              '<span class="muted" style="font-size:11px;">Per piece. Leave empty to keep it as it is.</span></div>'
+          : '') +
+        '<button class="btn small" type="submit">' + (canEdit && needsApproval && !showCostBox ? 'Submit for Approval' : 'Save') + '</button> ' +
         '<button class="btn small secondary" type="button" data-cancel="1">Cancel</button>' +
       '</form>';
     const form = cell.querySelector('.edit-form');
     form.querySelector('[data-cancel]').addEventListener('click', () => { cell.style.display = 'none'; form.remove(); });
+    if (focusCost && form.supplierPrice) { form.supplierPrice.focus(); form.supplierPrice.select(); }
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const f = ev.target;
-      const fields = {
-        itemName: f.itemName.value.trim(), category: f.category.value.trim(), subSku: f.subSku.value.trim(),
-        price: f.price.value, grossWeightG: f.grossWeightG.value,
-        pricingMode: f.pricingMode.value, pricePerGram: f.pricePerGram.value,
-      };
+      const saveBtn = f.querySelector('button[type="submit"]');
+      saveBtn.disabled = true;
       try {
-        if (needsApproval) {
-          await requestProductEdit({ sku, ...fields });
-          toast('prod-msg', 'Edit request submitted -- awaiting Admin or Branch Supervisor approval.', false);
-          await loadPendingEditRequests();
-          render();
-        } else {
-          await updateProduct(sku, fields);
-          toast('prod-msg', 'SKU updated.', false);
-          await loadProducts();
+        // 1) The supplier price goes first and on its own: catalog_cost_save() checks the permission, validates the number, writes the audit trail and
+        // closes the product's "Missing Product Cost" task. If it says no, nothing else on the form is touched, so a bad cost never half-saves the product.
+        let costSaved = false;
+        if (f.supplierPrice) {
+          const raw = String(f.supplierPrice.value || '').replace(/php|₱|,|\s/gi, '');
+          if (raw !== '') {
+            const n = Number(raw);
+            if (!/^-?(\d+\.?\d*|\.\d+)$/.test(raw) || !isFinite(n)) { toast('prod-msg', 'Enter a valid cost.', true); return; }
+            if (n < 0) { toast('prod-msg', 'Price cannot be negative.', true); return; }
+            if (n === 0) { toast('prod-msg', 'Enter a valid cost.', true); return; }
+            if (currentCost == null || Math.round(n * 100) !== Math.round(currentCost * 100)) {
+              const { data, error } = await supabase.rpc('catalog_cost_save', { p_sku: sku, p_cost: n });
+              if (error || !data) { toast('prod-msg', 'We couldn\'t save this change. Please try again.', true); return; }
+              if (!data.ok) { toast('prod-msg', data.message || 'We couldn\'t save this change. Please try again.', true); return; }
+              costSaved = !data.unchanged;
+            }
+          }
         }
+        // 2) The product fields, exactly as before. Without a cost box on the form that is always the whole save; with one, they are only sent when
+        // something other than the cost was changed (so fixing a cost never creates an empty approval request or touches the product).
+        let productSaved = false, requested = false;
+        if (canEdit) {
+          const fields = {
+            itemName: f.itemName.value.trim(), category: f.category.value.trim(), subSku: f.subSku.value.trim(),
+            price: f.price.value, grossWeightG: f.grossWeightG.value,
+            pricingMode: f.pricingMode.value, pricePerGram: f.pricePerGram.value,
+          };
+          const same = (a, b) => ((a === '' || a == null) ? (b === '' || b == null) : (b !== '' && b != null && Number(a) === Number(b)));
+          const productChanged = !f.supplierPrice
+            || fields.itemName !== (p.item_name || '') || fields.category !== (p.category || '') || fields.subSku !== (p.sub_sku || '')
+            || !same(fields.price, p.system_selling_price) || !same(fields.grossWeightG, p.gross_weight_g)
+            || fields.pricingMode !== (p.pricing_mode === 'Per Gram' ? 'Per Gram' : 'Per Piece') || !same(fields.pricePerGram, p.current_gold_rate_per_g);
+          if (productChanged) {
+            if (needsApproval) { await requestProductEdit({ sku, ...fields }); requested = true; }
+            else { await updateProduct(sku, fields); productSaved = true; }
+          }
+        }
+        if (!costSaved && !productSaved && !requested) { toast('prod-msg', 'Nothing was changed.', false); return; }
+        const said = [];
+        if (costSaved) said.push('Supplier price saved.');
+        if (productSaved) said.push('SKU updated.');
+        if (requested) said.push('Edit request submitted -- awaiting Admin or Branch Supervisor approval.');
+        toast('prod-msg', said.join(' '), false);
+        if (requested) await loadPendingEditRequests();
+        await Promise.all([productSaved || costSaved ? loadProducts() : Promise.resolve(), costSaved ? loadCosts() : Promise.resolve(), costSaved ? loadMissingCost() : Promise.resolve()]);
+        if (requested && !productSaved && !costSaved) render();
       } catch (err) {
         toast('prod-msg', String(err.message || err), true);
+      } finally {
+        if (saveBtn.isConnected) saveBtn.disabled = false;
       }
     });
   }

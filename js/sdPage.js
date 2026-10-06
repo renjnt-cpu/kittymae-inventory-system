@@ -1,14 +1,14 @@
 // Sales & Profit Dashboard -- the page: title, filters, data-quality notes, the tabs, and the glue between them.
 // Who sees what is decided by the database (keys "dashboard.*" in the Position Access Matrix); this page only hides what it is told not to ask for.
-import { api, esc, friendly, fmtDateTime, int, money } from './sdCore.js?v=20261006a';
-import { mountShell, loadingBox, errorBox, lockedBox, badge, toast, openDrawer } from './sdUi.js?v=20261006a';
-import { createFilters } from './sdFilters.js?v=20261006a';
-import { renderOverview } from './sdOverview.js?v=20261006a';
-import { renderSales, renderProducts, renderChannels, renderPurchases, renderInventory, renderExpenses, renderPayments } from './sdTabs.js?v=20261006a';
-import { renderCapital } from './sdCapital.js?v=20261006a';
-import { renderReports, renderSettings } from './sdMore.js?v=20261006a';
-import { createTable } from './sdTable.js?v=20261006a';
-import { COLS, ROW_TITLE } from './sdColumns.js?v=20261006a';
+import { api, esc, friendly, fmtDateTime, int, money } from './sdCore.js?v=20261006d';
+import { mountShell, loadingBox, errorBox, lockedBox, badge, toast, openDrawer } from './sdUi.js?v=20261006d';
+import { createFilters } from './sdFilters.js?v=20261006d';
+import { renderOverview } from './sdOverview.js?v=20261006d';
+import { renderSales, renderProducts, renderChannels, renderPurchases, renderInventory, renderExpenses, renderPayments } from './sdTabs.js?v=20261006d';
+import { renderCapital } from './sdCapital.js?v=20261006d';
+import { renderReports, renderSettings } from './sdMore.js?v=20261006d';
+import { createTable } from './sdTable.js?v=20261006d';
+import { COLS, ROW_TITLE } from './sdColumns.js?v=20261006d';
 
 const TABS = [
   { id: 'overview', label: 'Overview', show: () => true, make: renderOverview },
@@ -23,6 +23,20 @@ const TABS = [
   { id: 'reports', label: 'Reports', show: () => true, make: renderReports },
   { id: 'settings', label: 'Settings', show: () => true, make: renderSettings },
 ];
+
+// The owner's line under a note a Manager/Supervisor can fix: the same shared task records the Dashboard's "Needs Attention" shows (status, who, how far).
+const TASK_STATUS = { OPEN: ['OPEN', 'orange'], IN_PROGRESS: ['IN PROGRESS', 'blue'], RESOLVED: ['RESOLVED', 'green'] };
+const TASK_MODE = { cost_missing: 'cost', not_in_catalog: 'sku', purchase_unpriced: 'purchase' };
+function taskLine(t, key) {
+  if (!t) return '';
+  const [label, tone] = TASK_STATUS[t.status] || TASK_STATUS.OPEN;
+  const names = (t.assigned || []).filter(Boolean).join(', ');
+  return '<div class="sd-task" style="display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-top:4px;">' + badge(label, tone) +
+    '<span>' + (t.total ? int(t.fixed) + ' / ' + int(t.total) + ' fixed · ' + int(t.remaining) + ' remaining' : 'No tasks yet') + '</span>' +
+    '<span>' + (t.open ? (names ? 'Assigned: ' + esc(names) : 'Not assigned yet') : '') + '</span>' +
+    (t.total ? '<span style="flex:1 1 120px;min-width:90px;max-width:220px;height:7px;background:#eadfae;border-radius:5px;overflow:hidden;display:inline-block;"><i style="display:block;height:100%;width:' + Math.max(0, Math.min(100, Number(t.pct) || 0)) + '%;background:' + (t.open ? '#e0a800' : '#2e7d32') + ';"></i></span>' : '') +
+    (TASK_MODE[key] ? '<a href="fix-data.html?type=' + TASK_MODE[key] + '">' + (t.open ? 'Open the fix list →' : 'See the fix list →') + '</a>' : '') + '</div>';
+}
 
 function ago(iso) {
   if (!iso) return 'never';
@@ -79,9 +93,9 @@ export async function startDashboardPage({ root, employee }) {
       const items = q.items || [], warn = items.filter((i) => i.severity === 'warn'), info = items.filter((i) => i.severity !== 'warn');
       if (!items.length) { box.innerHTML = ''; return; }
       const cost = items.find((i) => i.key === 'cost_missing');
-      box.innerHTML = (cost ? '<div class="sd-alert"><b>⚠ ' + esc(cost.title) + '</b><div>' + esc(cost.detail) + '</div>' + (can.cost ? '<button type="button" class="btn small secondary" id="sd-show-missing">Show the products missing a cost</button>' : '') + '</div>' : '') +
+      box.innerHTML = (cost ? '<div class="sd-alert"><b>⚠ ' + esc(cost.title) + '</b><div>' + esc(cost.detail) + '</div>' + taskLine(cost.task, 'cost_missing') + (can.cost ? '<button type="button" class="btn small secondary" id="sd-show-missing">Show the products missing a cost</button>' : '') + '</div>' : '') +
         '<details class="sd-quality card"><summary>' + (warn.length ? badge(warn.length + ' to fix', 'orange') + ' ' : '') + (info.length ? badge(info.length + ' to know', 'blue') + ' ' : '') + '<b>Data notes</b> <span class="muted">— what is missing or incomplete in the figures below</span></summary><ul>' +
-        items.map((i) => '<li>' + badge(i.severity === 'warn' ? 'Fix' : 'Note', i.severity === 'warn' ? 'orange' : 'blue') + ' <b>' + esc(i.title) + '</b><div class="muted">' + esc(i.detail) + '</div></li>').join('') + '</ul></details>';
+        items.map((i) => '<li>' + badge(i.severity === 'warn' ? 'Fix' : 'Note', i.severity === 'warn' ? 'orange' : 'blue') + ' <b>' + esc(i.title) + '</b><div class="muted">' + esc(i.detail) + '</div>' + taskLine(i.task, i.key) + '</li>').join('') + '</ul></details>';
       const mb = box.querySelector('#sd-show-missing');
       if (mb) mb.addEventListener('click', () => {
         openDrawer({ wide: true, title: 'Products missing a cost', sub: 'Sold in the period, or in stock, with no Supplier Price in the SKU Catalog',

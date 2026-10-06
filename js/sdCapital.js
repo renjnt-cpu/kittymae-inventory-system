@@ -1,10 +1,10 @@
 // Sales & Profit Dashboard -- the Capital tab: owner capital (initial, additional, withdrawals), equipment, cash, and the estimated owner equity.
 // Capital is kept apart from sales and from stock. An entry is never deleted: a wrong one is voided with a reason, and every change is in the audit trail.
-import { api, esc, money, int, fmtDate, friendly, todayIn } from './sdCore.js?v=20261006a';
-import { panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, closeDrawer, toast, drawerBody } from './sdUi.js?v=20261006a';
-import { createTable, staticTable } from './sdTable.js?v=20261006a';
-import { COLS, ROW_TITLE } from './sdColumns.js?v=20261006a';
-import { stats } from './sdTabs.js?v=20261006a';
+import { api, esc, money, int, fmtDate, friendly, todayIn } from './sdCore.js?v=20261006d';
+import { panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, closeDrawer, toast, drawerBody } from './sdUi.js?v=20261006d';
+import { createTable, staticTable } from './sdTable.js?v=20261006d';
+import { COLS, ROW_TITLE } from './sdColumns.js?v=20261006d';
+import { stats } from './sdTabs.js?v=20261006d';
 
 const TYPES = [
   { id: 'INITIAL_CAPITAL', label: 'Initial capital', hint: 'The money the owner first put into the business.' },

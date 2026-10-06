@@ -1,10 +1,10 @@
 // Sales & Profit Dashboard -- the Overview tab: 18 KPI cards (each with the previous comparable period, the change, and a green / red / gray arrow that follows
 // what the change MEANS: lower expenses are good, higher refunds are not), the sales trend, the profit breakdown, channel / product / expense / stock / capital panels,
 // and the detailed sales table. Click a KPI card to see the transactions behind it.
-import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS, rangeText, fmtDateTime } from './sdCore.js?v=20261006a';
-import { kpiCard, panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, hbars, donut, lineChart, waterfall, trendLabels, seriesOf, C, PALETTE, kvRow, closeDrawer } from './sdUi.js?v=20261006a';
-import { createTable } from './sdTable.js?v=20261006a';
-import { COLS, ROW_TITLE } from './sdColumns.js?v=20261006a';
+import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS, rangeText, fmtDateTime } from './sdCore.js?v=20261006d';
+import { kpiCard, panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, hbars, donut, lineChart, waterfall, trendLabels, seriesOf, C, PALETTE, kvRow, closeDrawer } from './sdUi.js?v=20261006d';
+import { createTable } from './sdTable.js?v=20261006d';
+import { COLS, ROW_TITLE } from './sdColumns.js?v=20261006d';
 
 // ---------------------------------------------------------------- the 18 cards
 const prevText = (p, f) => 'Previous: ' + (p === null || p === undefined ? '—' : f(p));

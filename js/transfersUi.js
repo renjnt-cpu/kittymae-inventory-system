@@ -2,9 +2,9 @@
 // uses, the inline confirmation panel (the app never uses confirm() / prompt()), and a few chart helpers. KPI cards, money-free number
 // formatting and the generic charts come from billsUi.js / refundsUi.js -- the same look across the modules is deliberate, and so is the
 // shared (bl-) layout CSS.
-import { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText, plural, friendly, emptyBox, progressBar, donut, hbars, stackedHbars, COLORS, kpiCard } from './billsUi.js?v=20261006a';
-import { columnPairs, changeText } from './refundsUi.js?v=20261006a';
-import { branchBadge, branchColor } from './branchColors.js?v=20261006a';
+import { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText, plural, friendly, emptyBox, progressBar, donut, hbars, stackedHbars, COLORS, kpiCard } from './billsUi.js?v=20261006d';
+import { columnPairs, changeText } from './refundsUi.js?v=20261006d';
+import { branchBadge, branchColor } from './branchColors.js?v=20261006d';
 export { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText, plural, friendly, emptyBox, progressBar, donut, hbars, stackedHbars, COLORS, kpiCard, columnPairs, changeText, branchBadge, branchColor };
 
 export const qty = (n) => (n === null || n === undefined || n === '' ? '—' : Number(n).toLocaleString('en-PH'));
