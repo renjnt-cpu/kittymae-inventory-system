@@ -2,11 +2,11 @@
 //   Approval Queue  every request still waiting for a decision, most urgent first, with Review / Approve / Reject on each
 //   Payments        approved refunds that still owe money, what the company owes in total, and the payment ledger
 //   Completed       refunds that were paid in full, with how long they took and whether proof is on file
-import { esc, money, fmtDate, plural, kpiCard, statusBadge, priorityBadge, agingBadge, flagBadges, proofBadge, progressBar } from './refundsUi.js?v=20261007c';
-import { agingKey, attentionScore, liability, inPeriod, sum, daysBetween, uniqueSorted } from './refundsLogic.js?v=20261007c';
-import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './refundsFilters.js?v=20261007c';
-import { actionButtons, alertRow, bindActions } from './refundsActions.js?v=20261007c';
-import { liabilityHtml } from './refundsDashboard.js?v=20261007c';
+import { esc, money, fmtDate, plural, kpiCard, statusBadge, priorityBadge, agingBadge, flagBadges, proofBadge, progressBar } from './refundsUi.js?v=20261007d';
+import { agingKey, attentionScore, liability, inPeriod, sum, daysBetween, uniqueSorted } from './refundsLogic.js?v=20261007d';
+import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './refundsFilters.js?v=20261007d';
+import { actionButtons, alertRow, bindActions } from './refundsActions.js?v=20261007d';
+import { liabilityHtml } from './refundsDashboard.js?v=20261007d';
 
 // ================================================================ approval queue
 const QUEUE_GROUPS = [

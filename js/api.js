@@ -2,8 +2,8 @@
 // `supabase` directly, so the query shape lives in one place. Mirrors the old app's
 // `api(name, ...args)` helper in spirit, just split into named functions since
 // supabase-js's table/RPC calls aren't as uniformly shaped as google.script.run's.
-import { supabase } from './supabaseClient.js?v=20261007c';
-import { localDateStr } from './uiKit.js?v=20261007c';
+import { supabase } from './supabaseClient.js?v=20261007d';
+import { localDateStr } from './uiKit.js?v=20261007d';
 
 /** Caps the core ledger list queries (Sales, Layaway, Scrap, Subasta) so a tab load
  * fetches recent history instead of the entire table unconditionally -- these had no
@@ -1085,7 +1085,8 @@ export async function listAllEmployee201Files() {
     // Ascending by employee_code -- oldest-onboarded first (Ren: "MK23 start are the
     // first one on top") -- not hire_date, since employee_code already encodes
     // onboarding order and is what he actually wants this sorted by.
-    supabase.from('employees').select('id, employee_code, full_name, role, position, status, hire_date, contact_number, branches(name)').order('employee_code', { ascending: true }),
+    // explicit relationship: since the employee_branch_access table (migration 166) exists, a bare branches(name) is ambiguous (PGRST201 / HTTP 300)
+    supabase.from('employees').select('id, employee_code, full_name, role, position, status, hire_date, contact_number, branches!employees_branch_id_fkey(name)').order('employee_code', { ascending: true }),
     supabase.from('employee_201_files').select('*'),
   ]);
   if (empErr) throw new Error(empErr.message);

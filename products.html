@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SKU Catalog — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261007c">
+<link rel="stylesheet" href="css/styles.css?v=20261007d">
 </head>
 <body>
 <main>
@@ -13,15 +13,15 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261007c';
+import { initShell, toast, esc } from './js/shell.js?v=20261007d';
 import {
   listProducts, updateProduct, getBranches, listAllInventoryQty, subscribeToChanges,
   requestProductEdit, listProductEditRequests, approveProductEdit, rejectProductEdit,
   setProductStatus, listProductLastChanges,
-} from './js/api.js?v=20261007c';
-import { branchColor } from './js/branchColors.js?v=20261007c';
-import { supabase } from './js/supabaseClient.js?v=20261007c';
-import { openSkuMovement } from './js/skuMovement.js?v=20261007c';
+} from './js/api.js?v=20261007d';
+import { branchColor } from './js/branchColors.js?v=20261007d';
+import { supabase } from './js/supabaseClient.js?v=20261007d';
+import { openSkuMovement } from './js/skuMovement.js?v=20261007d';
 
 // "History" on a SKU row: the read-only movement history (transfers, sales, adjustments ... with stock before / after) -- see js/skuMovement.js.
 const showHistory = (sku) => openSkuMovement(supabase, sku, { transferUrl: 'transfers.html?open=' });

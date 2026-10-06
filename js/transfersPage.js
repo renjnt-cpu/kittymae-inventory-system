@@ -5,19 +5,19 @@
 // One loaded copy of the data (ctx) feeds every tab; a change anywhere goes through the database, then ctx.refresh() reloads and
 // redraws. Stock is READ from the real inventory and ledger on every load -- this page keeps no stock of its own. Who may do what is
 // decided by the database; the page only hides the buttons a person could not use.
-import { esc, drawersHtml, makeToast, closeDrawer, isDrawerOpen, friendly } from './transfersUi.js?v=20261007c';
-import { enrichTransfers, makeCaps, DEFAULTS } from './transfersLogic.js?v=20261007c';
-import { defaultFilters } from './transfersFilters.js?v=20261007c';
-import { renderDashboard } from './transfersDashboard.js?v=20261007c';
-import { renderTable, newTableState } from './transfersTable.js?v=20261007c';
-import { renderBranches, renderDiscrepancies, newDiscState } from './transfersBranches.js?v=20261007c';
-import { renderSku, selectSku, newSkuState } from './transfersSku.js?v=20261007c';
-import { renderReports } from './transfersReports.js?v=20261007c';
-import { renderLog, renderSettings, newLogState } from './transfersAdmin.js?v=20261007c';
-import { openDetail, closeDetail, detailOpenId, printTransfer } from './transfersDetail.js?v=20261007c';
-import { openTransferForm, requestCloseForm } from './transfersForm.js?v=20261007c';
-import { openApprove, openRelease, openReceive, openRevise, openNote, openUpload } from './transfersWork.js?v=20261007c';
-import { manilaDate } from './leaveUi.js?v=20261007c';
+import { esc, drawersHtml, makeToast, closeDrawer, isDrawerOpen, friendly } from './transfersUi.js?v=20261007d';
+import { enrichTransfers, makeCaps, DEFAULTS } from './transfersLogic.js?v=20261007d';
+import { defaultFilters } from './transfersFilters.js?v=20261007d';
+import { renderDashboard } from './transfersDashboard.js?v=20261007d';
+import { renderTable, newTableState } from './transfersTable.js?v=20261007d';
+import { renderBranches, renderDiscrepancies, newDiscState } from './transfersBranches.js?v=20261007d';
+import { renderSku, selectSku, newSkuState } from './transfersSku.js?v=20261007d';
+import { renderReports } from './transfersReports.js?v=20261007d';
+import { renderLog, renderSettings, newLogState } from './transfersAdmin.js?v=20261007d';
+import { openDetail, closeDetail, detailOpenId, printTransfer } from './transfersDetail.js?v=20261007d';
+import { openTransferForm, requestCloseForm } from './transfersForm.js?v=20261007d';
+import { openApprove, openRelease, openReceive, openRevise, openNote, openUpload } from './transfersWork.js?v=20261007d';
+import { manilaDate } from './leaveUi.js?v=20261007d';
 
 const $ = (id) => document.getElementById(id);
 
