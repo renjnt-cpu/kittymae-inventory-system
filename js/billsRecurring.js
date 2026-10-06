@@ -1,9 +1,9 @@
 // Bills Management -- the Recurring tab: every repeating bill is driven by a template (name, amount, branch,
 // schedule). From here you can see what is coming and what has fallen behind, generate a bill by hand, edit,
 // pause or archive a template. Automatic generation is OFF for every template until someone turns it on.
-import { esc, money, fmtDate, tagBadge, kpiCard, openDrawer, closeDrawer, drawerBody, confirmSide, friendly, errorsText, plural, prioBadge } from './billsUi.js?v=20261007g';
-import { recurringSummary, frequencyText, nextGenerationDate, daysBetween, FREQUENCIES, PRIORITIES, REMINDER_CHOICES, matchesScope } from './billsLogic.js?v=20261007g';
-import { flagInvalid } from './uiKit.js?v=20261007g';
+import { esc, money, fmtDate, tagBadge, kpiCard, openDrawer, closeDrawer, drawerBody, confirmSide, friendly, errorsText, plural, prioBadge } from './billsUi.js?v=20261007h';
+import { recurringSummary, frequencyText, nextGenerationDate, daysBetween, FREQUENCIES, PRIORITIES, REMINDER_CHOICES, matchesScope } from './billsLogic.js?v=20261007h';
+import { flagInvalid } from './uiKit.js?v=20261007h';
 
 const $ = (id) => document.getElementById(id);
 const val = (id) => ($(id) ? $(id).value : '');

@@ -3,7 +3,7 @@
 // database then shows the asset only to people who are allowed to see it. The QR library is loaded from cdnjs when first needed, pinned to one
 // version with a Subresource Integrity hash. Scanning uses the phone's camera where the browser supports it (BarcodeDetector); typing the
 // number always works.
-import { esc, openDrawer, closeDrawer, drawerBody, friendly } from './assetsUi.js?v=20261007g';
+import { esc, openDrawer, closeDrawer, drawerBody, friendly } from './assetsUi.js?v=20261007h';
 
 const LIB = { url: 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', integrity: 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1' };
 let pending = null;
