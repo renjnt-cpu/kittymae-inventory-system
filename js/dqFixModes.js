@@ -1,8 +1,8 @@
 // Data Fixes -- the forms for product cost, purchase price, category and supplier: what to show, what to ask for, and how to save it.
 // Each mode gives the Fix screen (dqFix.js) two things: make(row, ctx) for one item at a time, and bulk.make(ctx) for several at once.
 // Wording is plain; the messages ("Enter a valid cost.", "Select a supplier.", "Price cannot be negative.") are the same ones the database gives.
-import { dq } from './dqApi.js?v=20261007j';
-import { esc, money, int, shortDate } from './dqUi.js?v=20261007j';
+import { dq } from './dqApi.js?v=20261008a';
+import { esc, money, int, shortDate } from './dqUi.js?v=20261008a';
 
 export const parseMoney = (s) => { const t = String(s === null || s === undefined ? '' : s).replace(/[₱,\s]/g, ''); if (t === '') return null; const n = Number(t); return Number.isFinite(n) ? n : NaN; };
 const costError = (n) => (n === null || Number.isNaN(n) ? 'Enter a valid cost.' : n < 0 ? 'Price cannot be negative.' : (n === 0 || n > 50000000) ? 'Enter a valid cost.' : null);

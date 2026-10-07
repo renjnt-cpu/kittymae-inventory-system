@@ -1,8 +1,8 @@
 // Sales & Profit Dashboard -- the one table every tab uses: the database sends a page at a time (search, sort and totals are done there, so the browser
 // never holds every transaction), the person can choose which columns to see, open a row, and export everything the filters match (CSV, Excel, PDF, Print).
-import { api, esc, money, int, pct, fin, fmtDate, fmtDateTime, friendly } from './sdCore.js?v=20261007j';
-import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261007j';
-import { loadingBox, errorBox, emptyBox, badge, openDrawer, kvRow, toast } from './sdUi.js?v=20261007j';
+import { api, esc, money, int, pct, fin, fmtDate, fmtDateTime, friendly } from './sdCore.js?v=20261008a';
+import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261008a';
+import { loadingBox, errorBox, emptyBox, badge, openDrawer, kvRow, toast } from './sdUi.js?v=20261008a';
 
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
@@ -197,7 +197,7 @@ export async function exportData(format, spec) {
   const name = spec.name + '-' + new Date().toISOString().slice(0, 10), sub = spec.subtitle || [];
   if (format === 'csv') exportCsv(name, ecols, erows);
   else if (format === 'xlsx') await exportXlsx(name, spec.title, ecols, erows, sub.map((l) => { const i = l.indexOf(':'); return i > 0 ? { k: l.slice(0, i), v: l.slice(i + 1).trim() } : { k: 'Note', v: l }; }));
-  else if (format === 'pdf') await exportPdf(name, spec.title, sub, ecols, erows, 'Kittymae Jewels — Sales & Profit Dashboard');
+  else if (format === 'pdf') await exportPdf(name, spec.title, sub, ecols, erows, spec.footer || 'Kittymae Jewels — Sales & Profit Dashboard');
   else { printRows(spec.title, sub, ecols, erows); return; }
   toast('Exported ' + int(spec.rows.length) + ' rows.');
 }

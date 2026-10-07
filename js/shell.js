@@ -1,13 +1,13 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20261007j';
-import { listMyPermissions } from './api.js?v=20261007j';
-import { initActivityFeed } from './activityFeed.js?v=20261007j';
-import { localDateStr } from './uiKit.js?v=20261007j';
-import { showBirthdayBanner } from './birthdayBanner.js?v=20261007j';
-import { initAdminChat } from './adminChat.js?v=20261007j';
-import { initLeaveNotifications } from './leaveNotifications.js?v=20261007j';
+import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20261008a';
+import { listMyPermissions } from './api.js?v=20261008a';
+import { initActivityFeed } from './activityFeed.js?v=20261008a';
+import { localDateStr } from './uiKit.js?v=20261008a';
+import { showBirthdayBanner } from './birthdayBanner.js?v=20261008a';
+import { initAdminChat } from './adminChat.js?v=20261008a';
+import { initLeaveNotifications } from './leaveNotifications.js?v=20261008a';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -117,7 +117,7 @@ export async function initShell(activePage) {
     assets: { label: 'Asset & Supplies Custodian', href: 'assets.html' },
     lbc: { label: 'LBC Monitoring', href: 'lbc.html' },
     hr: { label: 'HR — 201 File', href: 'hr.html' },
-    'access-checklist': { label: 'Access Checklist', href: 'access-checklist.html' },
+    'access-performance': { label: 'Access & Performance', href: 'access-performance.html' },
     'access-matrix': { label: 'Position Access Matrix', href: 'access-matrix.html' },
     'data-backup': { label: 'Data Backup', href: 'data-backup.html' },
     leave: { label: 'Leave Management', href: 'leave.html' },
@@ -201,11 +201,11 @@ export async function initShell(activePage) {
       ((employee.permissions || []).includes('hr.view_profile') && !employee.hr_201_file_blocked)) {
       pages.push({ id: 'hr', ...ALL_PAGE_DEFS.hr });
     }
-    // Admin-only -- Ren, 2026-09-21: "only me can access the access checklist this is
-    // my personal monitoring" (previously Personal Assistant also got a read-only
-    // view; that's removed here and at the RLS level).
+    // Owner-only -- Ren, 2026-09-21: "only me can access the access checklist this is my personal monitoring"; 2026-10-08 it became the Access & Performance Control Center.
+    // The link shows only for someone holding the "access_perf.view" key (held by the owner alone -- not by the Admin role). That is a courtesy: the page and every
+    // figure behind it are refused by the database to anyone else.
+    if ((employee.permissions || []).includes('access_perf.view')) pages.push({ id: 'access-performance', ...ALL_PAGE_DEFS['access-performance'] });
     if (employee.role === 'Admin') {
-      pages.push({ id: 'access-checklist', ...ALL_PAGE_DEFS['access-checklist'] });
       // HR-Position-based Permission System (Ren's spec sections 252-270) -- lets an
       // Admin see and edit what each role/position grants, and grant/revoke individual
       // overrides, instead of that living only in migration files.
@@ -237,7 +237,7 @@ export async function initShell(activePage) {
     { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers', 'pull-out'] },
     { label: 'Operations', ids: ['lbc', 'assets'] },
     { label: 'Finance', ids: ['bills', 'transactions'] },
-    { label: 'People', ids: ['leave', 'hr', 'access-checklist', 'access-matrix', 'data-backup'] },
+    { label: 'People', ids: ['leave', 'hr', 'access-performance', 'access-matrix', 'data-backup'] },
   ];
   const pageById = Object.fromEntries(pages.map((p) => [p.id, p]));
   const navHtml = NAV_GROUPS.map((g) => {

@@ -1,14 +1,14 @@
 // HR 201 File -- page controller.  hr.html is a thin shell; everything is wired here.  The data layer is passed in (`api`), so the same code runs
 // against the real Supabase functions in production and against a stand-in object in tests.
 // Who may see or do what is decided by the database (migrations 180-183); this page only hides what it would refuse.
-import { esc, $, toast, spinner, friendly, confirmDialog } from './hrUi.js?v=20261007j';
-import { newDirectoryState, renderDirectory } from './hrDirectory.js?v=20261007j';
-import { openProfile, drawProfile, showTab, markDirty, reloadProfile, afterChange, afterSaveChecks } from './hrProfile.js?v=20261007j';
-import { isDirty } from './hrEdit.js?v=20261007j';
-import { openAddWizard } from './hrAdd.js?v=20261007j';
-import { openPrint, exportDirectory } from './hrPrint.js?v=20261007j';
-import { openAuditAll } from './hrSide.js?v=20261007j';
-import { visibleTabs } from './hrLogic.js?v=20261007j';
+import { esc, $, toast, spinner, friendly, confirmDialog } from './hrUi.js?v=20261008a';
+import { newDirectoryState, renderDirectory } from './hrDirectory.js?v=20261008a';
+import { openProfile, drawProfile, showTab, markDirty, reloadProfile, afterChange, afterSaveChecks } from './hrProfile.js?v=20261008a';
+import { isDirty } from './hrEdit.js?v=20261008a';
+import { openAddWizard } from './hrAdd.js?v=20261008a';
+import { openPrint, exportDirectory } from './hrPrint.js?v=20261008a';
+import { openAuditAll } from './hrSide.js?v=20261008a';
+import { visibleTabs } from './hrLogic.js?v=20261008a';
 
 export function createHrContext(api, employee) {
   const ctx = {
@@ -105,7 +105,7 @@ export async function startHrPage({ root, api, employee, hash = '', search = '' 
   renderDirectory(ctx, ctx.dirHost);
 
   // offboarding banner (people who left but still hold company property); loaded on its own so it can never hold the page up
-  import('./hrAssets.js?v=20261007j').then((m) => m.offboardingBanner()).then((html) => { ctx.assetBanner = html; const b = $('hr-asset-alert'); if (b) b.innerHTML = html; }).catch(() => {});
+  import('./hrAssets.js?v=20261008a').then((m) => m.offboardingBanner()).then((html) => { ctx.assetBanner = html; const b = $('hr-asset-alert'); if (b) b.innerHTML = html; }).catch(() => {});
 
   // classic editor stays reachable for now (a safety net while the new page is new)
   if (access.master) { const foot = $('hr-foot'); foot.hidden = false; foot.innerHTML = 'Something not working as expected? <a href="hr-classic.html">Open the classic 201-File editor</a> (temporary, for emergencies).'; }

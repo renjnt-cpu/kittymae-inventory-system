@@ -2,11 +2,11 @@
 // of it (with a reason when less), a custodian prepares and issues it (in one go or in parts), and the requester confirms they received it.
 // Nothing moves stock until it is ISSUED -- approving only says "yes, up to this much". A request is never deleted: it is rejected, waitlisted
 // or cancelled, and every step is recorded with who and when.
-import { esc, plural, field, opts, qty, dt, emptyBox, flowBadge, branchName, branchChip, openDrawer, closeDrawer, drawerBody, kv, setDetailHandlers, friendly, errorsText, val, branchOptions, fmtDateTime, isDrawerOpen } from './assetsUi.js?v=20261007j';
-import { REQUEST_STATUSES, REQUEST_OPEN, stockOf, dayOf, daysBetween } from './assetsLogic.js?v=20261007j';
-import { exportRequests } from './assetsReports.js?v=20261007j';
-import { exportMenu } from './assetsList.js?v=20261007j';
-import { flagInvalid } from './uiKit.js?v=20261007j';
+import { esc, plural, field, opts, qty, dt, emptyBox, flowBadge, branchName, branchChip, openDrawer, closeDrawer, drawerBody, kv, setDetailHandlers, friendly, errorsText, val, branchOptions, fmtDateTime, isDrawerOpen } from './assetsUi.js?v=20261008a';
+import { REQUEST_STATUSES, REQUEST_OPEN, stockOf, dayOf, daysBetween } from './assetsLogic.js?v=20261008a';
+import { exportRequests } from './assetsReports.js?v=20261008a';
+import { exportMenu } from './assetsList.js?v=20261008a';
+import { flagInvalid } from './uiKit.js?v=20261008a';
 
 const $ = (id) => document.getElementById(id);
 export const newRequestsState = () => ({ q: '', status: 'open', mine: false, branch: '' });

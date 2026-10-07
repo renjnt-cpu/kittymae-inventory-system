@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Access &amp; Performance Control Center — Kittymae Jewels System</title>
+<link rel="stylesheet" href="css/styles.css?v=20261008a">
+<link rel="stylesheet" href="css/sales-dashboard.css?v=20261008a">
+<link rel="stylesheet" href="css/apc.css?v=20261008a">
+</head>
+<body>
+<main id="apc-root"><p class="muted">Loading…</p></main>
+
+<script type="module">
+import { initShell } from './js/shell.js?v=20261008a';
+import { startApcPage } from './js/apcPage.js?v=20261008a';
+import { api } from './js/apcApi.js?v=20261008a';
+
+// OWNER ONLY. Who may open this page is decided by the database (keys access_perf.view and staff_analytics.view, held only by the owner): apc_context() answers {ok:false}
+// to anyone else and the page then asks for nothing more, so no staff data is ever sent to them. Hiding the menu link is a courtesy, not the protection.
+const employee = await initShell('access-performance');
+if (employee) {
+  await startApcPage({ root: document.getElementById('apc-root'), api, employee });
+}
+</script>
+</body>
+</html>

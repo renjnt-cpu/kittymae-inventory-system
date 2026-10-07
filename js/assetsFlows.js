@@ -1,10 +1,10 @@
 // Assets & Supplies Custodian -- the process tabs: Asset Transfers, Returns, Maintenance & Repairs, Lost / Damaged and Disposals. Each is a
 // work list over one kind of record (open ones first), with the actions the viewer may take on each row. The asset itself is always opened
 // from here, never copied: these lists read the same register as the Assets tab.
-import { esc, plural, field, opts, dt, dash, money, flowBadge, statusBadge, tagBadge, branchName, emptyBox, qty } from './assetsUi.js?v=20261007j';
-import { OPEN_REPAIR, OPEN_INCIDENT, OPEN_DISPOSAL, REPAIR_TYPES, REPAIR_STATUSES, INCIDENT_TYPES, TRANSFER_OPEN, daysBetween, dayOf, repairCostFlag, sum } from './assetsLogic.js?v=20261007j';
-import { exportFlow } from './assetsReports.js?v=20261007j';
-import { exportMenu } from './assetsList.js?v=20261007j';
+import { esc, plural, field, opts, dt, dash, money, flowBadge, statusBadge, tagBadge, branchName, emptyBox, qty } from './assetsUi.js?v=20261008a';
+import { OPEN_REPAIR, OPEN_INCIDENT, OPEN_DISPOSAL, REPAIR_TYPES, REPAIR_STATUSES, INCIDENT_TYPES, TRANSFER_OPEN, daysBetween, dayOf, repairCostFlag, sum } from './assetsLogic.js?v=20261008a';
+import { exportFlow } from './assetsReports.js?v=20261008a';
+import { exportMenu } from './assetsList.js?v=20261008a';
 
 const $ = (id) => document.getElementById(id);
 export const newFlowState = () => ({ transfers: { q: '', status: 'open', type: '' }, returns: { q: '', days: '30', show: 'expected' }, repairs: { q: '', status: 'open', type: '' }, incidents: { q: '', status: 'open', type: '' }, disposals: { q: '', status: 'open' } });

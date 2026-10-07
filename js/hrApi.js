@@ -2,8 +2,8 @@
 // (and can be driven by a stand-in object in tests).  Every read and every change goes through an hr_* database function
 // (migrations 180-183) that checks the caller's HR permission keys itself; the page only hides what it would refuse.
 // A function that finds a problem with the input returns {ok:false, errors:[{field, message}]}; a missing permission throws an Error.
-import { supabase } from './supabaseClient.js?v=20261007j';
-export { getBranches, listHrPositions, setEmployeePassword } from './api.js?v=20261007j';
+import { supabase } from './supabaseClient.js?v=20261008a';
+export { getBranches, listHrPositions, setEmployeePassword } from './api.js?v=20261008a';
 
 const BUCKET = 'employee-201-documents';
 

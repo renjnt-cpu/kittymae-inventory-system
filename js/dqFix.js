@@ -1,10 +1,10 @@
 // Data Fixes -- the "Fix Product Data" screen: one focused edit form at a time (SAVE & NEXT, SAVE, CANCEL) or, where it is safe, several rows at once.
 // SEE PROBLEM -> CLICK -> EDIT -> SAVE -> DONE. It never opens a report or an accounting screen, and the database only hands it sanitized fields.
 // The forms for each kind of problem live in dqFixModes.js (cost, purchase, category, supplier) and dqFixSku.js (matching a sold item).
-import { dq, GENERIC_ERROR, LOAD_ERROR } from './dqApi.js?v=20261007j';
-import { TYPES, MODE_TO_TYPE, esc, int, bar, showMsg, confirmBox, debounce, firstName } from './dqUi.js?v=20261007j';
-import { MODES } from './dqFixModes.js?v=20261007j';
-import { skuMode } from './dqFixSku.js?v=20261007j';
+import { dq, GENERIC_ERROR, LOAD_ERROR } from './dqApi.js?v=20261008a';
+import { TYPES, MODE_TO_TYPE, esc, int, bar, showMsg, confirmBox, debounce, firstName } from './dqUi.js?v=20261008a';
+import { MODES } from './dqFixModes.js?v=20261008a';
+import { skuMode } from './dqFixSku.js?v=20261008a';
 
 const ALL_MODES = Object.assign({}, MODES, { sku: skuMode });
 const PAGE = 50;
