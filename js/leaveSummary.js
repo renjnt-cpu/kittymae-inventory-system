@@ -1,8 +1,8 @@
 // Leave Management -- one employee's leave numbers (credits, requests, upcoming leave).
 // The HR 201-File Overview card and the Leave section's summary tiles both use summarizeLeave(), so the two can never disagree, and
 // there is no second copy of any leave rule.  loadLeaveSummary() reads only that one person's rows (small queries) for the Overview card.
-import { OPEN_STATUSES } from './leaveUi.js?v=20261007i';
-import * as api from './leaveApi.js?v=20261007i';
+import { OPEN_STATUSES } from './leaveUi.js?v=20261007j';
+import * as api from './leaveApi.js?v=20261007j';
 
 /**
  * The numbers for one employee from data that is already loaded: {types, balances, requests, today}.

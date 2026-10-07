@@ -2,8 +2,8 @@
 // Asset & Supplies Custodian module records for this person: nothing about the employee is copied, and nothing is issued or returned from here
 // (that happens on the Asset & Supplies Custodian page, where the history is kept). A person who has left but still holds company property is
 // flagged here so HR does not clear them by mistake; nothing is ever deleted.
-import { esc, fmtDate } from './leaveUi.js?v=20261007i';
-import * as api from './assetsApi.js?v=20261007i';
+import { esc, fmtDate } from './leaveUi.js?v=20261007j';
+import * as api from './assetsApi.js?v=20261007j';
 
 const link = (number) => 'assets.html?asset=' + encodeURIComponent(number);
 

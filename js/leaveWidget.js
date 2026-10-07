@@ -3,8 +3,8 @@
 // button; HR also sees how many requests need review, and the Final Approver how many await a decision.
 // Counts come from a few small queries (never the full request list), and the dashboard loads this file
 // lazily and ignores any failure, so a problem here can never affect the dashboard itself.
-import { getWidgetData } from './leaveApi.js?v=20261007i';
-import { esc, fmtDate, rangeText, num, daysText } from './leaveUi.js?v=20261007i';
+import { getWidgetData } from './leaveApi.js?v=20261007j';
+import { esc, fmtDate, rangeText, num, daysText } from './leaveUi.js?v=20261007j';
 
 const box = (valueHtml, label, sub) => '<div class="tile"><div class="num" style="font-size:20px;">' + valueHtml + '</div><div class="lbl">' + esc(label) + '</div>' +
   (sub ? '<div class="muted" style="font-size:11px;">' + esc(sub) + '</div>' : '') + '</div>';

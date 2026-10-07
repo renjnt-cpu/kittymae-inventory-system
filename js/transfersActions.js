@@ -1,7 +1,7 @@
 // Transfers -- the quick-action buttons that appear on every list (dashboard alerts, the Transfers table, the discrepancy list) and the one
 // click handler that runs them. Which buttons a person sees follows their role and the transfer's state; the database re-checks every one
 // of them when it is pressed.
-import { esc, routeText, statusBadge, priorityBadge, discBadge, pcs } from './transfersUi.js?v=20261007i';
+import { esc, routeText, statusBadge, priorityBadge, discBadge, pcs } from './transfersUi.js?v=20261007j';
 
 const btn = (act, id, label, cls) => '<button type="button" class="btn small' + (cls ? ' ' + cls : '') + '" data-act="' + act + '" data-id="' + id + '">' + label + '</button>';
 

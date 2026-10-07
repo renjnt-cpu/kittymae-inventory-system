@@ -2,9 +2,9 @@
 // review, resolve), maintenance and repairs (open, move along, complete or declare unrepairable), and disposal (request, approve, mark
 // disposed, archive). Nobody is ever charged automatically, nothing is auto-disposed and nothing is deleted: a disposed asset stays in the
 // register with its whole history. Each panel opens in the side drawer; the database re-checks every rule.
-import { esc, field, opts, dt, money, openDrawer, closeDrawer, drawerBody, friendly, errorsText, val, flowBadge } from './assetsUi.js?v=20261007i';
-import { CONDITIONS, ISSUE_CONDITIONS, INCIDENT_TYPES, RECOMMENDED, REPAIR_TYPES, DISPOSAL_METHODS, OPEN_INCIDENT, repairCostFlag } from './assetsLogic.js?v=20261007i';
-import { flagInvalid } from './uiKit.js?v=20261007i';
+import { esc, field, opts, dt, money, openDrawer, closeDrawer, drawerBody, friendly, errorsText, val, flowBadge } from './assetsUi.js?v=20261007j';
+import { CONDITIONS, ISSUE_CONDITIONS, INCIDENT_TYPES, RECOMMENDED, REPAIR_TYPES, DISPOSAL_METHODS, OPEN_INCIDENT, repairCostFlag } from './assetsLogic.js?v=20261007j';
+import { flagInvalid } from './uiKit.js?v=20261007j';
 
 const $ = (id) => document.getElementById(id);
 const errBox = (html) => { const b = $('ac-sd-errors'); if (b) b.innerHTML = html ? '<div class="msg error">' + html + '</div>' : ''; if (html && drawerBody('side')) drawerBody('side').scrollTop = 0; };

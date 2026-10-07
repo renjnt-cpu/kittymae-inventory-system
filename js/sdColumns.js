@@ -1,7 +1,7 @@
 // Sales & Profit Dashboard -- the columns of every detail table (what each column is called, how it is shown, which key unlocks it, which are hidden at first).
 // `need` is a permission the database also enforces: a person without it never receives the figure, the column is just not offered.
-import { esc, money, int, pct, fmtDate } from './sdCore.js?v=20261007i';
-import { badge } from './sdUi.js?v=20261007i';
+import { esc, money, int, pct, fmtDate } from './sdCore.js?v=20261007j';
+import { badge } from './sdUi.js?v=20261007j';
 
 const missing = (label) => badge(label || 'COST DATA MISSING', 'orange');
 const dash = '<span class="muted">—</span>';

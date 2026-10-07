@@ -1,7 +1,7 @@
 // HR 201 File -- the Document Center tab: required-document checklist, upload, versions, expiry alerts, archive (never delete).
 // Files live in the private "employee-201-documents" bucket; every action is checked and logged by the database (hr_* functions).
-import { esc, $, badge, spinner, emptyBox, friendly, toast, confirmDialog, reasonDialog, openModal, busy } from './hrUi.js?v=20261007i';
-import { DOC_CATEGORIES, DOC_STATE_LABEL, fmtDate, fmtDateTime, fmtBytes, expiryText, plural } from './hrLogic.js?v=20261007i';
+import { esc, $, badge, spinner, emptyBox, friendly, toast, confirmDialog, reasonDialog, openModal, busy } from './hrUi.js?v=20261007j';
+import { DOC_CATEGORIES, DOC_STATE_LABEL, fmtDate, fmtDateTime, fmtBytes, expiryText, plural } from './hrLogic.js?v=20261007j';
 
 const MAX_BYTES = 15 * 1024 * 1024;
 const ACCEPT = 'image/*,.pdf,.doc,.docx,.xls,.xlsx';

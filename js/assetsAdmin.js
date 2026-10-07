@@ -1,11 +1,11 @@
 // Assets & Supplies Custodian -- the Audit Log tab (everything that ever changed on an asset or a supply, field by field; permanent and
 // read-only; Admin and Manager only) and the Settings tab (alert limits, the asset and supply categories, who can do what, the rules the
 // records follow).
-import { esc, plural, field, opts, fmtDateTime, friendly, errorsText, emptyBox, tagBadge } from './assetsUi.js?v=20261007i';
-import { uniqueSorted, DEFAULTS } from './assetsLogic.js?v=20261007i';
-import { exportAudit } from './assetsReports.js?v=20261007i';
-import { exportMenu } from './assetsList.js?v=20261007i';
-import { flagInvalid } from './uiKit.js?v=20261007i';
+import { esc, plural, field, opts, fmtDateTime, friendly, errorsText, emptyBox, tagBadge } from './assetsUi.js?v=20261007j';
+import { uniqueSorted, DEFAULTS } from './assetsLogic.js?v=20261007j';
+import { exportAudit } from './assetsReports.js?v=20261007j';
+import { exportMenu } from './assetsList.js?v=20261007j';
+import { flagInvalid } from './uiKit.js?v=20261007j';
 
 const $ = (id) => document.getElementById(id);
 export const newAuditState = () => ({ rows: [], loaded: false, done: false, q: '', user: '', action: '', entity: '', from: '', to: '' });

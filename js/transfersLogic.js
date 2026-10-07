@@ -4,8 +4,8 @@
 // Stock is NOT calculated here: quantities in stock come from the real inventory (ctx.stock) and the stock ledger (ctx.ledger).
 // What this file adds up is the transfer's own lines: requested, approved, released ("sent"), received, damaged, missing.
 // Who may do what mirrors the database rules exactly (the database still re-checks every action).
-import { addDays, daysBetween, yearOf, monthOf, monthName, MONTHS, addMonths, ymd, sum, group, round2 } from './billsLogic.js?v=20261007i';
-import { manilaDate } from './leaveUi.js?v=20261007i';
+import { addDays, daysBetween, yearOf, monthOf, monthName, MONTHS, addMonths, ymd, sum, group, round2 } from './billsLogic.js?v=20261007j';
+import { manilaDate } from './leaveUi.js?v=20261007j';
 export { addDays, daysBetween, yearOf, monthOf, monthName, MONTHS, addMonths, ymd, sum, group, round2 };
 
 export const STATUSES = ['Draft', 'Requested', 'Approved', 'Preparing', 'In Transit', 'Partially Received', 'Received', 'Rejected', 'Cancelled'];
