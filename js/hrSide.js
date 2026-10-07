@@ -1,9 +1,9 @@
 // HR 201 File -- the record-keeping tabs: Access & Permissions (view only), Employment History, Notes, Audit Log, and the Leave tab.
-import { esc, $, badge, spinner, emptyBox, friendly, toast, confirmDialog, reasonDialog, openModal, inputHtml, bindEdit, busy, lockIcon } from './hrUi.js?v=20261008a';
+import { esc, $, badge, spinner, emptyBox, friendly, toast, confirmDialog, reasonDialog, openModal, inputHtml, bindEdit, busy, lockIcon } from './hrUi.js?v=20261008b';
 import {
   fmtDate, fmtDateTime, historyText, plural, statusLabel, ACTION_LABEL, SECTION_LABEL, FIELD_DEFS, blank, money, HISTORY_LABEL,
-} from './hrLogic.js?v=20261008a';
-import { rebuildOriginal, canEditField } from './hrTabs.js?v=20261008a';
+} from './hrLogic.js?v=20261008b';
+import { rebuildOriginal, canEditField } from './hrTabs.js?v=20261008b';
 
 const stale = (ctx, ps, tab) => ctx.ps !== ps || ps.tab !== tab;
 
@@ -17,7 +17,7 @@ export async function renderAccess(ctx, ps, panel) {
   const card = (t, big, small, tone) => '<div class="hr-card' + (tone ? ' hr-tone-' + tone : '') + '"><h5>' + esc(t) + '</h5><span class="big">' + big + '</span>' + (small ? '<span class="small">' + small + '</span>' : '') + '</div>';
   const login = a.login || {}, pw = a.password || {}, rev = a.last_reviewed || {};
   panel.innerHTML = '<h3>Access &amp; permissions</h3><p class="hr-notice">' + lockIcon + ' <b>View only.</b> Nothing here changes what this person can do. Permissions are set in the Position Access Matrix' +
-    (ctx.access.is_admin ? ' — <a href="access-matrix.html">open it</a>' : ' (an Admin manages it)') + '. Changing the job title, role or branch on the Employment tab shows the effect first.</p>' +
+    ((ctx.employee.permissions || []).includes('access_perf.view') ? ' — <a href="access-matrix.html">open it</a>' : ' (the owner manages it)') + '. Changing the job title, role or branch on the Employment tab shows the effect first.</p>' +
     (a.position_differs_from_job_title ? '<div class="hr-notice warn">The system position is <b>' + esc(a.position || 'empty') + '</b> but the 201 job title is <b>' + esc(a.job_title || 'empty') + '</b>. Both exist in the system and some older rules still read the position. Nothing was changed automatically.</div>' : '') +
     (a.status !== 'Active' ? '<div class="hr-notice bad">This person\'s system account is <b>Inactive</b>: they cannot sign in or use any permission.</div>' : '') +
     '<div class="hr-grid">' +
@@ -177,7 +177,7 @@ function auditDetail(r) {
 export async function renderLeave(ctx, ps, panel) {
   panel.innerHTML = '<h3>Leave</h3><div id="hr-leave-host">' + spinner('Loading the leave record…') + '</div>';
   try {
-    const { mountLeaveProfile } = await import('./leaveProfile.js?v=20261008a');
+    const { mountLeaveProfile } = await import('./leaveProfile.js?v=20261008b');
     if (stale(ctx, ps, 'leave')) return;
     await mountLeaveProfile($('hr-leave-host'), ps.id);
   } catch (err) { const h = $('hr-leave-host'); if (h) h.innerHTML = '<div class="msg error">Could not load the leave record: ' + esc(friendly(err)) + '</div>'; }

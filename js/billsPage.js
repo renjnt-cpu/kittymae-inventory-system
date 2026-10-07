@@ -5,18 +5,18 @@
 // One loaded copy of the data (ctx) feeds every tab; a change anywhere goes through the database, then
 // ctx.refresh() reloads and redraws. Who may do what is decided by the database -- the page only hides
 // the buttons a person could not use.
-import { esc, drawersHtml, makeToast, closeDrawer, isDrawerOpen, drawerBody, friendly } from './billsUi.js?v=20261008a';
-import { enrichBills, daysToSunday } from './billsLogic.js?v=20261008a';
-import { defaultFilters } from './billsFilters.js?v=20261008a';
-import { renderDashboard } from './billsDashboard.js?v=20261008a';
-import { renderTable, newTableState, openAssignBranches } from './billsTable.js?v=20261008a';
-import { renderCalendar, renderPlanning, newCalState, newPlanState } from './billsCalendar.js?v=20261008a';
-import { renderRecurring, openTemplateForm } from './billsRecurring.js?v=20261008a';
-import { renderReports } from './billsReports.js?v=20261008a';
-import { renderLog, renderSettings, newLogState } from './billsAdmin.js?v=20261008a';
-import { openDetail, closeDetail, detailOpenId } from './billsDetail.js?v=20261008a';
-import { openBillForm, requestCloseForm, openPayment, openUpload, openSnooze } from './billsForm.js?v=20261008a';
-import { bellHtml, refreshBell } from './billsNotifications.js?v=20261008a';
+import { esc, drawersHtml, makeToast, closeDrawer, isDrawerOpen, drawerBody, friendly } from './billsUi.js?v=20261008b';
+import { enrichBills, daysToSunday } from './billsLogic.js?v=20261008b';
+import { defaultFilters } from './billsFilters.js?v=20261008b';
+import { renderDashboard } from './billsDashboard.js?v=20261008b';
+import { renderTable, newTableState, openAssignBranches } from './billsTable.js?v=20261008b';
+import { renderCalendar, renderPlanning, newCalState, newPlanState } from './billsCalendar.js?v=20261008b';
+import { renderRecurring, openTemplateForm } from './billsRecurring.js?v=20261008b';
+import { renderReports } from './billsReports.js?v=20261008b';
+import { renderLog, renderSettings, newLogState } from './billsAdmin.js?v=20261008b';
+import { openDetail, closeDetail, detailOpenId } from './billsDetail.js?v=20261008b';
+import { openBillForm, requestCloseForm, openPayment, openUpload, openSnooze } from './billsForm.js?v=20261008b';
+import { bellHtml, refreshBell } from './billsNotifications.js?v=20261008b';
 
 const $ = (id) => document.getElementById(id);
 

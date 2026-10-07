@@ -1,8 +1,8 @@
 // Access & Performance Control Center -- the one table every tab uses: search, sort, pages, and Export (CSV / Excel / PDF / Print) of exactly what is filtered.
 // The rows are already in the browser (the database sends one row per person or per record), so this works on them directly -- it never asks the database again.
 // A column is { key, label, type?, render?(row) -> html, sort?(row) -> value, total?: 'sum', hide?: true, noExport? }; render() must escape what it prints.
-import { cellHtml, exportData } from './sdTable.js?v=20261008a';
-import { esc, int, toast, friendly, emptyBox } from './apcCore.js?v=20261008a';
+import { cellHtml, exportData } from './sdTable.js?v=20261008b';
+import { esc, int, toast, friendly, emptyBox } from './apcCore.js?v=20261008b';
 
 const NUMERIC = ['money', 'int', 'num', 'pct'];
 const isNum = (c) => NUMERIC.includes(c.type) || c.align === 'right';

@@ -2,9 +2,9 @@
 //   MATCH EXISTING PRODUCT  /  MAP BUNDLE (a set made of several products)  /  CREATE PRODUCT.
 // Saving a match or a new product also gives orders that were waiting in Packing for this SKU their chance to deduct stock (the same rule the Pending SKU Match
 // screen already uses); the answer says in plain words how many were updated.
-import { dq } from './dqApi.js?v=20261008a';
-import { esc, int, debounce } from './dqUi.js?v=20261008a';
-import { parseMoney } from './dqFixModes.js?v=20261008a';
+import { dq } from './dqApi.js?v=20261008b';
+import { esc, int, debounce } from './dqUi.js?v=20261008b';
+import { parseMoney } from './dqFixModes.js?v=20261008b';
 
 const fact = (label, html, cls) => '<dt>' + esc(label) + '</dt><dd' + (cls ? ' class="' + cls + '"' : '') + '>' + html + '</dd>';
 

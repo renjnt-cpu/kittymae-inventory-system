@@ -1,13 +1,13 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20261008a';
-import { listMyPermissions } from './api.js?v=20261008a';
-import { initActivityFeed } from './activityFeed.js?v=20261008a';
-import { localDateStr } from './uiKit.js?v=20261008a';
-import { showBirthdayBanner } from './birthdayBanner.js?v=20261008a';
-import { initAdminChat } from './adminChat.js?v=20261008a';
-import { initLeaveNotifications } from './leaveNotifications.js?v=20261008a';
+import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20261008b';
+import { listMyPermissions } from './api.js?v=20261008b';
+import { initActivityFeed } from './activityFeed.js?v=20261008b';
+import { localDateStr } from './uiKit.js?v=20261008b';
+import { showBirthdayBanner } from './birthdayBanner.js?v=20261008b';
+import { initAdminChat } from './adminChat.js?v=20261008b';
+import { initLeaveNotifications } from './leaveNotifications.js?v=20261008b';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -204,12 +204,13 @@ export async function initShell(activePage) {
     // Owner-only -- Ren, 2026-09-21: "only me can access the access checklist this is my personal monitoring"; 2026-10-08 it became the Access & Performance Control Center.
     // The link shows only for someone holding the "access_perf.view" key (held by the owner alone -- not by the Admin role). That is a courtesy: the page and every
     // figure behind it are refused by the database to anyone else.
-    if ((employee.permissions || []).includes('access_perf.view')) pages.push({ id: 'access-performance', ...ALL_PAGE_DEFS['access-performance'] });
-    if (employee.role === 'Admin') {
-      // HR-Position-based Permission System (Ren's spec sections 252-270) -- lets an
-      // Admin see and edit what each role/position grants, and grant/revoke individual
-      // overrides, instead of that living only in migration files.
+    if ((employee.permissions || []).includes('access_perf.view')) {
+      pages.push({ id: 'access-performance', ...ALL_PAGE_DEFS['access-performance'] });
+      // HR-Position-based Permission System (Ren's spec sections 252-270) -- see and edit what each role/position grants, and grant/revoke individual
+      // overrides, instead of that living only in migration files. Owner-only since 2026-10-08 (migration 202): the same key, enforced by the database.
       pages.push({ id: 'access-matrix', ...ALL_PAGE_DEFS['access-matrix'] });
+    }
+    if (employee.role === 'Admin') {
       // Admin-only self-serve export of dated records + their Storage photos (Ren,
       // 2026-09-26: wanted a way to re-download this himself instead of a one-off
       // manual export) -- Storage files aren't covered by Supabase's own daily backups.

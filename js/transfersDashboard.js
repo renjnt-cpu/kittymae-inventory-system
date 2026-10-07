@@ -2,10 +2,10 @@
 // transit too long, partly received, open discrepancies, not enough stock), what is on its way right now, what each branch has received,
 // movement analytics and charts. Two groups of numbers on purpose: "transfers in this period" follows the Month / Year filter,
 // "right now" never does (a transfer that has been in transit for 6 days is late whatever month it was requested).
-import { esc, qty, fmtDate, kpiCard, donut, hbars, pairColumns, statusColor, routeText, plural, COLORS } from './transfersUi.js?v=20261008a';
-import { transferKpis, receivedByBranch, movementStats, monthlySeries, attentionScore, STATUSES, sum } from './transfersLogic.js?v=20261008a';
-import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './transfersFilters.js?v=20261008a';
-import { alertRow, bindActions } from './transfersActions.js?v=20261008a';
+import { esc, qty, fmtDate, kpiCard, donut, hbars, pairColumns, statusColor, routeText, plural, COLORS } from './transfersUi.js?v=20261008b';
+import { transferKpis, receivedByBranch, movementStats, monthlySeries, attentionScore, STATUSES, sum } from './transfersLogic.js?v=20261008b';
+import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './transfersFilters.js?v=20261008b';
+import { alertRow, bindActions } from './transfersActions.js?v=20261008b';
 
 const SECTIONS = [
   { id: 'approval', title: 'A · Waiting too long for approval', tone: 'orange', empty: 'No request is waiting for a decision for longer than the limit.' },

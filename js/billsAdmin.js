@@ -1,10 +1,10 @@
 // Bills Management -- the two Admin-only tabs: the company-wide Activity Log (who changed what, with
 // before / after values; permanent and read-only) and Settings (alert limits, categories, branch assignment).
-import { esc, money, fmtDateTime, tagBadge, openDrawer, closeDrawer, plural, friendly, errorsText, prioBadge, say, logName } from './billsUi.js?v=20261008a';
-import { PRIORITIES, uniqueSorted } from './billsLogic.js?v=20261008a';
-import { LOG_COLUMNS, logRow } from './billsExport.js?v=20261008a';
-import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261008a';
-import { flagInvalid } from './uiKit.js?v=20261008a';
+import { esc, money, fmtDateTime, tagBadge, openDrawer, closeDrawer, plural, friendly, errorsText, prioBadge, say, logName } from './billsUi.js?v=20261008b';
+import { PRIORITIES, uniqueSorted } from './billsLogic.js?v=20261008b';
+import { LOG_COLUMNS, logRow } from './billsExport.js?v=20261008b';
+import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261008b';
+import { flagInvalid } from './uiKit.js?v=20261008b';
 
 const $ = (id) => document.getElementById(id);
 const val = (id) => ($(id) ? $(id).value : '');
@@ -102,7 +102,7 @@ export function renderSettings(ctx, panel) {
       '<li><b>Finance</b> (“Expenses — Finance”, or the older “Expenses Module Access”) — add and edit expenses, record payments, manage recurring templates, reports and exports.</li>' +
       '<li><b>View only</b> (“Expenses — View only”) — dashboards, expenses and reports; cannot change anything. Personal expenses are hidden.</li>' +
       '<li><b>Branch Manager</b> (“Expenses — Branch Manager”) — sees only their own branch’s expenses, can add an expense for that branch and upload proof. Personal expenses are hidden.</li></ul>' +
-      '<p class="muted">Roles are granted per person or per position in the <a href="access-matrix.html">Access Matrix</a> — nothing about who can see what is decided on this page.</p></div></div>';
+      '<p class="muted">Roles are granted per person or per position in the <a href="access-matrix.html">Access Matrix</a> (owner only) — nothing about who can see what is decided on this page.</p></div></div>';
 
   $('bs-save').addEventListener('click', async () => {
     const high = $('bs-high').value, soon = $('bs-soon').value;

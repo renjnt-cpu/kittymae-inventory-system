@@ -1,7 +1,7 @@
 // Access & Performance Control Center -- shared plumbing: formatting, the date presets (this one adds "This Quarter"), small UI pieces, and the in-page dialogs
 // (confirm() / prompt() are not used: they are blocked in some browsers and cannot show a list of what is about to change).
-import { esc, fin, money, int, pct, fmtDate, fmtDateTime, addDays, startOfMonth, endOfMonth, addMonths, startOfWeek, startOfYear, daysBetween, previousPeriod, rangeText, friendly } from './sdCore.js?v=20261008a';
-import { badge, emptyBox, loadingBox, errorBox, lockedBox, panel, kpiCard, openDrawer, closeDrawer, toast, mountShell } from './sdUi.js?v=20261008a';
+import { esc, fin, money, int, pct, fmtDate, fmtDateTime, addDays, startOfMonth, endOfMonth, addMonths, startOfWeek, startOfYear, daysBetween, previousPeriod, rangeText, friendly } from './sdCore.js?v=20261008b';
+import { badge, emptyBox, loadingBox, errorBox, lockedBox, panel, kpiCard, openDrawer, closeDrawer, toast, mountShell } from './sdUi.js?v=20261008b';
 
 export { esc, fin, money, int, pct, fmtDate, fmtDateTime, addDays, rangeText, friendly, badge, emptyBox, loadingBox, errorBox, lockedBox, panel, kpiCard, openDrawer, closeDrawer, toast };
 export const mountShellOnce = mountShell; // already a no-op the second time

@@ -1,19 +1,19 @@
 // Access & Performance Control Center -- the page: the owner-only gate, the filter bar, the people-health strip, the nine tabs, and the shared state they read.
 // Who may open it is decided by the database (keys access_perf.view and staff_analytics.view, held only by the owner); a person without the key gets {ok:false} from apc_context()
 // and this page never asks for anything else -- so no staff data is ever sent to them.
-import { esc, friendly, loadingBox, errorBox, mountShellOnce, openDrawer, toast, money } from './apcCore.js?v=20261008a';
-import { createFilters } from './apcFilters.js?v=20261008a';
-import { createClientTable } from './apcTable.js?v=20261008a';
-import { thresholds } from './apcMetrics.js?v=20261008a';
-import { accessConflicts } from './apcAccessModel.js?v=20261008a';
-import { renderOverview } from './apcOverview.js?v=20261008a';
-import { renderAccess } from './apcAccess.js?v=20261008a';
-import { renderPeople } from './apcPeople.js?v=20261008a';
-import { renderSales, renderPos, renderScrap } from './apcRank.js?v=20261008a';
-import { renderErrors } from './apcErrors.js?v=20261008a';
-import { renderActivity } from './apcActivity.js?v=20261008a';
-import { renderMatrix } from './apcMatrix.js?v=20261008a';
-import { openSettings } from './apcSettings.js?v=20261008a';
+import { esc, friendly, loadingBox, errorBox, mountShellOnce, openDrawer, toast, money } from './apcCore.js?v=20261008b';
+import { createFilters } from './apcFilters.js?v=20261008b';
+import { createClientTable } from './apcTable.js?v=20261008b';
+import { thresholds } from './apcMetrics.js?v=20261008b';
+import { accessConflicts } from './apcAccessModel.js?v=20261008b';
+import { renderOverview } from './apcOverview.js?v=20261008b';
+import { renderAccess } from './apcAccess.js?v=20261008b';
+import { renderPeople } from './apcPeople.js?v=20261008b';
+import { renderSales, renderPos, renderScrap } from './apcRank.js?v=20261008b';
+import { renderErrors } from './apcErrors.js?v=20261008b';
+import { renderActivity } from './apcActivity.js?v=20261008b';
+import { renderMatrix } from './apcMatrix.js?v=20261008b';
+import { openSettings } from './apcSettings.js?v=20261008b';
 
 const TABS = [
   { id: 'overview', label: 'Overview', needs: 'access', make: renderOverview },

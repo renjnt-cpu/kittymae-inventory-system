@@ -1,6 +1,6 @@
 // Access & Performance Control Center -- the filter bar. Date range and branch change the figures (they are sent to the database); company, position, role and
 // status only decide which people are listed. Access itself is always current -- it does not follow the date range.
-import { esc, PRESETS, presetRange, previousRange, rangeText } from './apcCore.js?v=20261008a';
+import { esc, PRESETS, presetRange, previousRange, rangeText } from './apcCore.js?v=20261008b';
 
 export function createFilters({ root, ctx, positions, onChange }) {
   const today = ctx.today;

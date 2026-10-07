@@ -2,7 +2,7 @@
 // screen uses, the inline confirmation panel (the app never uses confirm() / prompt()) and the charts that
 // Bills does not have. Money / date text, KPI cards and the generic charts come from billsUi.js -- the same
 // look across Bills and Refunds is deliberate, and so is the shared (bl-) layout CSS.
-import { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText, money, moneyShort, plural, friendly, emptyBox, progressBar, donut, hbars, stackedHbars, COLORS, kpiCard } from './billsUi.js?v=20261008a';
+import { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText, money, moneyShort, plural, friendly, emptyBox, progressBar, donut, hbars, stackedHbars, COLORS, kpiCard } from './billsUi.js?v=20261008b';
 export { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText, money, moneyShort, plural, friendly, emptyBox, progressBar, donut, hbars, stackedHbars, COLORS, kpiCard };
 
 export const REFUND_COLORS = { 'Pending Approval': '#e0a030', 'Under Review': '#d9b24a', 'Needs Information': '#d9602a', 'On Hold': '#a9805a', 'Approved - Waiting Payment': '#1a56b0',

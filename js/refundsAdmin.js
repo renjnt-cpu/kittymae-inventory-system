@@ -1,10 +1,10 @@
 // Refund Management -- the History tab (everything that ever happened on a request; permanent and read-only, with the
 // field-by-field audit log for Admins) and the Admin-only Settings tab (alert limits, refund reasons, who can do what).
-import { esc, fmtDateTime, tagBadge, plural, friendly, errorsText } from './refundsUi.js?v=20261008a';
-import { uniqueSorted } from './refundsLogic.js?v=20261008a';
-import { LOG_COLUMNS, logRow } from './refundsExport.js?v=20261008a';
-import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261008a';
-import { flagInvalid } from './uiKit.js?v=20261008a';
+import { esc, fmtDateTime, tagBadge, plural, friendly, errorsText } from './refundsUi.js?v=20261008b';
+import { uniqueSorted } from './refundsLogic.js?v=20261008b';
+import { LOG_COLUMNS, logRow } from './refundsExport.js?v=20261008b';
+import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261008b';
+import { flagInvalid } from './uiKit.js?v=20261008b';
 
 const $ = (id) => document.getElementById(id);
 const field = (label, inner) => '<div class="field"><label>' + label + '</label>' + inner + '</div>';
@@ -114,7 +114,7 @@ export function renderSettings(ctx, panel) {
       '<li><b>Finance</b> (“Refunds — Finance”) — records refund payments, uploads proof, adds notes and logs customer contact, and sees every request and all reports. Cannot approve.</li>' +
       '<li><b>Viewer</b> (“Refunds — View only”) — sees every request, the dashboard and reports; cannot change anything.</li>' +
       '<li><b>Staff</b> (everyone else with a login) — creates refund requests and sees, edits (while waiting for review), cancels and adds notes to <i>their own</i> requests only.</li></ul>' +
-      '<p class="muted">Roles are granted per person or per position in the <a href="access-matrix.html">Access Matrix</a>. The database enforces every rule — hiding a button on this page is only a courtesy. Refunds can never be deleted: a request is cancelled or rejected, a payment is voided, and every change is kept in the history.</p></div></div>';
+      '<p class="muted">Roles are granted per person or per position in the <a href="access-matrix.html">Access Matrix</a> (owner only). The database enforces every rule — hiding a button on this page is only a courtesy. Refunds can never be deleted: a request is cancelled or rejected, a payment is voided, and every change is kept in the history.</p></div></div>';
 
   $('rs-save').addEventListener('click', async () => {
     const high = $('rs-high').value, warn = $('rs-warn').value;

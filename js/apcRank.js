@@ -1,9 +1,9 @@
 // Access & Performance Control Center -- the three ranking tabs: Sales Ranking (who rings up the most, with the quality figures beside it so a big number is never the whole story),
 // POS Performance (the counter, with gentle "Needs Review" alerts), and Scrap Performance (who encodes scrap, plus grams by purity).
 // Attribution is explicit: POS sales go to the person who rang the sale up, scrap goes to whoever created the entry (never whoever edited it last), online orders to their own fields.
-import { esc, panel, money, int, rate, grams, emptyBox, loadingBox, errorBox, friendly, accuracyOf, NOT_ENOUGH, empLink, wireLinks, drillLink, badge, btn } from './apcCore.js?v=20261008a';
-import { createClientTable } from './apcTable.js?v=20261008a';
-import { qualityScore, weightsOf, signalCounts } from './apcMetrics.js?v=20261008a';
+import { esc, panel, money, int, rate, grams, emptyBox, loadingBox, errorBox, friendly, accuracyOf, NOT_ENOUGH, empLink, wireLinks, drillLink, badge, btn } from './apcCore.js?v=20261008b';
+import { createClientTable } from './apcTable.js?v=20261008b';
+import { qualityScore, weightsOf, signalCounts } from './apcMetrics.js?v=20261008b';
 
 const pref = { get() { try { return localStorage.getItem('apc-scores') === '1'; } catch (e) { return false; } }, set(v) { try { localStorage.setItem('apc-scores', v ? '1' : '0'); } catch (e) { /* not remembered */ } } };
 const rankBadge = (i) => '<span class="apc-rank apc-rank-' + (i <= 3 ? i : 'n') + '">' + i + '</span>';

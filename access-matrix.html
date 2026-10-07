@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Position Access Matrix — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261008a">
+<link rel="stylesheet" href="css/styles.css?v=20261008b">
 <style>
   /* Ren's spec, 2026-09-22: HR-201-driven Position Access Matrix. Deliberately NOT a
      giant position×permission grid with rotated column headers (that's exactly what
@@ -57,14 +57,14 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261008a';
+import { initShell, toast, esc } from './js/shell.js?v=20261008b';
 import {
   getPermissionMatrix, setPositionPermission, getEmployeesForChecklist,
   listEmployeePermissionOverrides, setEmployeePermissionOverride, removeEmployeePermissionOverride,
   listAccessChangeLog, listHrPositions, createHrPosition, renameHrPosition,
   setHrPositionAutomaticAccess, setHrPositionActive, getRoleEmployeeCounts,
-} from './js/api.js?v=20261008a';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20261008a';
+} from './js/api.js?v=20261008b';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20261008b';
 
 // Roles are a fixed system enum (employees_role_check), not HR 201 data -- unlike
 // positions, there's nothing to load dynamically here (spec section 1 is specifically
@@ -80,8 +80,11 @@ const employee = await initShell('access-matrix');
 if (employee) {
   const root = document.getElementById('am-root');
 
-  if (employee.role !== 'Admin') {
-    root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">The Position Access Matrix is Admin-only.</p></div></div>';
+  // OWNER ONLY (Ren, 2026-10-08) -- the same key as the Access & Performance Control Center (migration 202). The database refuses every call on this page to anyone else; this
+  // check just shows them a clear message instead of a page full of errors.
+  if (!(employee.permissions || []).includes('access_perf.view')) {
+    root.innerHTML = '<div class="center-screen"><div><h2>403 — ACCESS DENIED</h2><p>The Position Access Matrix is for the owner only.</p><p class="muted">Taking you back to your Dashboard…</p><p><a class="btn small" href="dashboard.html">Go to the Dashboard now</a></p></div></div>';
+    setTimeout(() => { location.href = 'dashboard.html'; }, 5000);
   } else {
     let keys = []; // [{key, label, category}]
     let grants = new Set(); // "permissionKey|positionKey"
