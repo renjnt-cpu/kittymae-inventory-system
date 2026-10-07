@@ -3,8 +3,8 @@
 // Reads go straight to the tables (row-level security decides what a person may see); every CHANGE goes
 // through a bill_* database function that re-checks who is calling. A function that finds a problem
 // returns {ok:false, errors:[...]} -- callers show those; anything else thrown is an Error.
-import { supabase } from './supabaseClient.js?v=20261007h';
-import { FILE_TYPES, MAX_FILE } from './billsLogic.js?v=20261007h';
+import { supabase } from './supabaseClient.js?v=20261007i';
+import { FILE_TYPES, MAX_FILE } from './billsLogic.js?v=20261007i';
 
 async function rpc(name, params) {
   const { data, error } = await supabase.rpc(name, params);

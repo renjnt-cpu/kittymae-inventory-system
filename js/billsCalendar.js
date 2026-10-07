@@ -1,8 +1,8 @@
 // Bills Management -- the Calendar tab (month / week / agenda) and the Cash Planning tab (what has to be
 // paid, week by week, with the recurring bills that are still to be created counted in as "projected").
-import { esc, money, moneyShort, fmtDate, daysText, statusBadge, prioBadge, tagBadge, kpiCard, stackedColumns, openDrawer, closeDrawer, plural, COLORS } from './billsUi.js?v=20261007h';
-import { matchesScope, monthCells, weekDates, groupByDue, weekday, addDays, ymd, yearOf, monthOf, monthName, addMonths, weekBuckets, projectTemplates, PRIORITIES, sum, daysBetween, PRIORITY_RANK } from './billsLogic.js?v=20261007h';
-import { exportPlan } from './billsExport.js?v=20261007h';
+import { esc, money, moneyShort, fmtDate, daysText, statusBadge, prioBadge, tagBadge, kpiCard, stackedColumns, openDrawer, closeDrawer, plural, COLORS } from './billsUi.js?v=20261007i';
+import { matchesScope, monthCells, weekDates, groupByDue, weekday, addDays, ymd, yearOf, monthOf, monthName, addMonths, weekBuckets, projectTemplates, PRIORITIES, sum, daysBetween, PRIORITY_RANK } from './billsLogic.js?v=20261007i';
+import { exportPlan } from './billsExport.js?v=20261007i';
 
 const $ = (id) => document.getElementById(id);
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

@@ -2,8 +2,8 @@
 // `supabase` directly, so the query shape lives in one place. Mirrors the old app's
 // `api(name, ...args)` helper in spirit, just split into named functions since
 // supabase-js's table/RPC calls aren't as uniformly shaped as google.script.run's.
-import { supabase } from './supabaseClient.js?v=20261007h';
-import { localDateStr } from './uiKit.js?v=20261007h';
+import { supabase } from './supabaseClient.js?v=20261007i';
+import { localDateStr } from './uiKit.js?v=20261007i';
 
 /** Caps the core ledger list queries (Sales, Layaway, Scrap, Subasta) so a tab load
  * fetches recent history instead of the entire table unconditionally -- these had no
@@ -381,44 +381,9 @@ export async function listSales({ branchId, fromDate, toDate } = {}) {
   return data;
 }
 
-/** Walk-in POS checkout (Branches page) -- one atomic multi-item sale via
- * create_pos_sale() (91_pos_walkin_sale.sql), which loops record_sale() per item
- * inside one Postgres function call so a later item's failure rolls back everything
- * already recorded in the same call, no manual client-side rollback needed. */
-export async function createPosSale({ branchId, items, customerName, contactNumber, orderNumber, payments, saleDate, notes, pickupAddress }) {
-  const { data, error } = await supabase.rpc('create_pos_sale', {
-    p_branch_id: branchId,
-    p_items: items.map((it) => ({ sku: it.sku, qty: it.qty, unit_price: it.unitPrice ?? null })),
-    p_customer_name: customerName || null, p_contact_number: contactNumber || null,
-    p_order_number: orderNumber || null,
-    p_payments: (payments || []).map((p) => ({ method: p.method, amount: p.amount, reference: p.reference || null })),
-    p_sale_date: saleDate || null, p_notes: notes || null,
-    p_pickup_address: pickupAddress || null,
-  });
-  if (error) throw new Error(error.message);
-  return data; // the new sale_group_id
-}
-
-/** Correct a mistake on one line of a completed sale (wrong SKU/qty/price/customer/
- * order ref/notes) -- Admin/Manager/Branch Supervisor only (update_pos_sale_item
- * enforces this server-side too). Reverses the original item's stock effect and
- * applies the corrected one so qty_available stays accurate. */
-export async function updatePosSaleItem({ movementId, sku, qty, unitPrice, customerName, contactNumber, orderNumber, notes, reason }) {
-  const { error } = await supabase.rpc('update_pos_sale_item', {
-    p_movement_id: movementId, p_sku: sku, p_qty: qty, p_unit_price: unitPrice ?? null,
-    p_customer_name: customerName || null, p_contact_number: contactNumber || null, p_order_number: orderNumber || null,
-    p_notes: notes || null, p_reason: reason || null,
-  });
-  if (error) throw new Error(error.message);
-}
-
-/** Fully delete a completed sale (every line + its payments), restoring the stock
- * each line took -- for a sale that should never have existed at all. Admin/Manager/
- * Branch Supervisor only. */
-export async function deletePosSale(saleGroupId) {
-  const { error } = await supabase.rpc('delete_pos_sale', { p_sale_group_id: saleGroupId });
-  if (error) throw new Error(error.message);
-}
+// (createPosSale / updatePosSaleItem / deletePosSale were removed from this copy on 2026-10-07: nothing in this app calls them, and the database functions
+// behind them changed (create_pos_sale and update_pos_sale_item have new signatures; delete_pos_sale now only raises -- a sale is voided or deleted through the
+// request chain in the POS app). The POS app's own js/api.js is the live copy.)
 
 /** Flips a pickup sale's status from Pending Pickup to Picked Up (mark_sale_picked_up's
  * own gate: Admin/Manager/Branch Supervisor/Branch Team Leader, same as markCodCollected). */
