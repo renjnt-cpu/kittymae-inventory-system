@@ -1,7 +1,7 @@
 // Access & Performance Control Center -- Overview: the owner's one-screen answer to "who has access to what, who performs, who needs a second look".
-import { esc, panel, stat, statGrid, money, int, rate, dash, emptyBox, loadingBox, errorBox, friendly, accuracyOf, empLink, wireLinks, fmtDate, btn } from './apcCore.js?v=20261008b';
-import { createClientTable } from './apcTable.js?v=20261008b';
-import { needsReview, signalCounts } from './apcMetrics.js?v=20261008b';
+import { esc, panel, stat, statGrid, money, int, rate, dash, emptyBox, loadingBox, errorBox, friendly, accuracyOf, empLink, wireLinks, fmtDate, btn } from './apcCore.js?v=20261011a';
+import { createClientTable } from './apcTable.js?v=20261011a';
+import { needsReview, signalCounts } from './apcMetrics.js?v=20261011a';
 
 function add(root, html) { const t = document.createElement('div'); t.innerHTML = html; const el = t.firstElementChild; root.appendChild(el); return el; }
 const n = (v) => Number(v) || 0;

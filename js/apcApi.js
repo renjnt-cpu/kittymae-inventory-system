@@ -1,8 +1,8 @@
 // Access & Performance Control Center -- every database call the page makes (so the screens can be driven by a stand-in object in tests).
 // Every apc_* function checks the caller's own permission key; a person without it gets an "ACCESS DENIED" error and no rows (migrations 196-199).
-import { supabase } from './supabaseClient.js?v=20261008b';
-import { saveEmployee, accessImpact } from './hrApi.js?v=20261008b';
-import { getAccessChecklist, setAccessChecklistItem, getEmployeesForChecklist, setEmployeePassword, listPackedOrders, listOnlineOrderCareAssignments } from './api.js?v=20261008b';
+import { supabase } from './supabaseClient.js?v=20261011a';
+import { saveEmployee, accessImpact } from './hrApi.js?v=20261011a';
+import { getAccessChecklist, setAccessChecklistItem, getEmployeesForChecklist, setEmployeePassword, listPackedOrders, listOnlineOrderCareAssignments } from './api.js?v=20261011a';
 
 async function rpc(name, params) {
   const { data, error } = await supabase.rpc(name, params || {});

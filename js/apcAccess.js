@@ -1,12 +1,12 @@
 // Access & Performance Control Center -- the Access Control tab. Pick an employee, see exactly what they can do and where each permission comes from (role, position, or the owner's own
 // override), change it with plain switches, and save. Nothing is stored until Save; sensitive changes ask for a reason and a tick; every change goes to the permission history with
 // the old and the new access. "Verified" records what they can do right now, so any later difference shows up as ACCESS MISMATCH.
-import { esc, panel, chipFor, dialog, changeList, toast, friendly, guarded, btn, emptyBox, fmtDate, errorBox, dash } from './apcCore.js?v=20261008b';
-import { describeKey, keyState, actionFor, pendingToMatch, LOCKED_KEYS } from './apcAccessModel.js?v=20261008b';
-import { modulesHtml, sensitiveHtml, branchHtml, wireBranchSave, openReview, presetFlow } from './apcAccessSections.js?v=20261008b';
-import { mountEmployeeList } from './apcEmpList.js?v=20261008b';
-import { renderChecklist } from './apcChecklist.js?v=20261008b';
-import { renderAccountActions } from './apcStatus.js?v=20261008b';
+import { esc, panel, chipFor, dialog, changeList, toast, friendly, guarded, btn, emptyBox, fmtDate, errorBox, dash } from './apcCore.js?v=20261011a';
+import { describeKey, keyState, actionFor, pendingToMatch, LOCKED_KEYS } from './apcAccessModel.js?v=20261011a';
+import { modulesHtml, sensitiveHtml, branchHtml, wireBranchSave, openReview, presetFlow } from './apcAccessSections.js?v=20261011a';
+import { mountEmployeeList } from './apcEmpList.js?v=20261011a';
+import { renderChecklist } from './apcChecklist.js?v=20261011a';
+import { renderAccountActions } from './apcStatus.js?v=20261011a';
 
 const st = { forId: null, pending: new Map(), openMods: new Map() };
 const yn = (b) => b ? 'YES' : 'NO';

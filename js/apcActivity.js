@@ -1,7 +1,7 @@
 // Access & Performance Control Center -- Activity Log (what everyone did, newest first) and the Permission Change History (every access change: old access -> new access, who, when, why).
 // Both read records that already exist (the Global Activity feed and the access change log); nothing is copied.
-import { esc, panel, dash, loadingBox, errorBox, friendly, empLink, wireLinks, btn, badge } from './apcCore.js?v=20261008b';
-import { createClientTable } from './apcTable.js?v=20261008b';
+import { esc, panel, dash, loadingBox, errorBox, friendly, empLink, wireLinks, btn, badge } from './apcCore.js?v=20261011a';
+import { createClientTable } from './apcTable.js?v=20261011a';
 
 const KINDS = ['Created', 'Edited', 'Approved', 'Deleted', 'Voided', 'Refunded', 'Encoded', 'Transferred', 'Changed Permission'];
 const f = { employee: '', module: '', kind: '' };

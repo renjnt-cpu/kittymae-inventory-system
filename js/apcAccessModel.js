@@ -19,6 +19,7 @@ export const KEY_MAP = {
   'dashboard.cost': ['DASHBOARD', 'view'], 'dashboard.profit': ['DASHBOARD', 'view'], 'dashboard.capital': ['DASHBOARD', 'view'], 'dashboard.expenses': ['DASHBOARD', 'view'],
   'dashboard.export': ['DASHBOARD', 'export'], 'dashboard.capital_manage': ['FINANCE', 'edit'], 'dashboard.settings': ['SETTINGS', 'edit'],
   'branches.view_all': ['SALES', 'view'], 'layaway.request_delete': ['SALES', 'delete'],
+  'message_pancake.view': ['SALES', 'view'], 'message_pancake.manage': ['SALES', 'edit'],
   'pos_sale.manage': ['POS', 'delete'], 'transaction.edit_amount': ['POS', 'edit'],
   'datafix.view': ['PRODUCTS', 'view'], 'datafix.team': ['PRODUCTS', 'view'], 'datafix.sku_create': ['PRODUCTS', 'add'], 'datafix.category': ['PRODUCTS', 'edit'], 'datafix.cost': ['PRODUCTS', 'edit'],
   'datafix.sku_match': ['PRODUCTS', 'edit'], 'datafix.bulk': ['PRODUCTS', 'edit'], 'datafix.assign': ['PRODUCTS', 'approve'],

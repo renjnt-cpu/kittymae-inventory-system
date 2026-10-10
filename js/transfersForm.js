@@ -3,9 +3,9 @@
 // source and destination, what the stock will be before and after, and warnings: not enough stock at the source (blocked, unless an
 // Admin / Manager overrides with a written reason), a low-stock warning, and a destination that already holds plenty.
 // Nothing here moves stock: a request only asks. The database re-checks everything when it is saved.
-import { esc, qty, pcs, openDrawer, closeDrawer, drawerBody, actionPanel, friendly, errorsText, branchBadge } from './transfersUi.js?v=20261008b';
-import { stockOf, previewLine, REASONS, PRIORITIES } from './transfersLogic.js?v=20261008b';
-import { flagInvalid } from './uiKit.js?v=20261008b';
+import { esc, qty, pcs, openDrawer, closeDrawer, drawerBody, actionPanel, friendly, errorsText, branchBadge } from './transfersUi.js?v=20261011a';
+import { stockOf, previewLine, REASONS, PRIORITIES } from './transfersLogic.js?v=20261011a';
+import { flagInvalid } from './uiKit.js?v=20261011a';
 
 const $ = (id) => document.getElementById(id);
 const val = (id) => { const el = $(id); return el ? el.value : ''; };

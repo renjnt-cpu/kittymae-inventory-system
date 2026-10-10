@@ -3,11 +3,11 @@
 // Nothing here saves anything: edits go into ps.values and are saved through the review dialog (hrEdit.js).
 import {
   esc, $, badge, chip, viewField, inputHtml, bindEdit, spinner, emptyBox, lockIcon, eyeIcon, friendly, toast, confirmDialog, reasonDialog, openModal,
-} from './hrUi.js?v=20261008b';
+} from './hrUi.js?v=20261011a';
 import {
   FIELD_DEFS, GOV_FIELDS, money, fmtDate, fmtDateTime, statusLabel, statusTone, spanText, ageText, blank, historyText, plural, DOC_CATEGORIES,
-} from './hrLogic.js?v=20261008b';
-import { num, rangeText } from './leaveUi.js?v=20261008b';
+} from './hrLogic.js?v=20261011a';
+import { num, rangeText } from './leaveUi.js?v=20261011a';
 
 /** May this person change this field right now? (The database decides again when saving.) */
 export function canEditField(ctx, field) {
@@ -140,7 +140,7 @@ async function fillLeaveCard(ctx, ps, panel) {
   };
   if (ps.leaveInfo) paint(ps.leaveInfo);
   try {
-    const { loadLeaveSummary } = await import('./leaveSummary.js?v=20261008b');
+    const { loadLeaveSummary } = await import('./leaveSummary.js?v=20261011a');
     ps.leaveInfo = describeLeave(await loadLeaveSummary(ps.id));
     paint(ps.leaveInfo);
   } catch (err) {
@@ -172,10 +172,10 @@ export function renderEmployment(ctx, ps, panel) {
   afterDraw(ctx, ps, panel, (field) => {
     if (field === 'department') {
       const dl = $('hr-dl-job_title'); if (!dl) return;
-      import('./hrLogic.js?v=20261008b').then((L) => { dl.innerHTML = [...new Set((ctx.positions || []).concat(L.JOB_TITLES_BY_DEPT[val(ps, 'department')] || []))].map((t) => '<option value="' + esc(t) + '">').join(''); });
+      import('./hrLogic.js?v=20261011a').then((L) => { dl.innerHTML = [...new Set((ctx.positions || []).concat(L.JOB_TITLES_BY_DEPT[val(ps, 'department')] || []))].map((t) => '<option value="' + esc(t) + '">').join(''); });
     }
   });
-  import('./hrAssets.js?v=20261008b').then((m) => m.mountAssetsProfile($('hr-assets-host'), ps.id)).catch((err) => {
+  import('./hrAssets.js?v=20261011a').then((m) => m.mountAssetsProfile($('hr-assets-host'), ps.id)).catch((err) => {
     const h = $('hr-assets-host'); if (h) h.innerHTML = '<p class="muted">Company assets could not be loaded (' + esc(friendly(err)) + ').</p>';
   });
 }

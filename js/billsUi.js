@@ -1,7 +1,7 @@
 // Bills Management -- shared display helpers: money and date text, status / priority badges, KPI cards,
 // the drawers every screen uses, the inline confirmation panel (the app never uses confirm() / prompt())
 // and the charts. Charts are plain SVG or CSS bars: no chart library, nothing loaded from the internet.
-import { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText } from './leaveUi.js?v=20261008b';
+import { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText } from './leaveUi.js?v=20261011a';
 export { esc, fmtDate, fmtDateTime, fmtBytes, kv, errorsText };
 
 export const money = (n) => (n === null || n === undefined || n === '') ? '—' : '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

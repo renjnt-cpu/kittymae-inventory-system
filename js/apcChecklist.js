@@ -1,7 +1,7 @@
 // Access & Performance Control Center -- the Task Checklist this page grew out of ("each task starts from what their role/position grants"), now showing three things per task:
 // POSITION DEFAULT (what the role/position rules give), OWNER RECORD (what the owner saw on the real account and recorded -- stored in access_checklist_verifications), and CURRENT.
 // The default is worked out from the same role/position rules the screens use; the record is the owner's own note and does not change what anyone can do.
-import { esc, toast, friendly, guarded, btn } from './apcCore.js?v=20261008b';
+import { esc, toast, friendly, guarded, btn } from './apcCore.js?v=20261011a';
 
 const POSITION_MANAGERS = ['Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
 const CATEGORY_ORDER = ['inventory', 'movement', 'orders', 'transfers', 'branches', 'capital', 'payments', 'assets', 'lbc', 'refund', 'bills'];

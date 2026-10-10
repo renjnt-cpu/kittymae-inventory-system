@@ -1,12 +1,12 @@
 // Access & Performance Control Center -- the Employee Performance tab: the whole team in one sortable table, then one person in full -- profile, the figures that fit their kind of work,
 // this period against the last, what the data says (strengths / needs attention), their errors and recent activity, and private owner notes.
 // Every number opens the records behind it. Scores are optional, use the owner's weights, and never replace the raw figures.
-import { esc, panel, stat, statGrid, money, int, rate, dash, emptyBox, loadingBox, errorBox, friendly, toast, guarded, btn, fmtDate, fmtDateTime, chipFor, accuracyHtml, accuracyOf, empLink, drillLink, wireLinks, NOT_ENOUGH, badge } from './apcCore.js?v=20261008b';
-import { createClientTable } from './apcTable.js?v=20261008b';
-import { mountEmployeeList } from './apcEmpList.js?v=20261008b';
-import { METRICS, encoded } from './apcMetricRows.js?v=20261008b';
-import { familiesOf, trendFor, reviewPanel, qualityScore, performanceScore, weightsOf, WEIGHT_LABELS, signalCounts, unitsOf } from './apcMetrics.js?v=20261008b';
-import { renderCompare } from './apcCompare.js?v=20261008b';
+import { esc, panel, stat, statGrid, money, int, rate, dash, emptyBox, loadingBox, errorBox, friendly, toast, guarded, btn, fmtDate, fmtDateTime, chipFor, accuracyHtml, accuracyOf, empLink, drillLink, wireLinks, NOT_ENOUGH, badge } from './apcCore.js?v=20261011a';
+import { createClientTable } from './apcTable.js?v=20261011a';
+import { mountEmployeeList } from './apcEmpList.js?v=20261011a';
+import { METRICS, encoded } from './apcMetricRows.js?v=20261011a';
+import { familiesOf, trendFor, reviewPanel, qualityScore, performanceScore, weightsOf, WEIGHT_LABELS, signalCounts, unitsOf } from './apcMetrics.js?v=20261011a';
+import { renderCompare } from './apcCompare.js?v=20261011a';
 
 const pref = { get(k) { try { return localStorage.getItem(k) === '1'; } catch (e) { return false; } }, set(k, v) { try { localStorage.setItem(k, v ? '1' : '0'); } catch (e) { /* not remembered */ } } };
 const RANKS = [['net', 'Highest Sales'], ['orders', 'Most Transactions'], ['tasks', 'Most Tasks'], ['encoded', 'Most Entries'], ['accuracy', 'Highest Accuracy'], ['errors_asc', 'Lowest Errors']];

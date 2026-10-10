@@ -2,10 +2,10 @@
 // balances, high amounts, missing proof, waiting too long), what the company still owes, aging, and charts.
 // Two groups of numbers on purpose: "requests in this period" follows the Month / Year filter, "right now" never does
 // (a refund that has been waiting 20 days is waiting whatever month it was requested).
-import { esc, money, moneyShort, fmtDate, plural, kpiCard, donut, hbars, columnPairs, statusBadge, priorityBadge, agingBadge, flagBadges, proofBadge, REFUND_COLORS, statusColor, COLORS } from './refundsUi.js?v=20261008b';
-import { refundKpis, buildAlerts, liability, agingBuckets, monthlySeries, groupTotals, statusCounts, agingKey, STATUSES, daysBetween } from './refundsLogic.js?v=20261008b';
-import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './refundsFilters.js?v=20261008b';
-import { alertRow, bindActions } from './refundsActions.js?v=20261008b';
+import { esc, money, moneyShort, fmtDate, plural, kpiCard, donut, hbars, columnPairs, statusBadge, priorityBadge, agingBadge, flagBadges, proofBadge, REFUND_COLORS, statusColor, COLORS } from './refundsUi.js?v=20261011a';
+import { refundKpis, buildAlerts, liability, agingBuckets, monthlySeries, groupTotals, statusCounts, agingKey, STATUSES, daysBetween } from './refundsLogic.js?v=20261011a';
+import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './refundsFilters.js?v=20261011a';
+import { alertRow, bindActions } from './refundsActions.js?v=20261011a';
 
 const AGE_COLORS = ['#9aa4ad', '#e0a030', '#e07b30', '#d9602a', '#a31515'];
 // seven cards share one row on a laptop: a six-figure amount gets a slightly smaller number so it never wraps

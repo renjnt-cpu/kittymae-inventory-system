@@ -1,10 +1,10 @@
 // Assets & Supplies Custodian -- the Employee Accountability tab: who holds company property, who has not confirmed receipt, who has left and
 // still holds something, and each person's full record (what they hold now, everything they have held, reports against it). The employee
 // record itself is never copied or changed here -- names, branches, departments and employment status are read from the HR 201 File.
-import { esc, plural, branchChip, dt, statusBadge, conditionBadge, flowBadge, tagBadge, openDrawer, kv, emptyBox, field, opts, setDetailHandlers } from './assetsUi.js?v=20261008b';
-import { peopleRows } from './assetsLogic.js?v=20261008b';
-import { exportPeople } from './assetsReports.js?v=20261008b';
-import { exportMenu, pagerHtml } from './assetsList.js?v=20261008b';
+import { esc, plural, branchChip, dt, statusBadge, conditionBadge, flowBadge, tagBadge, openDrawer, kv, emptyBox, field, opts, setDetailHandlers } from './assetsUi.js?v=20261011a';
+import { peopleRows } from './assetsLogic.js?v=20261011a';
+import { exportPeople } from './assetsReports.js?v=20261011a';
+import { exportMenu, pagerHtml } from './assetsList.js?v=20261011a';
 
 const $ = (id) => document.getElementById(id);
 export const newPeopleState = () => ({ view: 'holding', q: '', branch: '', page: 1, pageSize: 50 });

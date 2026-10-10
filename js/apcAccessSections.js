@@ -1,7 +1,7 @@
 // Access & Performance Control Center -- the pieces of the Access Control tab: the permission switches (by module, and the SENSITIVE ones on their own), the branch scope,
 // the "do they still need this?" review, and applying a preset. Every switch is a real permission key; nothing here stores anything until the owner presses Save.
-import { esc, badge, dialog, changeList, openDrawer, closeDrawer, toast, btn, guarded } from './apcCore.js?v=20261008b';
-import { MODULES, MODULE_NOTE, ACTIONS, describeKey, SENSITIVE_ORDER, SENSITIVE_NOTE, LOCKED_KEYS, BRANCH_SCOPE_KEYS, REVIEW_GROUPS, keyState, actionFor, pendingToMatch } from './apcAccessModel.js?v=20261008b';
+import { esc, badge, dialog, changeList, openDrawer, closeDrawer, toast, btn, guarded } from './apcCore.js?v=20261011a';
+import { MODULES, MODULE_NOTE, ACTIONS, describeKey, SENSITIVE_ORDER, SENSITIVE_NOTE, LOCKED_KEYS, BRANCH_SCOPE_KEYS, REVIEW_GROUPS, keyState, actionFor, pendingToMatch } from './apcAccessModel.js?v=20261011a';
 
 const yn = (b) => b ? 'YES' : 'NO';
 const actionLabel = (id) => (ACTIONS.find((a) => a.id === id) || { label: id }).label;
