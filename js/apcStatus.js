@@ -2,7 +2,7 @@
 // Position, branch and status go through the same HR function the HR 201 File page uses (hr_save_employee): it shows exactly what the person will gain or lose first, asks for a
 // reason, and writes the change to the HR audit log. No password is ever shown -- a password can only be set, never read.
 // ("Lock account" is the same thing as switching the account off here: an inactive account cannot sign in or do anything.)
-import { esc, dialog, toast, guarded, btn } from './apcCore.js?v=20261011a';
+import { esc, dialog, toast, guarded, btn } from './apcCore.js?v=20261011b';
 
 function impactBody(imp, what) {
   const list = (xs) => xs.length ? '<ul class="apc-plain">' + xs.slice(0, 40).map((k) => '<li>' + esc(k.label || k.key) + '</li>').join('') + (xs.length > 40 ? '<li class="muted">… and ' + (xs.length - 40) + ' more</li>' : '') + '</ul>' : '<p class="muted">None.</p>';

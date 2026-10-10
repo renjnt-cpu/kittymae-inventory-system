@@ -1,10 +1,10 @@
 // HR 201 File -- the employee directory: summary cards, HR alerts, search, filters, quick filters and the employee table.
 // It only ever shows the columns the directory function returns (no salary, no government IDs).
-import { esc, $, badge, emptyBox } from './hrUi.js?v=20261011a';
+import { esc, $, badge, emptyBox } from './hrUi.js?v=20261011b';
 import {
   QUICK_FILTERS, SORTS, defaultFilters, filterRows, sortRows, distinct, statusLabel, statusTone, fmtDate, directoryCsv, plural,
   ALERT_TITLE, ALERT_QUICK, COMPANIES, DEPARTMENTS, STATUS_LABEL, EMPLOYMENT_STATUSES,
-} from './hrLogic.js?v=20261011a';
+} from './hrLogic.js?v=20261011b';
 
 export function newDirectoryState() {
   return { filters: defaultFilters(), sort: { field: 'employee_code', dir: 'asc' }, alertsOpen: false };

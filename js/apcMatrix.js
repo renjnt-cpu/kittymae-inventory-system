@@ -1,9 +1,9 @@
 // Access & Performance Control Center -- Role / Position Matrix: every role and position side by side, so the owner can compare access at a glance, then open one to see who is in it,
 // what it grants, its branch reach, the people on it with custom overrides, and its sensitive access. Editing a position's permissions stays on the Position Access Matrix page (it asks
 // for confirmation and shows who is affected); this tab is for comparing.
-import { esc, panel, badge, loadingBox, errorBox, friendly, empLink, wireLinks, btn } from './apcCore.js?v=20261011a';
-import { createClientTable } from './apcTable.js?v=20261011a';
-import { describeKey, SENSITIVE, BRANCH_SCOPE_KEYS, MODULES } from './apcAccessModel.js?v=20261011a';
+import { esc, panel, badge, loadingBox, errorBox, friendly, empLink, wireLinks, btn } from './apcCore.js?v=20261011b';
+import { createClientTable } from './apcTable.js?v=20261011b';
+import { describeKey, SENSITIVE, BRANCH_SCOPE_KEYS, MODULES } from './apcAccessModel.js?v=20261011b';
 
 const view = { cols: null, module: '', sensitiveOnly: false, detail: null };
 

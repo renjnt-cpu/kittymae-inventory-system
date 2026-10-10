@@ -1,8 +1,8 @@
 // Sales & Profit Dashboard -- the building blocks every tab uses: KPI cards, panels, empty / error / locked states, badges, a drawer, a toast and the charts.
 // Charts are plain SVG (no chart library, nothing loaded from the internet), they scale to the width of their panel, and they never draw NaN: a missing
 // figure is left as a gap or a dashed "no data" bar, never as zero.
-import { esc, fin, money, moneyShort, int, ARROW, bucketLabel } from './sdCore.js?v=20261011a';
-import { hbars, donut, COLORS } from './billsUi.js?v=20261011a';
+import { esc, fin, money, moneyShort, int, ARROW, bucketLabel } from './sdCore.js?v=20261011b';
+import { hbars, donut, COLORS } from './billsUi.js?v=20261011b';
 export { hbars, donut, COLORS };
 
 export const C = { sales: '#1a56b0', gross: '#2e7d32', net: '#8a5a00', cogs: '#d9602a', opex: '#c62828', refunds: '#9b59b6', gray: '#9aa4ad', blue2: '#5b8bd4', yellow: '#e0a030' };

@@ -2,8 +2,8 @@
 // tabs (Month / Year / Branch / Refund method), and the helpers that turn those choices into a list of refunds.
 // One set of choices (ctx.filters) drives every tab, so switching tabs never changes what you are looking at.
 // The page opens on "all months": the old Refunds page showed everything, and a month default would look like missing records.
-import { esc } from './refundsUi.js?v=20261011a';
-import { inPeriod, matchesScope, MONTHS, METHODS, yearOf } from './refundsLogic.js?v=20261011a';
+import { esc } from './refundsUi.js?v=20261011b';
+import { inPeriod, matchesScope, MONTHS, METHODS, yearOf } from './refundsLogic.js?v=20261011b';
 
 /** Refunds for the chosen branch / method only -- used for "right now" numbers (waiting, owed, old), which ignore the month. */
 export const scopedLive = (ctx) => ctx.refunds.filter((r) => matchesScope(r, ctx.filters));

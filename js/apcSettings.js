@@ -1,7 +1,7 @@
 // Access & Performance Control Center -- Settings: the owner's own thresholds ("what counts as a higher-than-normal void rate"), the weights behind the two optional scores, and which kinds
 // of record are shown as review signals instead of counting as errors. Nothing here is hard-coded in the screens; changing a value changes every figure and alert that uses it.
-import { esc, openDrawer, closeDrawer, toast, guarded, btn } from './apcCore.js?v=20261011a';
-import { DEFAULT_TH, DEFAULT_WEIGHTS, WEIGHT_LABELS, thresholds, weightsOf } from './apcMetrics.js?v=20261011a';
+import { esc, openDrawer, closeDrawer, toast, guarded, btn } from './apcCore.js?v=20261011b';
+import { DEFAULT_TH, DEFAULT_WEIGHTS, WEIGHT_LABELS, thresholds, weightsOf } from './apcMetrics.js?v=20261011b';
 
 const TH_LABELS = {
   void_rate_pct: 'Void rate that needs a look (%)', discount_rate_pct: 'Discount rate that needs a look (%)', refund_rate_pct: 'Refund rate that needs a look (%) — not used until refunds can be tied to a seller',

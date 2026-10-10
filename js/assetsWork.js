@@ -3,9 +3,9 @@
 // approve -> release -> receive), change condition, accessories, financial details, photos and files, and the employee's own
 // acknowledgment. Each opens in the side drawer so it works the same from a list row and from the asset card. The database re-checks every
 // rule (who, status, branch, dates); a panel only helps people get it right the first time. Nothing here deletes anything.
-import { esc, field, opts, qty, dt, money, openDrawer, closeDrawer, drawerBody, actionPanel, friendly, errorsText, fmtBytes, must, val, personOptions, branchOptions, branchName, statusBadge, conditionBadge } from './assetsUi.js?v=20261011a';
-import { ISSUE_CONDITIONS, CONDITIONS, RETURN_OUTCOMES, FILE_KINDS, COST_KINDS, PHOTO_STAGES, FILE_TYPES, MAX_FILE, uniqueSorted, daysBetween } from './assetsLogic.js?v=20261011a';
-import { flagInvalid } from './uiKit.js?v=20261011a';
+import { esc, field, opts, qty, dt, money, openDrawer, closeDrawer, drawerBody, actionPanel, friendly, errorsText, fmtBytes, must, val, personOptions, branchOptions, branchName, statusBadge, conditionBadge } from './assetsUi.js?v=20261011b';
+import { ISSUE_CONDITIONS, CONDITIONS, RETURN_OUTCOMES, FILE_KINDS, COST_KINDS, PHOTO_STAGES, FILE_TYPES, MAX_FILE, uniqueSorted, daysBetween } from './assetsLogic.js?v=20261011b';
+import { flagInvalid } from './uiKit.js?v=20261011b';
 
 const $ = (id) => document.getElementById(id);
 const errBox = (html) => { const b = $('ac-sd-errors'); if (b) b.innerHTML = html ? '<div class="msg error">' + html + '</div>' : ''; if (html && drawerBody('side')) drawerBody('side').scrollTop = 0; };

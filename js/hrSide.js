@@ -1,9 +1,9 @@
 // HR 201 File -- the record-keeping tabs: Access & Permissions (view only), Employment History, Notes, Audit Log, and the Leave tab.
-import { esc, $, badge, spinner, emptyBox, friendly, toast, confirmDialog, reasonDialog, openModal, inputHtml, bindEdit, busy, lockIcon } from './hrUi.js?v=20261011a';
+import { esc, $, badge, spinner, emptyBox, friendly, toast, confirmDialog, reasonDialog, openModal, inputHtml, bindEdit, busy, lockIcon } from './hrUi.js?v=20261011b';
 import {
   fmtDate, fmtDateTime, historyText, plural, statusLabel, ACTION_LABEL, SECTION_LABEL, FIELD_DEFS, blank, money, HISTORY_LABEL,
-} from './hrLogic.js?v=20261011a';
-import { rebuildOriginal, canEditField } from './hrTabs.js?v=20261011a';
+} from './hrLogic.js?v=20261011b';
+import { rebuildOriginal, canEditField } from './hrTabs.js?v=20261011b';
 
 const stale = (ctx, ps, tab) => ctx.ps !== ps || ps.tab !== tab;
 
@@ -177,7 +177,7 @@ function auditDetail(r) {
 export async function renderLeave(ctx, ps, panel) {
   panel.innerHTML = '<h3>Leave</h3><div id="hr-leave-host">' + spinner('Loading the leave record…') + '</div>';
   try {
-    const { mountLeaveProfile } = await import('./leaveProfile.js?v=20261011a');
+    const { mountLeaveProfile } = await import('./leaveProfile.js?v=20261011b');
     if (stale(ctx, ps, 'leave')) return;
     await mountLeaveProfile($('hr-leave-host'), ps.id);
   } catch (err) { const h = $('hr-leave-host'); if (h) h.innerHTML = '<div class="msg error">Could not load the leave record: ' + esc(friendly(err)) + '</div>'; }

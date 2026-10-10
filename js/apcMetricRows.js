@@ -1,6 +1,6 @@
 // Access & Performance Control Center -- the list of figures a person can be measured on, each tied to the kind of work it belongs to ("family") so that a cashier is not measured
 // on scrap and a scrap encoder is not measured on voids. `drill` names the records behind the figure (click it to see them).
-import { money, int, rate, grams, accuracyOf, dash, fin } from './apcCore.js?v=20261011a';
+import { money, int, rate, grams, accuracyOf, dash, fin } from './apcCore.js?v=20261011b';
 
 const m = (id, label, fam, get, fmt, extra) => Object.assign({ id, label, fam, get, fmt }, extra || {});
 const nz = (v) => (v === null || v === undefined ? null : v);

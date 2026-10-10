@@ -1,8 +1,8 @@
 // Access & Performance Control Center -- compare up to five people side by side. Only figures that fit everyone's kind of work are compared (a cashier and a scrap encoder are
 // compared on accuracy and errors, not on each other's sales); the best figure in a row is marked, never ranked into a verdict.
-import { esc, panel, toast, empLink, wireLinks, dash, NOT_ENOUGH } from './apcCore.js?v=20261011a';
-import { METRICS } from './apcMetricRows.js?v=20261011a';
-import { familiesOf } from './apcMetrics.js?v=20261011a';
+import { esc, panel, toast, empLink, wireLinks, dash, NOT_ENOUGH } from './apcCore.js?v=20261011b';
+import { METRICS } from './apcMetricRows.js?v=20261011b';
+import { familiesOf } from './apcMetrics.js?v=20261011b';
 
 const MAX = 5;
 const picked = new Set();

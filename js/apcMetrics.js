@@ -1,7 +1,7 @@
 // Access & Performance Control Center -- the judgement calls, kept in one place and kept plain: thresholds and weights come from the owner's settings (never hard-coded),
 // every statement is worked out from the figures on screen, and the wording is "Needs Review" -- never a verdict on a person.
 // Rates and counts come from the database (apc_performance); this file only compares them.
-import { fin, accuracyOf, needsSample, pctChange, money } from './apcCore.js?v=20261011a';
+import { fin, accuracyOf, needsSample, pctChange, money } from './apcCore.js?v=20261011b';
 
 export const DEFAULT_TH = { void_rate_pct: 5, refund_rate_pct: 5, discount_rate_pct: 10, error_rate_pct: 5, min_sample: 10, repeat_error_count: 3, low_activity_events: 3, inactive_days: 30, low_stock_qty: 2 };
 export const DEFAULT_WEIGHTS = {
