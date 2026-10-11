@@ -1,10 +1,10 @@
 // Transfers -- the History tab (everything that ever happened on a transfer; permanent and read-only, with the field-by-field audit
 // log for Admins and Managers) and the Settings tab (alert limits, the inventory check, who can do what, how stock moves).
-import { esc, fmtDateTime, plural, friendly, errorsText } from './transfersUi.js?v=20261011d';
-import { uniqueSorted } from './transfersLogic.js?v=20261011d';
-import { LOG_COLUMNS, logRow } from './transfersExport.js?v=20261011d';
-import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261011d';
-import { flagInvalid } from './uiKit.js?v=20261011d';
+import { esc, fmtDateTime, plural, friendly, errorsText } from './transfersUi.js?v=20261011e';
+import { uniqueSorted } from './transfersLogic.js?v=20261011e';
+import { LOG_COLUMNS, logRow } from './transfersExport.js?v=20261011e';
+import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261011e';
+import { flagInvalid } from './uiKit.js?v=20261011e';
 
 const $ = (id) => document.getElementById(id);
 const field = (label, inner) => '<div class="field"><label>' + label + '</label>' + inner + '</div>';
