@@ -5,7 +5,7 @@ import { api, esc, money, int, fmtDate, friendly, todayIn } from './sdCore.js?v=
 import { panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, closeDrawer, toast, drawerBody } from './sdUi.js?v=20261011e';
 import { createTable } from './sdTable.js?v=20261011e';
 import { COLS, ROW_TITLE } from './sdColumns.js?v=20261011e';
-import { stats } from './sdTabs.js?v=20261011e';
+import { stats } from './sdTabs.js?v=20261011f';
 
 const TYPES = [
   { id: 'INITIAL_CAPITAL', label: 'Initial capital', hint: 'The money the owner first put into the business.' },

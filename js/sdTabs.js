@@ -5,6 +5,15 @@ import { panel, lockedBox, loadingBox, errorBox, emptyBox, hbars, donut, lineCha
 import { createTable, staticTable } from './sdTable.js?v=20261011e';
 import { COLS, ROW_TITLE } from './sdColumns.js?v=20261011e';
 import { openDrill } from './sdOverview.js?v=20261011e';
+import { supabase } from './supabaseClient.js?v=20261011e';
+
+// Supplier payments (migration 218): asked here, in the one file that shows them, the same way sdCore's api asks for the other figures (a refusal from the database arrives as ok:false = denied)
+async function supplierPayments(f) {
+  const { data, error } = await supabase.rpc('dash_supplier_payments', { p_f: f });
+  if (error) throw new Error(error.message);
+  if (data && data.ok === false) { const e = new Error((data.errors || ['Something went wrong.']).join(' ')); e.errors = data.errors || []; e.denied = true; throw e; }
+  return data;
+}
 
 // ---------------------------------------------------------------- shared bits
 /** A row of figures; `chip` compares this period with the previous one. */
@@ -146,7 +155,7 @@ export function renderPurchases(root, ctx) {
         { label: 'Pieces purchased', html: esc(int(c.units)), cmp: s.prev ? { cur: c.units, prev: p.units, good: 'neutral' } : null, f: int },
         { label: 'Deliveries', html: esc(int(c.deliveries)), cmp: s.prev ? { cur: c.deliveries, prev: p.deliveries, good: 'neutral' } : null, f: int },
         { label: 'Deliveries with no price', html: esc(int(c.unpriced)), sub: int(c.units_unpriced) + ' pieces — their cost is unknown, not zero' },
-      ]) + (s.notes || []).map((n) => '<p class="muted sd-note">' + esc(n) + '</p>').join(''); }, draw);
+      ]) + (s.notes || []).map((n) => '<p class="muted sd-note">' + esc(n) + '</p>').join('') + (ctx.can.expenses ? '<p class="muted sd-note">What was paid to suppliers is in the Expenses tab, under Supplier Payments.</p>' : ''); }, draw);
     const grid = root.querySelector('#sd-pu-grid');
     const tr = add(grid, panel('Purchase Trend', '', { cls: 'sd-span-12', sub: 'Priced purchases over time', actions: grainSelect(grain) }));
     const bc = add(grid, panel('By Category', '', { cls: 'sd-span-6', sub: 'Priced purchases' })), bb = add(grid, panel('By Branch', '', { cls: 'sd-span-6', sub: 'Priced purchases' }));
@@ -205,7 +214,7 @@ export function renderExpenses(root, ctx) {
   const { filters, can } = ctx; let grain = null;
   function draw() {
     const f = filters.server(), r = filters.range(); grain = grain || defaultGrain(r.from, r.to);
-    root.innerHTML = '<div id="sd-ex-sum"></div><div class="sd-grid" id="sd-ex-grid"></div><div id="sd-ex-table"></div>';
+    root.innerHTML = '<div id="sd-ex-sum"></div><div id="sd-ex-sup"></div><div class="sd-grid" id="sd-ex-grid"></div><div id="sd-ex-table"></div>';
     const sum = add(root.querySelector('#sd-ex-sum'), panel('Expense Summary', '', { sub: 'Business expenses due in the period', actions: '<button type="button" class="btn small secondary" id="sd-ex-open">See unpaid expenses (payables)</button>' }));
     fill(sum, () => api.expenseSummary(f), (s) => { const c = s.cur, p = s.prev;
       return stats([
@@ -214,6 +223,25 @@ export function renderExpenses(root, ctx) {
         { label: 'Paid so far', html: esc(money(c.paid)) }, { label: 'Still unpaid', html: esc(money(c.unpaid)) },
       ]) + '<p class="muted sd-note">' + esc(s.basis) + '</p>'; }, draw);
     root.querySelector('#sd-ex-open').addEventListener('click', () => openDrill('payables', ctx));
+    // Supplier payments: what is paid to suppliers for the products sold. Kept out of the expense figures above (and out of net profit) on purpose -- shown here on their own.
+    const sup = add(root.querySelector('#sd-ex-sup'), panel('Supplier Payments', '', { sub: 'Paid to suppliers for the products you sell — not part of Total expenses or net profit' }));
+    fill(sup, () => supplierPayments(f), (s) => { const c = s.cur, p = s.prev, n = s.now || {};
+      return stats([
+        { label: 'Supplier payments due', html: esc(money(c.total)), cmp: p ? { cur: c.total, prev: p.total, good: 'neutral' } : null, f: money, sub: int(c.bills) + (c.bills === 1 ? ' bill' : ' bills') + ' due in the period', warn: c.no_amount > 0 ? int(c.no_amount) + ' with no amount' : '' },
+        { label: 'Paid so far', html: esc(money(c.paid)), cmp: p ? { cur: c.paid, prev: p.paid, good: 'neutral' } : null, f: money }, { label: 'Still unpaid', html: esc(money(c.unpaid)), sub: 'Due in this period' },
+        { label: 'Owed to suppliers now', html: esc(money(n.owed)), sub: int(n.open) + (n.open === 1 ? ' bill' : ' bills') + ' open, any date' },
+        { label: 'Overdue', html: esc(money(n.overdue)), sub: int(n.overdue_bills) + (n.overdue_bills === 1 ? ' bill' : ' bills') + ' past the due date' },
+      ]) + '<p class="muted sd-note">' + esc(s.basis) + '</p><div id="sd-ex-sup-t"></div>'; }, draw).then((s) => {
+      if (!s) return;
+      const rows = s.rows || [];
+      staticTable(sup.querySelector('#sd-ex-sup-t'), { title: 'Supplier payments', exportName: 'supplier-payments', subtitle: () => filters.describe(), emptyText: 'No supplier payments are due in this period.', rows,
+        totals: { amount: rows.reduce((t, r) => t + (Number(r.amount) || 0), 0), paid: rows.reduce((t, r) => t + (Number(r.paid) || 0), 0), remaining: rows.reduce((t, r) => t + (Number(r.remaining) || 0), 0) },
+        columns: [{ key: 'date', label: 'Due date', type: 'date' }, { key: 'description', label: 'Description' }, { key: 'payee', label: 'Supplier / payee' },
+          { key: 'amount', label: 'Amount', type: 'money', total: 'amount', render: (r) => r.amount === null || r.amount === undefined ? badge('NO AMOUNT YET', 'orange') : esc(money(r.amount)) },
+          { key: 'paid', label: 'Paid', type: 'money', total: 'paid' }, { key: 'remaining', label: 'Unpaid', type: 'money', total: 'remaining' }, { key: 'payment_method', label: 'Method' },
+          { key: 'payment_status', label: 'Status', render: (r) => (r.overdue ? badge('Overdue', 'red') : badge(r.payment_status || '—', { Paid: 'green', 'Partially Paid': 'orange', Unpaid: 'red' }[r.payment_status] || 'gray')) },
+          { key: 'receipt', label: 'Receipt', type: 'bool' }, { key: 'branch', label: 'Branch' }, { key: 'created_by', label: 'Created by' }] });
+    });
     const grid = root.querySelector('#sd-ex-grid');
     const cat = add(grid, panel('Expenses by Category', '', { cls: 'sd-span-6', sub: 'Biggest first' })), top = add(grid, panel('Top Expense Categories', '', { cls: 'sd-span-6', sub: 'Share of the total' }));
     api.expenseSummary(f).then((s) => {
