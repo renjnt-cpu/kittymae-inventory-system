@@ -2,8 +2,8 @@
 // `supabase` directly, so the query shape lives in one place. Mirrors the old app's
 // `api(name, ...args)` helper in spirit, just split into named functions since
 // supabase-js's table/RPC calls aren't as uniformly shaped as google.script.run's.
-import { supabase } from './supabaseClient.js?v=20261011c';
-import { localDateStr } from './uiKit.js?v=20261011c';
+import { supabase } from './supabaseClient.js?v=20261011d';
+import { localDateStr } from './uiKit.js?v=20261011d';
 
 /** Caps the core ledger list queries (Sales, Layaway, Scrap, Subasta) so a tab load
  * fetches recent history instead of the entire table unconditionally -- these had no
@@ -205,11 +205,27 @@ export async function listProductChangeLog(limit = 100) {
 // "Add Item". Every write goes through record_factory_purchase(), which creates the
 // product if it's new and posts a real Stock In ledger transaction.
 
-export async function listFactoryPurchases(limit = 200) {
-  const { data, error } = await supabase.from('factory_purchases')
-    .select('*, branches(name), products(item_name)').order('date_delivered', { ascending: false }).order('created_at', { ascending: false }).limit(limit);
-  if (error) throw new Error(error.message);
-  return attachEmployeeNames(data, { creator: 'created_by' });
+// Pages through every purchase (PostgREST stops a single request at 1000 rows) so Trace a
+// Product and its totals cover the whole history, not just the newest 200 -- there were
+// already 807 purchases when the Gold / Silver / Coated filter was added, and a filter
+// over only the newest 200 would have silently missed the rest. `limit` is the overall
+// safety cap. `id` breaks ties so rows sharing a delivery date and import timestamp can't
+// repeat or go missing between pages. 20000 matches listProducts' own ceiling: far above
+// today's volume, but high enough that a cut-off can't quietly skew the totals.
+export async function listFactoryPurchases(limit = 20000) {
+  const pageSize = 1000;
+  let all = [];
+  for (let offset = 0; offset < limit; offset += pageSize) {
+    const last = Math.min(offset + pageSize, limit) - 1;
+    const { data, error } = await supabase.from('factory_purchases')
+      .select('*, branches(name), products(item_name, category)')
+      .order('date_delivered', { ascending: false }).order('created_at', { ascending: false }).order('id', { ascending: false })
+      .range(offset, last);
+    if (error) throw new Error(error.message);
+    all = all.concat(data);
+    if (data.length < last - offset + 1) break;
+  }
+  return attachEmployeeNames(all, { creator: 'created_by' });
 }
 
 export async function recordFactoryPurchase({

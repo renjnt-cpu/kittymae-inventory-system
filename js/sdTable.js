@@ -1,8 +1,8 @@
 // Sales & Profit Dashboard -- the one table every tab uses: the database sends a page at a time (search, sort and totals are done there, so the browser
 // never holds every transaction), the person can choose which columns to see, open a row, and export everything the filters match (CSV, Excel, PDF, Print).
-import { api, esc, money, int, pct, fin, fmtDate, fmtDateTime, friendly } from './sdCore.js?v=20261011c';
-import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261011c';
-import { loadingBox, errorBox, emptyBox, badge, openDrawer, kvRow, toast } from './sdUi.js?v=20261011c';
+import { api, esc, money, int, pct, fin, fmtDate, fmtDateTime, friendly } from './sdCore.js?v=20261011d';
+import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261011d';
+import { loadingBox, errorBox, emptyBox, badge, openDrawer, kvRow, toast } from './sdUi.js?v=20261011d';
 
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },

@@ -2,10 +2,10 @@
 // Everything is built in the browser from the data this person is allowed to see -- a branch supervisor's reports cover their branch, and
 // money columns appear only for people who may see costs. Nothing is sent anywhere. The Excel / PDF libraries load from cdnjs only when someone
 // clicks Export (pinned and integrity-checked in leaveExport.js).
-import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261011c';
-import { manilaDate } from './leaveUi.js?v=20261011c';
-import { esc, plural, field, opts, branchName, fmtDate } from './assetsUi.js?v=20261011c';
-import { OPEN_INCIDENT, OPEN_REPAIR, STATUSES, SUPPLY_TYPES, sum, group, uniqueSorted, dayOf, peopleRows } from './assetsLogic.js?v=20261011c';
+import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261011d';
+import { manilaDate } from './leaveUi.js?v=20261011d';
+import { esc, plural, field, opts, branchName, fmtDate } from './assetsUi.js?v=20261011d';
+import { OPEN_INCIDENT, OPEN_REPAIR, STATUSES, SUPPLY_TYPES, sum, group, uniqueSorted, dayOf, peopleRows } from './assetsLogic.js?v=20261011d';
 
 const $ = (id) => document.getElementById(id);
 const FOOTER = 'Kittymae Jewels - Assets & Supplies Custodian';

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Item Monitoring — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261011c">
+<link rel="stylesheet" href="css/styles.css?v=20261011d">
 </head>
 <body>
 <main>
@@ -13,16 +13,17 @@
 </main>
 
 <script type="module">
-import { initShell, toast, esc } from './js/shell.js?v=20261011c';
+import { initShell, toast, esc } from './js/shell.js?v=20261011d';
 import {
   getBranches, listStockByBranch, searchProducts, logCycleCount, listRecentCycleCounts,
   markCycleCountInvestigated, listLatestCycleCountBySkuBranch, listProductChangeLog,
   listFactoryPurchases, recordFactoryPurchase, deleteFactoryPurchase, subscribeToChanges,
-} from './js/api.js?v=20261011c';
-import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20261011c';
-import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20261011c';
-import { supabase } from './js/supabaseClient.js?v=20261011c';
-import { openSkuMovement } from './js/skuMovement.js?v=20261011c';
+} from './js/api.js?v=20261011d';
+import { branchBadge, branchOptionStyle } from './js/branchColors.js?v=20261011d';
+import { sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate, localDateStr } from './js/uiKit.js?v=20261011d';
+import { supabase } from './js/supabaseClient.js?v=20261011d';
+import { openSkuMovement } from './js/skuMovement.js?v=20261011d';
+import { materialGroup, MATERIAL_GROUPS } from './js/productMaterial.js?v=20261011d';
 
 // Global Filter + Sort rules (Ren, 2026-09-21, section 14: Monitoring) -- one Sort
 // control for the Stock by Branch board.
@@ -111,13 +112,19 @@ if (employee) {
 
     '<div class="card" style="margin-top:16px;">' +
       '<h3>Trace a Product</h3>' +
-      '<p class="muted" style="margin-top:-4px;">Search Factory Purchases by SKU or product name, optionally narrowed to a delivery date range.</p>' +
+      '<p class="muted" style="margin-top:-4px;">Search Factory Purchases by SKU or product name, optionally narrowed to a category (Gold, Silver or Coated) and a delivery date range.</p>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
         '<div class="field" style="min-width:200px;"><label>Search</label><input type="text" id="fp-trace-search" placeholder="SKU or product name…"></div>' +
+        // Ren, 2026-10-11: "i want to add a category of this gold, silver, coated this area".
+        // Worked out from each product's category + name (js/productMaterial.js) -- the
+        // catalog has no material field, so the dropdown says so below instead of implying one.
+        '<div class="field"><label>Category</label><select id="fp-trace-category"><option value="all">All categories</option>' +
+          MATERIAL_GROUPS.map((g) => '<option value="' + g + '">' + g + '</option>').join('') + '</select></div>' +
         '<div class="field"><label>From</label><input type="date" id="fp-trace-from"></div>' +
         '<div class="field"><label>To</label><input type="date" id="fp-trace-to"></div>' +
         '<button type="button" class="btn small secondary" id="fp-trace-clear">Clear</button>' +
       '</div>' +
+      '<p class="muted" style="font-size:11px;margin:8px 0 0;">Gold / Silver / Coated is read from each product’s category and name (the catalog has no separate material field yet). “Not marked” means neither says which.</p>' +
     '</div>' +
 
     '<h2 style="margin-top:24px;">Factory Purchases</h2>' +
@@ -454,13 +461,24 @@ if (employee) {
   let latestCounts = {};
   let productChanges = [];
   let factoryPurchases = [];
+  // The Factory Purchases table shows the newest FP_ROW_CAP matches until "Show all" is
+  // pressed; the totals above it always cover every match. (Declared up here, not beside
+  // renderFactoryPurchases, because load() below renders before that point is reached.)
+  const FP_ROW_CAP = 200;
+  let fpShowAll = false;
   // ?q=<sku or name> opens Stock by Branch already searched, on "All" (used by the "Open in Item Monitoring" link on the Transfers SKU Trace)
   const presetSearch = new URLSearchParams(location.search).get('q');
   if (presetSearch) { document.getElementById('f-search').value = presetSearch.slice(0, 80); document.getElementById('f-status').value = 'all'; }
   await load();
   subscribeToChanges(['inventory', 'cycle_counts'], load);
   subscribeToChanges('product_change_log', async () => { productChanges = await listProductChangeLog(100); renderProductChanges(); });
-  subscribeToChanges('factory_purchases', async () => { factoryPurchases = await listFactoryPurchases(); renderFactoryPurchases(); });
+  // One event fires per row, and the list is now every purchase rather than the newest 200,
+  // so a multi-item purchase waits for the burst to settle and reloads once.
+  let fpReloadTimer = null;
+  subscribeToChanges('factory_purchases', () => {
+    clearTimeout(fpReloadTimer);
+    fpReloadTimer = setTimeout(async () => { factoryPurchases = await listFactoryPurchases(); renderFactoryPurchases(); }, 500);
+  });
 
   document.getElementById('f-search').addEventListener('input', renderStockByBranch);
   document.getElementById('f-branch').addEventListener('change', renderStockByBranch);
@@ -473,14 +491,18 @@ if (employee) {
   });
   wireSortControl('sbb-sort-field', 'sbb-sort-dir', sbbSort, renderStockByBranch);
 
-  document.getElementById('fp-trace-search').addEventListener('input', renderFactoryPurchases);
-  document.getElementById('fp-trace-from').addEventListener('change', renderFactoryPurchases);
-  document.getElementById('fp-trace-to').addEventListener('change', renderFactoryPurchases);
+  // Any change to the search / category / dates goes back to the first page of results.
+  const onTraceFilter = () => { fpShowAll = false; renderFactoryPurchases(); };
+  document.getElementById('fp-trace-search').addEventListener('input', onTraceFilter);
+  document.getElementById('fp-trace-category').addEventListener('change', onTraceFilter);
+  document.getElementById('fp-trace-from').addEventListener('change', onTraceFilter);
+  document.getElementById('fp-trace-to').addEventListener('change', onTraceFilter);
   document.getElementById('fp-trace-clear').addEventListener('click', () => {
     document.getElementById('fp-trace-search').value = '';
+    document.getElementById('fp-trace-category').value = 'all';
     document.getElementById('fp-trace-from').value = '';
     document.getElementById('fp-trace-to').value = '';
-    renderFactoryPurchases();
+    onTraceFilter();
   });
 
   async function load() {
@@ -635,16 +657,18 @@ if (employee) {
       (employee.role === 'Branch Supervisor' && employee.branch_id === p.branch_id) ||
       employee.position === 'Admin Assistant';
   }
-  // Trace a Product: SKU or product name (via the products(item_name) join added to
-  // listFactoryPurchases) plus an optional delivery-date range -- entirely client-side
-  // over the already-fetched factoryPurchases array, same pattern as Stock by Branch's
-  // filters above.
+  // Trace a Product: SKU or product name (via the products(item_name, category) join added
+  // to listFactoryPurchases), a Gold / Silver / Coated category (js/productMaterial.js) and
+  // an optional delivery-date range -- entirely client-side over the already-fetched
+  // factoryPurchases array, same pattern as Stock by Branch's filters above.
   function filterFactoryPurchases(rows) {
     const q = document.getElementById('fp-trace-search').value.trim().toLowerCase();
+    const group = document.getElementById('fp-trace-category').value;
     const from = document.getElementById('fp-trace-from').value;
     const to = document.getElementById('fp-trace-to').value;
     let out = rows;
     if (q) out = out.filter((p) => p.sku.toLowerCase().includes(q) || ((p.products || {}).item_name || '').toLowerCase().includes(q));
+    if (group !== 'all') out = out.filter((p) => materialGroup((p.products || {}).category, (p.products || {}).item_name) === group);
     if (from) out = out.filter((p) => p.date_delivered >= from);
     if (to) out = out.filter((p) => p.date_delivered <= to);
     return out;
@@ -670,6 +694,7 @@ if (employee) {
     if (!factoryPurchases.length) { box.innerHTML = '<p class="muted">No factory purchases recorded yet.</p>'; return; }
     const rows = filterFactoryPurchases(factoryPurchases);
     if (!rows.length) { box.innerHTML = '<p class="muted">No factory purchases match this search.</p>'; return; }
+    const shown = fpShowAll ? rows : rows.slice(0, FP_ROW_CAP);
 
     // Ren, 2026-09-24: "total the qty and total amount of every encoded" -- sums
     // whatever's currently shown (respects the search/date-range filter above it),
@@ -681,7 +706,7 @@ if (employee) {
       '<div class="table-scroll table-2col"><table style="table-layout:fixed;overflow-wrap:break-word;">' +
       '<thead><tr><th>Delivered</th><th>SKU</th><th>Branch</th><th>Pcs</th><th>Sup. Price</th><th>Pancake Price</th>' +
       '<th>Grams</th><th>Total Grams</th><th>Availed Factory Gram</th><th>Current/Gram</th><th>Est. Sales</th><th>Purchased</th><th>Profit</th><th>Note</th><th>By</th><th></th></tr></thead><tbody>' +
-      rows.map((p) => '<tr>' +
+      shown.map((p) => '<tr>' +
         '<td data-label="Delivered">' + fmtDate(p.date_delivered) + '</td>' +
         '<td data-label="SKU"><b>' + esc(p.sku) + '</b></td>' +
         '<td data-label="Branch">' + (p.branches ? esc(p.branches.name) : '—') + '</td>' +
@@ -698,7 +723,16 @@ if (employee) {
         '<td data-label="Note" class="full-row">' + esc(p.tag_note || '—') + '</td>' +
         '<td data-label="By" class="full-row">' + (p.creator ? esc(p.creator.full_name) : '—') + '</td>' +
         '<td>' + (canDeletePurchase(p) ? '<button type="button" class="btn small secondary" data-act="delete-purchase" data-id="' + p.id + '">Delete</button>' : '') + '</td>' +
-      '</tr>').join('') + '</tbody></table></div>';
+      '</tr>').join('') + '</tbody></table></div>' +
+      (shown.length < rows.length
+        ? '<div style="display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:10px;">' +
+            '<span class="muted">Showing the newest ' + shown.length + ' of ' + rows.length + ' purchases.</span>' +
+            '<button type="button" class="btn small secondary" id="fp-show-all">Show all ' + rows.length + '</button>' +
+          '</div>'
+        : '');
+
+    const showAllBtn = document.getElementById('fp-show-all');
+    if (showAllBtn) showAllBtn.addEventListener('click', () => { fpShowAll = true; renderFactoryPurchases(); });
 
     box.querySelectorAll('[data-act="delete-purchase"]').forEach((btn) => btn.addEventListener('click', async () => {
       if (!confirm('Permanently delete this factory purchase? This reverses the stock it added and cannot be undone.')) return;
