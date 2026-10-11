@@ -9,6 +9,7 @@ const pref = { get() { try { return localStorage.getItem('apc-scores') === '1'; 
 const rankBadge = (i) => '<span class="apc-rank apc-rank-' + (i <= 3 ? i : 'n') + '">' + i + '</span>';
 const n = (v) => Number(v) || 0;
 const sampleOk = (r, th) => r.workload.total >= th.min_sample;
+const minTxt = (m) => (m === null || m === undefined ? '—' : Number(m) >= 60 ? Math.floor(Number(m) / 60) + ' h ' + (Number(m) % 60) + ' min' : Number(m) + ' min');
 function add(root, html) { const t = document.createElement('div'); t.innerHTML = html; const el = t.firstElementChild; root.appendChild(el); return el; }
 
 // ---------------------------------------------------------------- Sales Ranking
@@ -59,6 +60,21 @@ async function loadOnline(A, root) {
     createClientTable({ root: p2.querySelector('#on-care'), rows: list, size: 10, noSearch: true, sort: { key: 'orders', dir: 'desc' }, exportName: 'online-customer-care', title: 'Online orders by customer care', subtitle: () => A.filters.describe(),
       columns: [{ key: 'rank', label: 'Rank', type: 'int', render: (r) => rankBadge(r.rank) }, { key: 'name', label: 'Staff (Pancake account)' }, { key: 'orders', label: 'Orders', type: 'int' }, { key: 'qty', label: 'Qty', type: 'int' }, { key: 'amount', label: 'Total Amount', type: 'money' }], emptyText: 'No Pancake care assignments in this period.' });
   } catch (err) { p2.querySelector('#on-care').innerHTML = errorBox(friendly(err)); }
+  // Message Pancake (customer chats): who answered the most different customers -- real people only, Pancake's own agent names, never mixed into the sales figures above
+  const p3 = add(root, panel('Message Pancake — top admins', '<div id="on-msg-note" class="muted sd-small"></div><div id="on-msg">' + loadingBox() + '</div>',
+    { sub: 'Who answered the most different customers in Pancake chats. Real people only — Botcake, BotcakeAI and the page itself are left out. It counts activity, not quality. Names are Pancake’s own agent names, shown as they are.' }));
+  try {
+    const d = await A.api.messageAdmins(f);
+    const since = d.since ? new Date(d.since).toLocaleDateString('en-PH', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Manila' }) : null;
+    p3.querySelector('#on-msg-note').textContent = (since ? 'Counted from the chats Message Pancake has read since ' + since + ' (the newest ~20 messages of each chat that changed). ' : '') +
+      (f.branch ? 'A branch is picked, so only chats already linked to a branch are counted — a chat gets a branch once it is linked to an order.' : '');
+    const list = (d.rows || []).map((r, i) => ({ rank: i + 1, name: r.staff, customers: n(r.customers), messages: n(r.messages), first: n(r.first_replies), avg: r.avg_response_min }));
+    createClientTable({ root: p3.querySelector('#on-msg'), rows: list, size: 10, noSearch: true, sort: { key: 'customers', dir: 'desc' }, exportName: 'message-pancake-top-admins', title: 'Message Pancake top admins',
+      subtitle: () => A.filters.describe().concat(since ? ['Chats read since ' + since] : []), rowClass: (r) => (r.rank === 1 ? 'apc-top1' : r.rank <= 3 ? 'apc-top3' : ''),
+      columns: [{ key: 'rank', label: 'Rank', type: 'int', render: (r) => rankBadge(r.rank) }, { key: 'name', label: 'Admin (Pancake account)' }, { key: 'customers', label: 'Customers Assisted', type: 'int' },
+        { key: 'messages', label: 'Replies Sent', type: 'int' }, { key: 'first', label: 'First Replies', type: 'int' }, { key: 'avg', label: 'Average First Reply', type: 'num', render: (r) => minTxt(r.avg) }],
+      emptyText: 'No Pancake replies in this period.' });
+  } catch (err) { p3.querySelector('#on-msg').innerHTML = errorBox(friendly(err)); }
 }
 
 // ---------------------------------------------------------------- POS Performance

@@ -50,4 +50,6 @@ export const api = {
   // ---- online order leaderboards (Pancake): attributed by their own fields, never mixed into the POS ranking
   packedOrders: (f) => listPackedOrders({ fromDate: f.from, toDate: f.to }),
   careAssignments: (f) => listOnlineOrderCareAssignments({ fromDate: f.from, toDate: f.to }),
+  // Message Pancake: who answered the most customers (staff_analytics.view; real people only, Pancake agent names)
+  messageAdmins: (f) => rpc('apc_message_admins', Object.assign(dates(f), { p_branch: branch(f) })),
 };
