@@ -24,7 +24,7 @@ const KPIS = [
     card: (d) => ({ v: d.net_profit, f: money, sub: d.coverage.unknown ? 'Needs supplier prices' : 'After operating expenses', warn: covWarn(d.coverage), unknown: d.net_profit === null || d.net_profit === undefined }) }),
   mk({ key: 'net_margin', row: 1, label: 'Net Profit Margin', need: ['sales', 'profit', 'expenses'], good: 'up', kind: 'pp', hint: 'Net Profit ÷ Net Sales × 100.',
     card: (d) => ({ v: d.net_margin, f: (x) => pct(x, 2), sub: 'Net profit ÷ net sales', warn: covWarn(d.coverage), unknown: d.net_margin === null || d.net_margin === undefined }) }),
-  mk({ key: 'total_orders', row: 1, label: 'Total Orders', need: 'sales', good: 'up', hint: 'Orders placed in the period (any status). Completed orders are the ones counted as sales.',
+  mk({ key: 'total_orders', row: 1, label: 'Total Orders', need: 'sales', good: 'up', hint: 'Orders placed in the period (any status). Completed orders are the ones counted as sales: online (Pancake) orders from Packing onward, walk-in sales when recorded, layaway when completed.',
     card: (d) => ({ v: d.orders_total, f: int, sub: int(d.orders_completed) + ' completed · ' + int(d.orders_cancelled) + ' cancelled' }) }),
 
   mk({ key: 'total_purchases', row: 2, label: 'Total Purchases', need: 'cost', good: 'neutral', hint: 'What was bought in the period (deliveries recorded in the ERP). This is NOT the cost of what was sold.',
@@ -54,7 +54,7 @@ const KPIS = [
   mk({ key: 'capital_invested', row: 3, label: 'Total Capital Invested', need: 'capital', good: 'neutral', hint: 'Net owner contribution = initial + additional capital − owner withdrawals (Capital tab).',
     card: (d) => ({ v: d.capital_entries > 0 ? d.capital_net : null, f: money, sub: d.capital_entries > 0 ? 'Contributions ' + money(d.capital_contributions) + ' − withdrawals ' + money(d.capital_withdrawals) : 'Record capital on the Capital tab',
       warn: d.capital_entries > 0 ? null : { text: 'No capital entries', tone: 'gray' }, unknown: !(d.capital_entries > 0) }) }),
-  mk({ key: 'refunds', row: 3, label: 'Refunds', need: 'sales', good: 'down', hint: 'Money taken back from sales: orders returned or cancelled after delivery, plus refunds recorded in the Refunds module that reduce sales.',
+  mk({ key: 'refunds', row: 3, label: 'Refunds', need: 'sales', good: 'down', hint: 'Money taken back from sales: orders returned or cancelled after they were packed, plus refunds recorded in the Refunds module that reduce sales.',
     card: (d) => ({ v: d.refunds, f: money, sub: int(d.orders_returned) + ' returned orders' }) }),
   mk({ key: 'discounts', row: 3, label: 'Discounts', need: 'sales', good: 'down', hint: 'Discounts given on completed sales.',
     card: (d) => ({ v: d.discounts, f: money, sub: 'On completed sales' }) }),
