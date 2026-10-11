@@ -59,7 +59,7 @@ export async function startDashboardPage({ root, employee }) {
   if (!tabs.some((t) => t.id === active)) active = 'overview';
 
   root.innerHTML =
-    '<div class="sd-head"><div><h2 class="sd-title">KITTYMAE — Sales &amp; Business Dashboard</h2><div class="muted">All figures in Philippine pesos (₱) · dates in ' + esc(meta.tz) + ' · <span id="sd-fresh"></span></div></div>' +
+    '<div class="sd-head"><div><h2 class="sd-title">KITTYMAE — Sales &amp; Business Dashboard</h2><div class="muted">All figures in Philippine pesos (₱) · dates in ' + esc(meta.tz) + ' · <span id="sd-fresh"></span> · Online (Pancake) orders count only for the Warehouse and Manila branches, from Packing</div></div>' +
       '<div class="sd-head-right"><button type="button" class="btn small secondary" id="sd-refresh">Refresh data</button>' + (can.export ? '<button type="button" class="btn small" id="sd-export">Export reports</button>' : '') + '</div></div>' +
     '<div id="sd-filters"></div><div id="sd-quality"></div>' +
     '<div class="sd-tabs" role="tablist" aria-label="Dashboard sections">' + tabs.map((t) => '<button type="button" role="tab" class="sd-tab" id="sd-tab-' + t.id + '" data-tab="' + t.id + '" aria-selected="false">' + esc(t.label) + '</button>').join('') + '</div>' +
