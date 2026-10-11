@@ -1,13 +1,13 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName } from './auth.js?v=20261011d';
-import { listMyPermissions } from './api.js?v=20261011d';
-import { initActivityFeed } from './activityFeed.js?v=20261011d';
-import { localDateStr } from './uiKit.js?v=20261011d';
-import { showBirthdayBanner } from './birthdayBanner.js?v=20261011d';
-import { initAdminChat } from './adminChat.js?v=20261011d';
-import { initLeaveNotifications } from './leaveNotifications.js?v=20261011d';
+import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName, isExpiredLogin, dropStaleSession } from './auth.js?v=20261011e';
+import { listMyPermissions } from './api.js?v=20261011e';
+import { initActivityFeed } from './activityFeed.js?v=20261011e';
+import { localDateStr } from './uiKit.js?v=20261011e';
+import { showBirthdayBanner } from './birthdayBanner.js?v=20261011e';
+import { initAdminChat } from './adminChat.js?v=20261011e';
+import { initLeaveNotifications } from './leaveNotifications.js?v=20261011e';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -64,6 +64,8 @@ export async function initShell(activePage) {
     employee = await linkEmployee();
   } catch (err) {
     const msg = String(err.message || err);
+    // the login on this device expired and could not be renewed: back to the login screen, not a dead end
+    if (isExpiredLogin(msg)) { await dropStaleSession(); return null; }
     document.body.innerHTML = msg.startsWith('NOT_REGISTERED')
       ? '<div class="center-screen"><div><h2>Not registered yet</h2><p>Signed in as <b>' + session.user.email + '</b>, but you\'re not in the Employees list.</p><p class="muted">Ask an Admin to add you, then sign in again.</p></div></div>'
       : msg.startsWith('INACTIVE')
