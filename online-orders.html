@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Online Orders — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261011b">
+<link rel="stylesheet" href="css/styles.css?v=20261011c">
 </head>
 <body>
 <main>
@@ -22,15 +22,16 @@
 // Function (live) and the one-time pancake-backfill pull of Pancake's order history;
 // monitoring only, no manual Add -- status can be corrected by hand if Pancake's own
 // value is off.
-import { initShell, toast, esc } from './js/shell.js?v=20261011b';
+import { initShell, toast, esc } from './js/shell.js?v=20261011c';
 import {
   getBranches, listOrderItemStatuses, listOrderHistoryForItem, getOrderItemStatusCounts,
   getOrderItemPackaging, ORDER_ITEM_STATUS_ROW_CAP, setOrderItemStatus, deleteOrderItemStatus,
   listDeliveredOrders, listPendingSkuMatches, resolveSkuMatch, remapSkuMatch, searchProducts,
-  listSkuAliases, saveSkuAlias, deleteSkuAlias, subscribeToChanges,
-} from './js/api.js?v=20261011b';
-import { branchBadge } from './js/branchColors.js?v=20261011b';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20261011b';
+  listSkuAliases, saveSkuAlias, deleteSkuAlias, subscribeToChanges, getOnlineStageSummary,
+} from './js/api.js?v=20261011c';
+import { mountOnlineSalesSummary } from './js/onlineSalesSummary.js?v=20261011c';
+import { branchBadge } from './js/branchColors.js?v=20261011c';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20261011c';
 
 const OL_SORT_FIELDS = [
   { key: 'default', label: 'Default (most recent)' }, { key: 'item_name', label: 'Item' }, { key: 'qty', label: 'Qty' },
@@ -240,6 +241,7 @@ if (employee) {
     root.innerHTML =
       '<h2>Online Orders</h2>' +
       '<p class="muted" style="margin-top:-4px;">Monitoring only — synced live from Pancake across every branch. Status can be corrected by hand below if Pancake\'s own value is off.</p>' +
+      '<div id="ol-sales-summary"></div>' +
       '<div class="tiles" id="ol-tiles"></div>' +
       '<div class="card" style="margin-bottom:14px;">' +
         '<h3 style="margin-top:0;">Search &amp; Filter</h3>' +
@@ -256,6 +258,13 @@ if (employee) {
       '<div id="ol-active"></div>' +
       '<div id="ol-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>' +
       '<div id="ol-list" style="margin-top:10px;"><div class="muted">Loading…</div></div>';
+
+    // "Sales by stage" summary (Ren, 2026-10-11) -- shown only to people who may see sales figures across every branch (the Sales & Profit Dashboard's
+    // keys, today the Admin role); the database refuses everyone else, this check just keeps the card off their screen. Always covers both Pancake shops.
+    const permKeys = employee.permissions || [];
+    if (['dashboard.view', 'dashboard.sales', 'dashboard.all_branches'].every((k) => permKeys.includes(k))) {
+      mountOnlineSalesSummary(document.getElementById('ol-sales-summary'), { load: getOnlineStageSummary });
+    }
 
     let orderItems = [];
     let statusCounts = { all: 0 };

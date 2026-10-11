@@ -2,8 +2,8 @@
 // `supabase` directly, so the query shape lives in one place. Mirrors the old app's
 // `api(name, ...args)` helper in spirit, just split into named functions since
 // supabase-js's table/RPC calls aren't as uniformly shaped as google.script.run's.
-import { supabase } from './supabaseClient.js?v=20261011b';
-import { localDateStr } from './uiKit.js?v=20261011b';
+import { supabase } from './supabaseClient.js?v=20261011c';
+import { localDateStr } from './uiKit.js?v=20261011c';
 
 /** Caps the core ledger list queries (Sales, Layaway, Scrap, Subasta) so a tab load
  * fetches recent history instead of the entire table unconditionally -- these had no
@@ -1551,6 +1551,15 @@ export async function getOrderItemStatusCounts(branchId = null, shopId = null) {
   const counts = { all: 0 };
   (data || []).forEach((row) => { counts[row.status] = Number(row.cnt); counts.all += Number(row.cnt); });
   return counts;
+}
+
+/** "Sales by stage" summary shown on both Online Orders pages (Ren, 2026-10-11; migration 215): orders PLACED between two Manila dates ('YYYY-MM-DD'),
+ * grouped by the Pancake stage they are in now, for both shops. Returns the function's own answer: { ok:true, from, to, as_of, stages, rows } or
+ * { ok:false, errors:[...] } (no access / bad dates) -- the database only answers people holding the dashboard sales keys. */
+export async function getOnlineStageSummary(fromDate, toDate) {
+  const { data, error } = await supabase.rpc('online_stage_summary', { p_from: fromDate, p_to: toDate });
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 /** Full history for one item across EVERY status, including the terminal ones the

@@ -1,9 +1,9 @@
 // Sales & Profit Dashboard -- the Reports tab (the eight reports, each exported for the period and filters chosen above) and the Dashboard Settings tab.
-import { api, esc, money, friendly, fmtDateTime, bucketLabel, defaultGrain, rangeText, PRESETS } from './sdCore.js?v=20261011b';
-import { panel, loadingBox, errorBox, toast } from './sdUi.js?v=20261011b';
-import { fetchAllRows, exportData } from './sdTable.js?v=20261011b';
-import { COLS } from './sdColumns.js?v=20261011b';
-import { KPI_LABELS } from './sdOverview.js?v=20261011b';
+import { api, esc, money, friendly, fmtDateTime, bucketLabel, defaultGrain, rangeText, PRESETS } from './sdCore.js?v=20261011c';
+import { panel, loadingBox, errorBox, toast } from './sdUi.js?v=20261011c';
+import { fetchAllRows, exportData } from './sdTable.js?v=20261011c';
+import { COLS } from './sdColumns.js?v=20261011c';
+import { KPI_LABELS } from './sdOverview.js?v=20261011c';
 
 // ---------------------------------------------------------------- Reports
 const REPORTS = [
