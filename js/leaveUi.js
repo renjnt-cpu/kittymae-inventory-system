@@ -52,6 +52,30 @@ export const daysText = (n) => num(n) + (Number(n) === 1 ? ' day' : ' days');
 export const fmtBytes = (b) => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(0) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
 export const yearOf = (dateStr) => Number(String(dateStr).slice(0, 4));
 
+// ---- people ----
+// Leave screens name a person by the formal full name on their HR 201 File (leave_directory
+// returns it as full_name) together with the employee number, so two people who share a first
+// name can never be mixed up. `e` is a leave_directory row.
+/** One line -- "Angelyn Morales (MK24024)" -- for dropdowns, subtitles, messages and exports. */
+export const personLabel = (e) => {
+  const name = (e && e.full_name) || '—';
+  return e && e.employee_code ? name + ' (' + e.employee_code + ')' : name;
+};
+/** A table cell: the name in bold with the employee number under it (extraHtml adds another line). */
+export const personCell = (e, extraHtml) => '<b>' + esc((e && e.full_name) || '—') + '</b>' +
+  (e && e.employee_code ? '<div class="muted">' + esc(e.employee_code) + '</div>' : '') + (extraHtml || '');
+// People are listed with the longest-serving first -- the earliest Date Hired on the HR 201 File on top,
+// never alphabetically by name (Ren, 2026-10-12: "sort this with the longest stay in the company";
+// that replaced the employee-number order he asked for the day before). Someone with no date hired goes
+// last; people hired on the same day follow employee-number order (numeric-aware, like the 201 directory).
+const compareEmployeeNo = (x, y) => String(x || '').localeCompare(String(y || ''), undefined, { numeric: true, sensitivity: 'base' });
+/** Array.sort comparator for anything carrying hire_date + employee_code (a leave_directory row, or a row built from one). */
+export const byTenure = (a, b) => {
+  const x = (a && a.hire_date) || '', y = (b && b.hire_date) || '';
+  if (x !== y) return !x ? 1 : !y ? -1 : (x < y ? -1 : 1); // ISO dates compare correctly as text
+  return compareEmployeeNo(a && a.employee_code, b && b.employee_code);
+};
+
 /** Plain-text key/value row in the existing drawer style. */
 export const kv = (label, valueHtml) => '<div class="drawer-kv"><span>' + esc(label) + '</span><b>' + valueHtml + '</b></div>';
 

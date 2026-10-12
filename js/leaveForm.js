@@ -4,9 +4,9 @@
 // Nothing here decides anything -- the preview, the validation and the routing (HR review,
 // final approval, owner auto-approval) all come back from the database functions.
 import {
-  esc, fmtDate, rangeText, num, daysText, fmtBytes, errorsText, statusBadge, DURATION_TYPES, DOC_KINDS, kv,
-} from './leaveUi.js?v=20261011e';
-import { fileProblem } from './leaveDetail.js?v=20261011e';
+  esc, fmtDate, rangeText, num, daysText, fmtBytes, errorsText, statusBadge, DURATION_TYPES, DOC_KINDS, kv, personLabel, byTenure,
+} from './leaveUi.js?v=20261012a';
+import { fileProblem } from './leaveDetail.js?v=20261012a';
 
 const $ = (id) => document.getElementById(id);
 let ctx = null;
@@ -89,10 +89,10 @@ function renderEdit() {
   let who = '';
   if (ctx.flags.hr && !editingExisting) {
     const people = ctx.dir.filter((e) => e.status === 'Active' || e.employee_id === st.employeeId)
-      .sort((a, b) => (a.employee_id === ctx.me.employee_id ? -1 : b.employee_id === ctx.me.employee_id ? 1 : String(a.full_name).localeCompare(String(b.full_name))));
+      .sort((a, b) => (a.employee_id === ctx.me.employee_id ? -1 : b.employee_id === ctx.me.employee_id ? 1 : byTenure(a, b)));
     who = '<div class="field"><label>File leave for</label><select id="lv-f-employee">' + people.map((e) =>
       '<option value="' + esc(e.employee_id) + '"' + (e.employee_id === st.employeeId ? ' selected' : '') + '>' +
-      esc(e.full_name) + (e.employee_id === ctx.me.employee_id ? ' (me)' : '') + (e.has_login === false ? ' — no login' : '') +
+      esc(personLabel(e)) + (e.employee_id === ctx.me.employee_id ? ' (me)' : '') + (e.has_login === false ? ' — no login' : '') +
       (e.department ? ' · ' + esc(e.department) : '') + '</option>').join('') + '</select></div>';
   }
   const t = typeOf();
@@ -400,7 +400,7 @@ function renderReview() {
   const route = routeText();
   let h = '<div id="lv-form-msg"></div><p style="margin-top:0;">Please check everything below before you submit.</p>' +
     '<div class="drawer-section"><h4>Review your request</h4>' +
-    kv('Employee', esc(e.full_name || '—')) + kv('Leave Type', esc(t ? t.name : '—')) + kv('Payment', esc(st.paymentType) + ' leave') +
+    kv('Employee', esc(e.full_name ? personLabel(e) : '—')) + kv('Leave Type', esc(t ? t.name : '—')) + kv('Payment', esc(st.paymentType) + ' leave') +
     kv('Dates', esc(rangeText(st.startDate, st.endDate))) +
     kv('Duration', esc(st.durationType) + (st.durationType === 'Custom Hours' ? ' (' + esc(st.startTime) + ' – ' + esc(st.endTime) + ')' : '')) +
     kv('Leave Days', esc(daysText(p.days))) +
@@ -461,7 +461,7 @@ function renderSuccess(res) {
   st.view = 'success';
   const wasEdit = st.status && st.status !== 'Draft';
   const other = filingForOther() ? empOf() : null;
-  const subject = other ? 'The leave request for ' + other.full_name : 'Your leave request';
+  const subject = other ? 'The leave request for ' + personLabel(other) : 'Your leave request';
   const msg = {
     'Pending HR Review': subject + ' has been submitted and is now waiting for HR review.',
     'Pending Final Approval': subject + ' has been submitted and is now waiting for the Final Approver\'s decision.',

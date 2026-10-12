@@ -1,13 +1,13 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, getMyJobTitle, signOut, updateMyName, isExpiredLogin, dropStaleSession } from './auth.js?v=20261011e';
-import { listMyPermissions } from './api.js?v=20261011e';
-import { initActivityFeed } from './activityFeed.js?v=20261011e';
-import { localDateStr } from './uiKit.js?v=20261011e';
-import { showBirthdayBanner } from './birthdayBanner.js?v=20261011e';
-import { initAdminChat } from './adminChat.js?v=20261011e';
-import { initLeaveNotifications } from './leaveNotifications.js?v=20261011e';
+import { requireSession, linkEmployee, getMyJobTitle, getMyLeaveOnlyCompany, signOut, updateMyName, isExpiredLogin, dropStaleSession } from './auth.js?v=20261012a';
+import { listMyPermissions } from './api.js?v=20261012a';
+import { initActivityFeed } from './activityFeed.js?v=20261012a';
+import { localDateStr } from './uiKit.js?v=20261012a';
+import { showBirthdayBanner } from './birthdayBanner.js?v=20261012a';
+import { initAdminChat } from './adminChat.js?v=20261012a';
+import { initLeaveNotifications } from './leaveNotifications.js?v=20261012a';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -74,6 +74,9 @@ export async function initShell(activePage) {
     return null;
   }
 
+  // asked now and answered below, so the leave-only check (see further down) costs no extra waiting
+  const leaveOnlyLookup = getMyLeaveOnlyCompany().catch(() => null);
+
   try {
     employee.permissions = await listMyPermissions();
   } catch (err) {
@@ -103,6 +106,14 @@ export async function initShell(activePage) {
   // old field and need their own review before switching.
   employee.jobTitle = jobTitle;
 
+  // Leave-only accounts (Ren, 2026-10-12: Layover employees "can access this and only the leave management can
+  // only see it and file it"). The database decides who they are -- an Active employee whose HR 201 File Company is
+  // Layover, never an Admin -- and refuses them every table but Leave's (migration 223), so this is the friendly
+  // half: a one-entry menu, and any other page sends them straight to Leave. If the lookup fails they get the normal
+  // menu, and the database still holds the line.
+  const leaveOnlyCompany = await leaveOnlyLookup;
+  if (leaveOnlyCompany && activePage !== 'leave') { window.location.replace('leave.html'); return null; }
+
   const ALL_PAGE_DEFS = {
     dashboard: { label: 'Dashboard', href: 'dashboard.html' },
     'sales-dashboard': { label: 'Sales & Profit Dashboard', href: 'sales-dashboard.html' },
@@ -125,7 +136,7 @@ export async function initShell(activePage) {
     leave: { label: 'Leave Management', href: 'leave.html' },
   };
   const pages = [];
-  const scopedIds = jobTitle && ERP_SCOPED_JOB_TITLES[jobTitle];
+  const scopedIds = leaveOnlyCompany ? ['leave'] : (jobTitle && ERP_SCOPED_JOB_TITLES[jobTitle]);
   if (scopedIds) {
     // A scoped job title (e.g. Sales Admin Associate) gets exactly these pages and
     // nothing else -- skip every role/position/extra_page_access check below entirely,
@@ -266,7 +277,7 @@ export async function initShell(activePage) {
   shell.innerHTML =
     '<div class="app-backdrop" id="app-backdrop"></div>' +
     '<aside class="app-sidebar" id="app-sidebar">' +
-      '<div class="app-sidebar-brand">💎 Kittymae Jewels</div>' +
+      '<div class="app-sidebar-brand">' + (leaveOnlyCompany ? '☕ ' + esc(leaveOnlyCompany) : '💎 Kittymae Jewels') + '</div>' +
       '<nav class="app-nav">' + navHtml + '</nav>' +
     '</aside>' +
     '<div class="app-main-col">' +
@@ -285,11 +296,11 @@ export async function initShell(activePage) {
   document.body.prepend(shell);
 
   const header = shell.querySelector('.app-header');
+  // what follows the person's name in the header: a leave-only account shows its company, everyone else the role and branch
+  const whoSuffix = () => leaveOnlyCompany ? ' · ' + leaveOnlyCompany : ' · ' + employee.role + (employee.branch_id ? ' · Branch #' + employee.branch_id : ' · All Branches');
   document.getElementById('app-header-who').innerHTML =
-    '<a class="btn small secondary" href="https://renjnt-cpu.github.io/kittymae-pos/index.html">Switch to POS ↗</a> ' +
-    '<span id="who-display">' + esc(employee.full_name) + ' · ' + esc(employee.role) +
-      (employee.branch_id ? ' · Branch #' + employee.branch_id : ' · All Branches') +
-    '</span>' +
+    (leaveOnlyCompany ? '' : '<a class="btn small secondary" href="https://renjnt-cpu.github.io/kittymae-pos/index.html">Switch to POS ↗</a> ') +
+    '<span id="who-display">' + esc(employee.full_name + whoSuffix()) + '</span>' +
     (nameEditLocked
       ? ' <span class="muted" style="font-size:11px;">(can rename ' + localDateStr(nameEditUnlockDate) + ')</span>'
       : ' <button class="btn small secondary" id="edit-name-btn">Edit Name</button>') +
@@ -299,9 +310,12 @@ export async function initShell(activePage) {
   // Global Branch Activity feed (spec 303-332): bell + live panel + history drawer.
   // Mounted async so a slow first fetch never delays the page itself; exposed on
   // window so branches.html can park its Forfeited notice in the panel's pinned slot.
-  initActivityFeed({ employee, headerEl: header, esc, links: ACTIVITY_LINKS })
-    .then((feed) => { window.__kmActivity = feed; document.dispatchEvent(new Event('km-activity-ready')); })
-    .catch(() => { /* the feed is an overlay -- a failure here must never break the page */ });
+  // (not for a leave-only account: the feed, the chat and the birthday banner are Kittymae's, not Layover's)
+  if (!leaveOnlyCompany) {
+    initActivityFeed({ employee, headerEl: header, esc, links: ACTIVITY_LINKS })
+      .then((feed) => { window.__kmActivity = feed; document.dispatchEvent(new Event('km-activity-ready')); })
+      .catch(() => { /* the feed is an overlay -- a failure here must never break the page */ });
+  }
   // Personal Leave notifications bell (Leave Management) -- same rule: an overlay that must never break the page.
   initLeaveNotifications({ employee, headerEl: header }).catch(() => { /* ignore */ });
 
@@ -334,7 +348,7 @@ export async function initShell(activePage) {
       try {
         await updateMyName(newName);
         employee.full_name = newName;
-        display.textContent = newName + ' · ' + employee.role + (employee.branch_id ? ' · Branch #' + employee.branch_id : ' · All Branches');
+        display.textContent = newName + whoSuffix();
         // Locked for the next 2 months now — replace the button with that note instead
         // of restoring it, so the header matches what a fresh page load would show.
         const unlock = new Date();
@@ -354,8 +368,10 @@ export async function initShell(activePage) {
 
   // Fire-and-forget -- never blocks page render, and fails silently on its own
   // (see birthdayBanner.js) if the check or storage isn't available.
-  showBirthdayBanner();
-  initAdminChat(employee);
+  if (!leaveOnlyCompany) {
+    showBirthdayBanner();
+    initAdminChat(employee);
+  }
 
   return employee;
 }

@@ -3,9 +3,9 @@
 // state the request is in -- but that is only the UI: every action is re-checked by the
 // database function behind it, so a hidden button is a convenience, not the security.
 import {
-  esc, statusBadge, fmtDate, fmtDateTime, rangeText, num, daysText, fmtBytes, kv, errorsText,
+  esc, statusBadge, fmtDate, fmtDateTime, rangeText, num, daysText, fmtBytes, kv, errorsText, personLabel,
   EMPLOYEE_EDITABLE, OPEN_STATUSES, PENDING_HR, DECISION_STATUSES, DOC_KINDS, yearOf,
-} from './leaveUi.js?v=20261011e';
+} from './leaveUi.js?v=20261012a';
 
 const $ = (id) => document.getElementById(id);
 let cur = null; // { ctx, id, req, timeline, comments, attachments }
@@ -69,6 +69,11 @@ function who(ctx, employeeId, fallback) {
   const e = ctx.dirById[employeeId];
   return e ? e.full_name : (employeeId ? (fallback || 'HR') : '—');
 }
+/** Same, with the employee number -- for the lines that record who filed, reviewed or decided. */
+function whoLabel(ctx, employeeId, fallback) {
+  const e = ctx.dirById[employeeId];
+  return e ? personLabel(e) : (employeeId ? (fallback || 'HR') : '—');
+}
 
 /** HR / Final Approver only: other people in the same department who already have approved leave
  * overlapping this request. Purely informational -- nothing is ever rejected because of it. */
@@ -86,7 +91,7 @@ export function overlapInfo(ctx, r) {
     people.set(x.employee_id, list);
   });
   if (!people.size) return null;
-  return { dept, people: Array.from(people.entries()).map(([id, ranges]) => ({ name: who(ctx, id), ranges })) };
+  return { dept, people: Array.from(people.entries()).map(([id, ranges]) => ({ name: whoLabel(ctx, id), ranges })) };
 }
 const overlapText = (o) => o.people.length + (o.people.length === 1 ? ' employee from ' : ' employees from ') + o.dept +
   (o.people.length === 1 ? ' already has' : ' already have') + ' approved leave during these dates.';
@@ -123,7 +128,7 @@ function render() {
   let leaveHtml = kv('Leave Type', esc(type.name)) + kv('Payment', esc(r.payment_type) + ' leave') + kv('Dates', esc(rangeText(r.start_date, r.end_date))) +
     kv('Duration', esc(r.duration_type) + (r.duration_type === 'Custom Hours' ? times : '')) + kv('Leave Days', esc(daysText(r.requested_days))) +
     kv('Date Filed', fmtDateTime(r.submitted_at || r.created_at));
-  if (r.filed_by !== r.employee_id) leaveHtml += kv('Filed By', esc(who(ctx, r.filed_by)) + ' <span class="muted">(on behalf)</span>');
+  if (r.filed_by !== r.employee_id) leaveHtml += kv('Filed By', esc(whoLabel(ctx, r.filed_by)) + ' <span class="muted">(on behalf)</span>');
   parts.push('<div class="drawer-section"><h4>Leave Details</h4>' + leaveHtml + '</div>');
 
   const ov = overlapInfo(ctx, r);
@@ -166,11 +171,11 @@ function render() {
   // Decisions
   let decHtml = '';
   if (f.view_all && r.hr_recommendation) {
-    decHtml += kv('HR Recommendation', esc(r.hr_recommendation)) + kv('Reviewed By', esc(who(ctx, r.hr_reviewed_by)) + ' · ' + esc(fmtDateTime(r.hr_reviewed_at)));
+    decHtml += kv('HR Recommendation', esc(r.hr_recommendation)) + kv('Reviewed By', esc(whoLabel(ctx, r.hr_reviewed_by)) + ' · ' + esc(fmtDateTime(r.hr_reviewed_at)));
     if (r.hr_comments) decHtml += kv('HR Comments', esc(r.hr_comments));
   }
   if (['Approved', 'Rejected', 'Completed'].includes(r.status) || r.final_reviewed_at) {
-    decHtml += kv('Final Decision', esc(r.status === 'Rejected' ? 'Rejected' : 'Approved')) + kv('Decided By', esc(who(ctx, r.final_reviewed_by, 'Final Approver')) + ' · ' + esc(fmtDateTime(r.final_reviewed_at)));
+    decHtml += kv('Final Decision', esc(r.status === 'Rejected' ? 'Rejected' : 'Approved')) + kv('Decided By', esc(whoLabel(ctx, r.final_reviewed_by, 'Final Approver')) + ' · ' + esc(fmtDateTime(r.final_reviewed_at)));
     if (r.final_approver_comments) decHtml += kv('Comments', esc(r.final_approver_comments));
     if (r.rejection_reason) decHtml += kv('Rejection Reason', esc(r.rejection_reason));
   }

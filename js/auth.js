@@ -2,7 +2,7 @@
 // Google account IS the identity, matched by email against a roster (now `employees`
 // instead of the Employees sheet) — just persisted via `link_my_employee_record()`
 // (01_branches_employees.sql) instead of re-derived on every single call.
-import { supabase } from './supabaseClient.js?v=20261011e';
+import { supabase } from './supabaseClient.js?v=20261012a';
 
 export async function signInWithGoogle() {
   const redirectTo = new URL('dashboard.html', window.location.href).toString();
@@ -60,6 +60,15 @@ export async function getMyJobTitle() {
   const { data, error } = await supabase.rpc('current_employee_job_title');
   if (error) throw new Error(error.message);
   return data;
+}
+
+/** The company name (e.g. "Layover") when this account is limited to Leave Management, otherwise null. The
+ * database decides it from the HR 201 File's Company (migration 223) and refuses such an account everything
+ * but Leave -- this call only lets the screens show the matching, simpler menu. */
+export async function getMyLeaveOnlyCompany() {
+  const { data, error } = await supabase.rpc('my_leave_only_company');
+  if (error) throw new Error(error.message);
+  return data || null;
 }
 
 /** Self-service name correction — several employees were bulk-added from a roster

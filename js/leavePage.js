@@ -3,17 +3,17 @@
 // Supabase functions in production and against a stand-in object in tests.
 // createLeaveContext / drawersHtml / bindDrawerEvents are also what the HR 201-File page uses to
 // show a Leave tab for one employee, so both places share one set of drawers and one rulebook.
-import { esc, OPEN_STATUSES, DECISION_STATUSES, PENDING_HR } from './leaveUi.js?v=20261011e';
-import { openDetail, closeDetail } from './leaveDetail.js?v=20261011e';
-import { openForm, requestCloseForm } from './leaveForm.js?v=20261011e';
-import { renderMine } from './leaveMine.js?v=20261011e';
-import { renderCalendar } from './leaveCalendar.js?v=20261011e';
-import { renderHr, renderFinal, setHrEmployeeFilter } from './leaveReview.js?v=20261011e';
-import { renderCredits } from './leaveCredits.js?v=20261011e';
-import { renderReports } from './leaveReports.js?v=20261011e';
-import { renderSettings } from './leaveSettings.js?v=20261011e';
-import { renderAudit } from './leaveAudit.js?v=20261011e';
-import { closeSide } from './leaveSide.js?v=20261011e';
+import { esc, OPEN_STATUSES, DECISION_STATUSES, PENDING_HR } from './leaveUi.js?v=20261012a';
+import { openDetail, closeDetail } from './leaveDetail.js?v=20261012a';
+import { openForm, requestCloseForm } from './leaveForm.js?v=20261012a';
+import { renderMine } from './leaveMine.js?v=20261012a';
+import { renderCalendar } from './leaveCalendar.js?v=20261012a';
+import { renderHr, renderFinal, setHrEmployeeFilter } from './leaveReview.js?v=20261012a';
+import { renderCredits } from './leaveCredits.js?v=20261012a';
+import { renderReports } from './leaveReports.js?v=20261012a';
+import { renderSettings } from './leaveSettings.js?v=20261012a';
+import { renderAudit } from './leaveAudit.js?v=20261012a';
+import { closeSide } from './leaveSide.js?v=20261012a';
 
 function drawer(name, title) {
   return '<div class="drawer-backdrop" id="lv-' + name + '-backdrop"></div>' +
@@ -128,7 +128,8 @@ export async function startLeavePage({ root, api, search, hash }) {
   function renderWhoami() {
     const role = ctx.flags.final ? 'Final Approver' : ctx.flags.hr ? 'HR' : ctx.flags.view_all ? 'View only' : 'Employee';
     const cls = ctx.flags.final ? 'lv-orange' : ctx.flags.hr ? 'lv-blue' : ctx.flags.view_all ? 'lv-gray' : 'lv-green';
-    $('lv-whoami').innerHTML = 'Signed in as <b>' + esc(ctx.me.full_name) + '</b> <span class="badge ' + cls + '">' + esc(role) + '</span>' +
+    $('lv-whoami').innerHTML = 'Signed in as <b>' + esc(ctx.me.full_name) + '</b>' + (ctx.me.employee_code ? ' <span class="muted">' + esc(ctx.me.employee_code) + '</span>' : '') +
+      ' <span class="badge ' + cls + '">' + esc(role) + '</span>' +
       (ctx.flags.view_all && !ctx.flags.hr ? ' <span class="muted">You can see all leave records but cannot approve or change them.</span>' : '');
   }
 

@@ -4,7 +4,7 @@
 //  * Company Calendar (HR / Final Approver / Auditor): approved leave for everyone, with
 //    Department / Employee / Leave Type filters; clicking an entry opens the request.
 // Day, Week and Month views; on a phone the month grid shrinks to dots with an agenda list below.
-import { esc, statusBadge, fmtDate, rangeText, daysText, addDays } from './leaveUi.js?v=20261011e';
+import { esc, statusBadge, fmtDate, rangeText, daysText, addDays, personLabel, byTenure } from './leaveUi.js?v=20261012a';
 
 const $ = (id) => document.getElementById(id);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -31,7 +31,7 @@ export async function renderCalendar(ctx, root) {
   const holidayBy = Object.fromEntries(holidays.map((h) => [h.holiday_date, h]));
 
   const depts = Array.from(new Set(ctx.dir.map((e) => e.department).filter(Boolean))).sort();
-  const people = ctx.dir.filter((e) => e.status === 'Active').sort((a, b) => String(a.full_name).localeCompare(String(b.full_name)));
+  const people = ctx.dir.filter((e) => e.status === 'Active').sort(byTenure);
   const opt = (v, l, cur) => '<option value="' + esc(v) + '"' + (String(cur) === String(v) ? ' selected' : '') + '>' + esc(l) + '</option>';
 
   root.innerHTML =
@@ -48,7 +48,7 @@ export async function renderCalendar(ctx, root) {
           '<button type="button" class="lv-seg-btn" data-scope="mine">My Calendar</button><button type="button" class="lv-seg-btn" data-scope="company">Company Calendar</button></div>' +
         '<div id="cal-filters" class="lv-cal-filter-fields">' +
           '<div class="field"><label>Department</label><select id="cal-dept"><option value="all">All</option>' + depts.map((d) => opt(d, d, cal.dept)).join('') + '</select></div>' +
-          '<div class="field"><label>Employee</label><select id="cal-emp"><option value="all">All</option>' + people.map((p) => opt(p.employee_id, p.full_name, cal.employee)).join('') + '</select></div>' +
+          '<div class="field"><label>Employee</label><select id="cal-emp"><option value="all">All</option>' + people.map((p) => opt(p.employee_id, personLabel(p), cal.employee)).join('') + '</select></div>' +
           '<div class="field"><label>Leave Type</label><select id="cal-type"><option value="all">All</option>' + ctx.types.map((t) => opt(t.id, t.name, cal.type)).join('') + '</select></div>' +
         '</div></div>'
       : '') +
@@ -69,12 +69,14 @@ export async function renderCalendar(ctx, root) {
       const type = (ctx.typeById[r.leave_type_id] || {}).name || 'Leave';
       const cls = r.status === 'Needs Employee Information' || r.cancellation_status === 'Requested' ? 'lv-cal-attn'
         : ['Approved', 'Completed'].includes(r.status) ? 'lv-cal-ok' : 'lv-cal-pend';
-      return { id: r.id, name: emp.full_name || '—', first: String(emp.full_name || '—').split(' ')[0], type, start: r.start_date, end: r.end_date, days: r.requested_days, status: r.status, cancel: r.cancellation_status, cls };
-    });
+      return { id: r.id, name: emp.full_name || '—', employee_code: emp.employee_code || '', hire_date: emp.hire_date || '', first: String(emp.full_name || '—').split(' ')[0], type, start: r.start_date, end: r.end_date, days: r.requested_days, status: r.status, cancel: r.cancellation_status, cls };
+    }).sort((a, b) => byTenure(a, b) || a.start.localeCompare(b.start)); // people on the same day: longest in the company first
   };
   const on = (list, d) => list.filter((e) => e.start <= d && e.end >= d);
   const label = (e) => (cal.scope === 'company' ? e.first + ' · ' : '') + e.type.replace(/ Leave$/, '');
-  const tip = (e) => (cal.scope === 'company' ? e.name + ' — ' : '') + e.type + ', ' + rangeText(e.start, e.end) + ' (' + daysText(e.days) + ') · ' + e.status;
+  // company view only: the employee number goes with the name wherever a whole name is shown
+  const tip = (e) => (cal.scope === 'company' ? e.name + (e.employee_code ? ' (' + e.employee_code + ')' : '') + ' — ' : '') + e.type + ', ' + rangeText(e.start, e.end) + ' (' + daysText(e.days) + ') · ' + e.status;
+  const who = (e) => (cal.scope === 'company' ? [e.employee_code, e.type].filter(Boolean).join(' · ') : '');
   const chip = (e) => '<button type="button" class="lv-cal-chip ' + e.cls + '" data-open="' + esc(e.id) + '" title="' + esc(tip(e)) + '">' + esc(label(e)) + '</button>';
   const holLabel = (d) => holidayBy[d] ? '<div class="lv-cal-hol" title="' + esc(holidayBy[d].holiday_name) + '">' + esc(holidayBy[d].holiday_name) + (holidayBy[d].is_working_holiday ? ' (working)' : '') + '</div>' : '';
 
@@ -102,7 +104,7 @@ export async function renderCalendar(ctx, root) {
     return '<div class="card lv-cal-card"><div class="lv-cal-grid lv-cal-head">' + DOWS.map((x) => '<div>' + x + '</div>').join('') + '</div><div class="lv-cal-grid">' + cells + '</div></div>' +
       '<div class="lv-cal-agenda card"><h4 class="lv-h">This month</h4>' + (monthItems.length
         ? monthItems.map((e) => '<div class="lv-agenda-row" data-open="' + esc(e.id) + '" role="button" tabindex="0"><i class="lv-dot ' + e.cls + '"></i><div><b>' + esc(cal.scope === 'company' ? e.name : e.type) + '</b>' +
-          '<div class="muted">' + esc((cal.scope === 'company' ? e.type + ' · ' : '') + rangeText(e.start, e.end)) + '</div></div></div>').join('')
+          '<div class="muted">' + esc((who(e) ? who(e) + ' · ' : '') + rangeText(e.start, e.end)) + '</div></div></div>').join('')
         : '<p class="muted" style="margin:0;">No leave this month.</p>') + '</div>';
   }
 
@@ -112,7 +114,7 @@ export async function renderCalendar(ctx, root) {
     for (let i = 0; i < 7; i++) {
       const d = addDays(s, i), items = on(list, d);
       cols += '<div class="lv-week-col' + (d === ctx.today ? ' lv-cal-today' : '') + '" data-day="' + d + '"><div class="lv-week-head"><b>' + DOWS[i] + '</b> ' + Number(d.slice(8)) + '</div>' + holLabel(d) +
-        (items.length ? items.map((e) => '<div class="lv-week-item ' + e.cls + '" data-open="' + esc(e.id) + '" role="button" tabindex="0"><b>' + esc(cal.scope === 'company' ? e.name : e.type) + '</b><div>' + esc((cal.scope === 'company' ? e.type : rangeText(e.start, e.end))) + '</div></div>').join('') : '<div class="muted lv-week-empty">—</div>') + '</div>';
+        (items.length ? items.map((e) => '<div class="lv-week-item ' + e.cls + '" data-open="' + esc(e.id) + '" role="button" tabindex="0"><b>' + esc(cal.scope === 'company' ? e.name : e.type) + '</b><div>' + esc((cal.scope === 'company' ? who(e) : rangeText(e.start, e.end))) + '</div></div>').join('') : '<div class="muted lv-week-empty">—</div>') + '</div>';
     }
     return '<div class="card"><div class="lv-week">' + cols + '</div></div>';
   }
@@ -122,7 +124,7 @@ export async function renderCalendar(ctx, root) {
     const hol = holidayBy[cal.cursor];
     return '<div class="card">' + (hol ? '<div class="msg" style="background:#eef3fb;color:#1a3a6b;">Holiday: <b>' + esc(hol.holiday_name) + '</b>' + (hol.is_working_holiday ? ' (working holiday — counted as a working day)' : ' — not counted as a leave day') + '</div>' : '') +
       (items.length ? items.map((e) => '<div class="lv-day-item" data-open="' + esc(e.id) + '" role="button" tabindex="0"><i class="lv-dot ' + e.cls + '"></i><div style="flex:1;"><b>' + esc(cal.scope === 'company' ? e.name : e.type) + '</b>' +
-        '<div class="muted">' + esc((cal.scope === 'company' ? e.type + ' · ' : '') + rangeText(e.start, e.end) + ' · ' + daysText(e.days)) + '</div></div>' + statusBadge(e.status, e.cancel) + '</div>').join('')
+        '<div class="muted">' + esc((who(e) ? who(e) + ' · ' : '') + rangeText(e.start, e.end) + ' · ' + daysText(e.days)) + '</div></div>' + statusBadge(e.status, e.cancel) + '</div>').join('')
         : '<p class="muted" style="margin:0;">' + (cal.scope === 'mine' ? 'You have no leave on this day.' : 'No one is on approved leave this day.') + '</p>') + '</div>';
   }
 

@@ -2,8 +2,8 @@
 // HR drafts rules; a rule does nothing until the Final Approver switches it on, and before they
 // do (or run it) they see exactly what it would change. The rules themselves are applied by the
 // database every night -- this file only edits rules and previews them.
-import { esc, fmtDate, num, daysText, errorsText } from './leaveUi.js?v=20261011e';
-import { openSide, closeSide, sideBody } from './leaveSide.js?v=20261011e';
+import { esc, fmtDate, num, daysText, errorsText, personLabel, personCell, byTenure } from './leaveUi.js?v=20261012a';
+import { openSide, closeSide, sideBody } from './leaveSide.js?v=20261012a';
 
 const $ = (id) => document.getElementById(id);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -17,7 +17,7 @@ export function ruleSummary(ctx, r) {
     ? 'on the ' + ordinal(r.run_day) + ' of every month'
     : 'every ' + MONTHS[r.run_month - 1] + ' ' + r.run_day;
   let who = 'every active employee';
-  if (r.employee_id) who = (ctx.dirById[r.employee_id] || {}).full_name || 'one employee';
+  if (r.employee_id) who = ctx.dirById[r.employee_id] ? personLabel(ctx.dirById[r.employee_id]) : 'one employee';
   else {
     const bits = [];
     if (r.employment_status) bits.push(r.employment_status + ' employees');
@@ -94,7 +94,7 @@ function openRuleForm(ctx, r) {
     run_month: 1, run_day: 1, starts_on: ctx.today, employment_status: null, department: null, employee_id: null,
     min_service_months: null, max_service_months: null, reset_enabled: false, reset_month: 12, reset_day: 31, carry_over_enabled: false, max_carry_over: null,
   };
-  const people = ctx.dir.filter((e) => e.status === 'Active').sort((a, b) => String(a.full_name).localeCompare(String(b.full_name)));
+  const people = ctx.dir.filter((e) => e.status === 'Active').sort(byTenure);
   const depts = Array.from(new Set(ctx.dir.map((e) => e.department).filter(Boolean))).sort();
   const statuses = Array.from(new Set(ctx.dir.map((e) => e.employment_status).filter(Boolean))).sort();
   const opt = (val, label, cur) => '<option value="' + esc(val) + '"' + (String(cur) === String(val) ? ' selected' : '') + '>' + esc(label) + '</option>';
@@ -117,7 +117,7 @@ function openRuleForm(ctx, r) {
       '<div class="drawer-section"><h4>Who gets it <span style="text-transform:none;" class="muted">— leave everything blank for every active employee</span></h4><div class="lv-grid">' +
         '<div class="field"><label>Employment Status</label><select id="ar-status"><option value="">Any</option>' + statuses.map((s) => opt(s, s, v.employment_status)).join('') + '</select></div>' +
         '<div class="field"><label>Department</label><select id="ar-dept"><option value="">Any</option>' + depts.map((d) => opt(d, d, v.department)).join('') + '</select></div>' +
-        '<div class="field"><label>One specific employee</label><select id="ar-emp"><option value="">Anyone matching</option>' + people.map((p) => opt(p.employee_id, p.full_name, v.employee_id)).join('') + '</select></div>' +
+        '<div class="field"><label>One specific employee</label><select id="ar-emp"><option value="">Anyone matching</option>' + people.map((p) => opt(p.employee_id, personLabel(p), v.employee_id)).join('') + '</select></div>' +
         '<div class="field"><label>Months of service — at least</label><input type="number" id="ar-min" min="0" step="1" value="' + esc(val(v.min_service_months)) + '"></div>' +
         '<div class="field"><label>Months of service — at most</label><input type="number" id="ar-max" min="0" step="1" value="' + esc(val(v.max_service_months)) + '"></div>' +
       '</div><div class="muted" style="margin-top:4px;">Length of service is counted from the Date Hired in the 201-File, as of each credit date.</div></div>' +
@@ -182,7 +182,8 @@ async function openPreview(ctx, r, mode) {
       (mode === 'preview' ? '<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;"><div class="field"><label>As of date</label><input type="date" id="ap-asof" value="' + esc(asOf) + '"></div><button type="button" class="btn small secondary" id="ap-go">Show</button></div>' : '') +
       '<div class="drawer-section"><h4>' + data.count + ' entr' + (data.count === 1 ? 'y' : 'ies') + ' · net ' + (Number(data.net_credits) >= 0 ? '+' : '') + esc(num(data.net_credits)) + ' days' + (data.truncated ? ' · showing the first 500' : '') + '</h4>' +
       (rows.length ? '<div class="table-scroll table-2col"><table><thead><tr><th>Employee</th><th>What</th><th>Days</th><th>For</th></tr></thead><tbody>' +
-        rows.map((x) => '<tr><td data-label="Employee">' + esc(x.employee_name) + '</td><td data-label="What">' + (x.kind === 'reset' ? 'Yearly reset (expire)' : (r.frequency === 'Monthly' ? 'Monthly credit' : 'Annual credit')) + '</td>' +
+        // the plan carries the database's own name stamp; the directory has the formal name + employee number HR expects
+        rows.map((x) => '<tr><td data-label="Employee">' + (ctx.dirById[x.employee_id] ? personCell(ctx.dirById[x.employee_id]) : esc(x.employee_name)) + '</td><td data-label="What">' + (x.kind === 'reset' ? 'Yearly reset (expire)' : (r.frequency === 'Monthly' ? 'Monthly credit' : 'Annual credit')) + '</td>' +
           '<td data-label="Days"><b class="' + (x.kind === 'reset' ? 'lv-neg' : 'lv-pos') + '">' + (x.kind === 'reset' ? '−' : '+') + esc(num(x.amount)) + '</b></td><td data-label="For">' + esc(fmtDate(x.scheduled)) + '</td></tr>').join('') + '</tbody></table></div>'
         : '<p class="muted">Nothing would be applied' + (mode === 'preview' ? ' on that date' : ' right now') + ' — either every period is already applied, the start date is still ahead, or nobody matches the “who gets it” filters.</p>') + '</div>';
     const go = $('ap-go');

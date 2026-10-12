@@ -1,15 +1,16 @@
 // Leave Management -- Leave Credits: every employee's balances, HR's manual adjustments and the
 // immutable credit ledger. Anyone with view_all can read; only HR can change (the database
 // refuses anyone else, and HR cannot change their own credits -- only the Final Approver can).
-import { esc, fmtDate, fmtDateTime, manilaDate, num, daysText, errorsText, kv } from './leaveUi.js?v=20261011e';
+import { esc, fmtDate, fmtDateTime, manilaDate, num, daysText, errorsText, kv, personLabel, personCell, byTenure } from './leaveUi.js?v=20261012a';
 import {
   activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber,
-} from './uiKit.js?v=20261011e';
-import { openSide, closeSide, sideBody, confirmPanel } from './leaveSide.js?v=20261011e';
+} from './uiKit.js?v=20261012a';
+import { openSide, closeSide, sideBody, confirmPanel } from './leaveSide.js?v=20261012a';
 
 const $ = (id) => document.getElementById(id);
-const cf = { search: '', department: 'all', show: 'all', sort: { field: 'name', dir: 'asc' } };
-const SORT = [{ key: 'name', label: 'Employee' }, { key: 'remaining', label: 'Remaining Credits' }, { key: 'used', label: 'Credits Used' }, { key: 'department', label: 'Department' }];
+// opens with the longest in the company first (earliest Date Hired on the HR 201 File), not by name
+const cf = { search: '', department: 'all', show: 'all', sort: { field: 'hire_date', dir: 'asc' } };
+const SORT = [{ key: 'hire_date', label: 'Date Hired' }, { key: 'remaining', label: 'Remaining Credits' }, { key: 'used', label: 'Credits Used' }, { key: 'department', label: 'Department' }];
 
 // Which sign each transaction type applies (mirrors leave_adjust_credit)
 const ADD_TYPES = ['Initial Credit', 'Annual Credit', 'Manual Credit', 'Carry Over'];
@@ -63,7 +64,7 @@ function drawList(ctx, people, cols) {
   let rows = people.filter((p) => (cf.department === 'all' || p.department === cf.department) &&
     (cf.show === 'all' || (cf.show === 'has' ? p.total > 0 : p.total === 0)) &&
     (!q || (p.full_name + ' ' + (p.employee_code || '')).toLowerCase().includes(q)));
-  rows = applySort(rows, cf.sort, { name: byText('name'), department: byText('department'), remaining: byNumber('remaining'), used: byNumber('used') });
+  rows = applySort(rows, cf.sort, { hire_date: byTenure, department: byText('department'), remaining: byNumber('remaining'), used: byNumber('used') });
   $('cr-active').innerHTML = activeFiltersHtml([
     { label: 'Search', value: esc(cf.search.trim()) }, { label: 'Department', value: esc(cf.department) },
     { label: 'Show', value: cf.show === 'all' ? '' : (cf.show === 'has' ? 'With credits' : 'No credits yet') },
@@ -80,7 +81,7 @@ function drawList(ctx, people, cols) {
     rows.map((p) => {
       const own = p.employee_id === ctx.me.employee_id;
       const canAdjust = ctx.flags.hr && (!own || ctx.flags.final);
-      return '<tr><td data-label="Employee"><b>' + esc(p.full_name) + '</b><div class="muted">' + esc(p.employee_code || '') + '</div></td>' +
+      return '<tr><td data-label="Employee">' + personCell(p) + '</td>' +
         '<td data-label="Department">' + esc(p.department || '—') + '</td>' +
         cols.map((t) => { const b = p.mine[t.id]; return '<td data-label="' + esc(t.name.replace(/ Leave$/, '')) + '" title="' + (b ? 'Total ' + num(b.total_credits) + ', used ' + num(b.used_credits) : 'No credits') + '">' + (b ? esc(num(b.available_credits)) : '0') + '</td>'; }).join('') +
         '<td data-label="Used">' + esc(num(p.used)) + '</td><td data-label="Remaining"><b>' + esc(num(p.remaining)) + '</b></td>' +
@@ -111,8 +112,8 @@ export function openAdjust(ctx, employeeId, opts = {}) {
     return a;
   };
   openSide({
-    title: 'Adjust Leave Credits', sub: e.full_name || '',
-    body: '<div id="lv-side-msg"></div><div class="drawer-section"><h4>Employee</h4>' + kv('Name', esc(e.full_name || '—')) + kv('Department', esc(e.department || '—')) + '</div>' +
+    title: 'Adjust Leave Credits', sub: e.full_name ? personLabel(e) : '',
+    body: '<div id="lv-side-msg"></div><div class="drawer-section"><h4>Employee</h4>' + kv('Name', esc(e.full_name || '—')) + kv('Employee ID', esc(e.employee_code || '—')) + kv('Department', esc(e.department || '—')) + '</div>' +
       '<div class="drawer-section"><h4>Change</h4><div class="lv-grid">' +
         '<div class="field"><label>Leave Type *</label><select id="adj-type">' + types.map((t) => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('') + '</select></div>' +
         '<div class="field"><label>Transaction Type *</label><select id="adj-txn">' + TXN_TYPES.map((t) => '<option' + (t === st.txn ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select></div>' +
@@ -155,7 +156,7 @@ export function openAdjust(ctx, employeeId, opts = {}) {
     if (problems.length) { slot.innerHTML = '<div class="msg error">' + esc(problems.join(' ')) + '</div>'; sideBody().scrollTop = 0; return; }
     confirmPanel({
       title: 'Confirm credit change',
-      message: esc((e.full_name || 'This employee') + ': ' + st.txn + ' — ' + (s >= 0 ? 'add ' : 'deduct ') + daysText(Math.abs(s)) + ' of ' + (type().name || 'leave') + '. New balance: ' + num(bal() + s) + ' days. This is recorded permanently in the credit history.'),
+      message: esc((e.full_name ? personLabel(e) : 'This employee') + ': ' + st.txn + ' — ' + (s >= 0 ? 'add ' : 'deduct ') + daysText(Math.abs(s)) + ' of ' + (type().name || 'leave') + '. New balance: ' + num(bal() + s) + ' days. This is recorded permanently in the credit history.'),
       okLabel: 'Confirm Change',
       onOk: async () => {
         const res = await ctx.api.adjustCredit({
@@ -174,7 +175,7 @@ export function openAdjust(ctx, employeeId, opts = {}) {
 // ---------------- ledger ----------------
 export async function openLedger(ctx, employeeId) {
   const e = ctx.dirById[employeeId] || {};
-  openSide({ title: 'Leave Credit History', sub: e.full_name || '', body: '<p class="muted">Loading…</p>' });
+  openSide({ title: 'Leave Credit History', sub: e.full_name ? personLabel(e) : '', body: '<p class="muted">Loading…</p>' });
   try {
     const rows = await ctx.api.listLedger(employeeId, 300);
     sideBody().innerHTML = !rows.length ? '<p class="muted">No credit changes recorded yet.</p>' :
@@ -186,7 +187,7 @@ export async function openLedger(ctx, employeeId) {
         '<td data-label="Change"><b class="' + (Number(r.amount) < 0 ? 'lv-neg' : 'lv-pos') + '">' + (Number(r.amount) > 0 ? '+' : '') + esc(num(r.amount)) + '</b></td>' +
         '<td data-label="Balance">' + esc(num(r.previous_balance)) + ' → ' + esc(num(r.new_balance)) + '</td>' +
         '<td data-label="Reason" class="full-row">' + esc(r.reason) + (r.notes ? '<div class="muted">' + esc(r.notes) + '</div>' : '') + '</td>' +
-        '<td data-label="By">' + esc(r.created_by ? ((ctx.dirById[r.created_by] || {}).full_name || 'HR') : 'System') + '</td></tr>').join('') + '</tbody></table></div>';
+        '<td data-label="By">' + esc(r.created_by ? (ctx.dirById[r.created_by] ? personLabel(ctx.dirById[r.created_by]) : 'HR') : 'System') + '</td></tr>').join('') + '</tbody></table></div>';
   } catch (err) {
     sideBody().innerHTML = '<div class="msg error">' + esc(err.message || String(err)) + '</div>';
   }

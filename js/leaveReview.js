@@ -2,12 +2,12 @@
 // views over what the database already allowed this person to see; every button just opens
 // the shared request drawer (optionally with its confirmation panel pre-opened).
 import {
-  esc, statusBadge, fmtDate, rangeText, num, daysText, manilaDate, addDays, yearOf,
+  esc, statusBadge, fmtDate, rangeText, num, daysText, manilaDate, addDays, yearOf, personLabel, personCell, byTenure,
   PENDING_HR, FINAL_QUEUE, DECISION_STATUSES, STATUSES,
-} from './leaveUi.js?v=20261011e';
+} from './leaveUi.js?v=20261012a';
 import {
   activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber, byDate,
-} from './uiKit.js?v=20261011e';
+} from './uiKit.js?v=20261012a';
 
 const $ = (id) => document.getElementById(id);
 const clip = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
@@ -38,6 +38,8 @@ function wireQuick(root, onPick) {
 }
 
 const empName = (ctx, id) => (ctx.dirById[id] || {}).full_name || '—';
+const empCode = (ctx, id) => (ctx.dirById[id] || {}).employee_code || '';
+const empLabel = (ctx, id) => (ctx.dirById[id] ? personLabel(ctx.dirById[id]) : '—');
 const empDept = (ctx, id) => (ctx.dirById[id] || {}).department || '—';
 const typeName = (ctx, id) => (ctx.typeById[id] || {}).name || '—';
 const balanceOf = (ctx, empId, typeId) => {
@@ -53,7 +55,7 @@ const hf = {
   sort: { field: 'created_at', dir: 'desc' },
 };
 const HR_SORT = [
-  { key: 'created_at', label: 'Date Filed' }, { key: 'start_date', label: 'Leave Dates' }, { key: 'employee', label: 'Employee' },
+  { key: 'created_at', label: 'Date Filed' }, { key: 'start_date', label: 'Leave Dates' }, { key: 'employee', label: 'Employee (Date Hired)' },
   { key: 'leave_request_number', label: 'Request No.' }, { key: 'requested_days', label: 'Days' }, { key: 'status', label: 'Status' },
 ];
 
@@ -69,7 +71,7 @@ export function renderHr(ctx, root) {
   const cnt = (k) => all.filter(quick[k].test).length;
   const ids = new Set(all.map((r) => r.employee_id));
   if (hf.employee !== 'all') ids.add(hf.employee); // keep a deep-linked employee selectable even if they have no requests yet
-  const employees = Array.from(ids).map((id) => ({ id, name: empName(ctx, id) })).sort((a, b) => a.name.localeCompare(b.name));
+  const employees = Array.from(ids).map((id) => ({ id, employee_code: empCode(ctx, id), hire_date: (ctx.dirById[id] || {}).hire_date, label: empLabel(ctx, id) })).sort(byTenure);
   const depts = Array.from(new Set(all.map((r) => empDept(ctx, r.employee_id)).filter((d) => d !== '—'))).sort();
   const years = Array.from(new Set([yearOf(today), ...all.map((r) => yearOf(r.start_date))])).sort((a, b) => b - a);
   const opt = (value, label, cur) => '<option value="' + esc(value) + '"' + (String(cur) === String(value) ? ' selected' : '') + '>' + esc(label) + '</option>';
@@ -82,8 +84,8 @@ export function renderHr(ctx, root) {
       ['month', cnt('month'), 'Filed This Month'], ['cancel', cnt('cancel'), 'Cancellation Requests'],
     ].map((t) => qtile(t[0], hf.quick === t[0], t[1], t[2], t[3])).join('') + '</div>' +
     '<div class="card"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">' +
-      '<div class="field" style="min-width:180px;"><label>Search</label><input type="text" id="hr-search" placeholder="Name, request no., reason…" value="' + esc(hf.search) + '"></div>' +
-      '<div class="field"><label>Employee</label><select id="hr-employee">' + opt('all', 'All', hf.employee) + employees.map((e) => opt(e.id, e.name, hf.employee)).join('') + '</select></div>' +
+      '<div class="field" style="min-width:180px;"><label>Search</label><input type="text" id="hr-search" placeholder="Name, employee ID, request no., reason…" value="' + esc(hf.search) + '"></div>' +
+      '<div class="field"><label>Employee</label><select id="hr-employee">' + opt('all', 'All', hf.employee) + employees.map((e) => opt(e.id, e.label, hf.employee)).join('') + '</select></div>' +
       '<div class="field"><label>Department</label><select id="hr-department">' + opt('all', 'All', hf.department) + depts.map((d) => opt(d, d, hf.department)).join('') + '</select></div>' +
       '<div class="field"><label>Leave Type</label><select id="hr-type">' + opt('all', 'All', hf.type) + ctx.types.map((t) => opt(t.id, t.name, hf.type)).join('') + '</select></div>' +
       '<div class="field"><label>Status</label><select id="hr-status">' + opt('all', 'All', hf.status) + STATUSES.filter((s) => s !== 'Draft').map((s) => opt(s, s, hf.status)).join('') + '</select></div>' +
@@ -122,20 +124,20 @@ function renderHrList(ctx, all) {
     if (hf.to && r.start_date > hf.to) return false;
     if (hf.year !== 'all' && String(yearOf(r.start_date)) !== hf.year) return false;
     if (hf.month !== 'all' && Number(r.start_date.slice(5, 7)) !== Number(hf.month)) return false;
-    if (q && !(empName(ctx, r.employee_id) + ' ' + (r.leave_request_number || '') + ' ' + (r.reason || '') + ' ' + typeName(ctx, r.leave_type_id)).toLowerCase().includes(q)) return false;
+    if (q && !(empName(ctx, r.employee_id) + ' ' + empCode(ctx, r.employee_id) + ' ' + (r.leave_request_number || '') + ' ' + (r.reason || '') + ' ' + typeName(ctx, r.leave_type_id)).toLowerCase().includes(q)) return false;
     return true;
   });
   const comps = {
     created_at: byDate('created_at'), start_date: byDate('start_date'), leave_request_number: byText('leave_request_number'),
     requested_days: byNumber('requested_days'), status: byText('status'),
-    employee: (a, b) => empName(ctx, a.employee_id).localeCompare(empName(ctx, b.employee_id)),
+    employee: (a, b) => byTenure(ctx.dirById[a.employee_id], ctx.dirById[b.employee_id]),
   };
   rows = applySort(rows, hf.sort, comps);
 
   const typeLabel = hf.type === 'all' ? 'all' : typeName(ctx, Number(hf.type));
   $('hr-active').innerHTML = activeFiltersHtml([
     { label: 'Showing', value: hf.quick ? esc(quick[hf.quick].label) : '' }, { label: 'Search', value: esc(hf.search.trim()) },
-    { label: 'Employee', value: hf.employee === 'all' ? 'all' : esc(empName(ctx, hf.employee)) }, { label: 'Department', value: esc(hf.department) },
+    { label: 'Employee', value: hf.employee === 'all' ? 'all' : esc(empLabel(ctx, hf.employee)) }, { label: 'Department', value: esc(hf.department) },
     { label: 'Leave Type', value: esc(typeLabel) }, { label: 'Status', value: esc(hf.status) }, { label: 'Payment', value: esc(hf.payment) },
     { label: 'From', value: esc(hf.from) }, { label: 'To', value: esc(hf.to) },
     { label: 'Month', value: hf.month === 'all' ? 'all' : MONTHS[Number(hf.month) - 1] }, { label: 'Year', value: esc(hf.year) },
@@ -153,7 +155,7 @@ function renderHrList(ctx, all) {
     rows.map((r) => {
       const needsHr = ctx.flags.hr && PENDING_HR.includes(r.status) && r.employee_id !== ctx.me.employee_id;
       return '<tr><td data-label="Request No.">' + esc(r.leave_request_number || '') + '</td>' +
-        '<td data-label="Employee"><b>' + esc(empName(ctx, r.employee_id)) + '</b>' + (r.filed_by !== r.employee_id ? '<div class="muted">filed by ' + esc(empName(ctx, r.filed_by)) + '</div>' : '') + '</td>' +
+        '<td data-label="Employee">' + personCell(ctx.dirById[r.employee_id], r.filed_by !== r.employee_id ? '<div class="muted">filed by ' + esc(empName(ctx, r.filed_by)) + '</div>' : '') + '</td>' +
         '<td data-label="Department">' + esc(empDept(ctx, r.employee_id)) + '</td>' +
         '<td data-label="Leave Type">' + esc(typeName(ctx, r.leave_type_id)) + '</td>' +
         '<td data-label="Dates">' + esc(rangeText(r.start_date, r.end_date)) + '</td>' +
@@ -183,7 +185,7 @@ export function renderFinal(ctx, root) {
   const cutoff = addDays(today, -30);
   const decided = all.filter((r) => ['Approved', 'Rejected', 'Completed'].includes(r.status) && r.final_reviewed_at && manilaDate(r.final_reviewed_at) >= cutoff)
     .sort((a, b) => String(b.final_reviewed_at).localeCompare(String(a.final_reviewed_at)));
-  const onLeave = all.filter(quick.on_leave.test);
+  const onLeave = all.filter(quick.on_leave.test).sort((a, b) => byTenure(ctx.dirById[a.employee_id], ctx.dirById[b.employee_id]));
   const soon = all.filter((r) => r.status === 'Approved' && r.start_date > today && r.start_date <= addDays(today, 14)).sort((a, b) => a.start_date.localeCompare(b.start_date));
 
   // by department: pending, approved this month, on leave now
@@ -204,7 +206,7 @@ export function renderFinal(ctx, root) {
     '</div>' +
     '<div class="card"><h4 class="lv-h">Awaiting Your Decision</h4>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">' +
-        '<div class="field" style="min-width:180px;"><label>Search</label><input type="text" id="fa-search" placeholder="Name, request no., leave type…" value="' + esc(ff.search) + '"></div>' +
+        '<div class="field" style="min-width:180px;"><label>Search</label><input type="text" id="fa-search" placeholder="Name, employee ID, request no., leave type…" value="' + esc(ff.search) + '"></div>' +
         '<div class="field"><label>Department</label><select id="fa-department"><option value="all">All</option>' + depts.map((d) => '<option' + (ff.department === d ? ' selected' : '') + '>' + esc(d) + '</option>').join('') + '</select></div>' +
         '<button type="button" class="btn small secondary" id="fa-clear">Clear Filters</button></div>' +
       '<div id="fa-queue"></div></div>' +
@@ -228,13 +230,13 @@ export function renderFinal(ctx, root) {
 
 function peopleList(ctx, rows, empty) {
   if (!rows.length) return '<p class="muted" style="margin:0;">' + esc(empty) + '</p>';
-  return '<ul class="lv-people">' + rows.map((r) => '<li data-open="' + r.id + '"><b>' + esc(empName(ctx, r.employee_id)) + '</b> <span class="muted">' + esc(empDept(ctx, r.employee_id)) + '</span>' +
+  return '<ul class="lv-people">' + rows.map((r) => '<li data-open="' + r.id + '"><b>' + esc(empName(ctx, r.employee_id)) + '</b> <span class="muted">' + esc([empCode(ctx, r.employee_id), empDept(ctx, r.employee_id)].filter(Boolean).join(' · ')) + '</span>' +
     '<div class="muted">' + esc(typeName(ctx, r.leave_type_id)) + ' · ' + esc(rangeText(r.start_date, r.end_date)) + '</div></li>').join('') + '</ul>';
 }
 
 function simpleTable(ctx, rows, cancellation) {
   return '<div class="table-scroll table-2col"><table><thead><tr><th>Request No.</th><th>Employee</th><th>Leave Type</th><th>Dates</th><th>Days</th><th>Status</th><th>' + (cancellation ? 'Cancellation Reason' : 'Decision') + '</th><th>Action</th></tr></thead><tbody>' +
-    rows.map((r) => '<tr><td data-label="Request No.">' + esc(r.leave_request_number || '') + '</td><td data-label="Employee"><b>' + esc(empName(ctx, r.employee_id)) + '</b></td>' +
+    rows.map((r) => '<tr><td data-label="Request No.">' + esc(r.leave_request_number || '') + '</td><td data-label="Employee">' + personCell(ctx.dirById[r.employee_id]) + '</td>' +
       '<td data-label="Leave Type">' + esc(typeName(ctx, r.leave_type_id)) + '</td><td data-label="Dates">' + esc(rangeText(r.start_date, r.end_date)) + '</td>' +
       '<td data-label="Days">' + esc(num(r.requested_days)) + '</td><td data-label="Status">' + statusBadge(r.status, r.cancellation_status) + '</td>' +
       '<td data-label="' + (cancellation ? 'Cancellation Reason' : 'Decision') + '">' + esc(clip(cancellation ? r.cancellation_reason : (r.status === 'Rejected' ? r.rejection_reason : r.final_approver_comments) || '—', 70)) +
@@ -246,7 +248,7 @@ function simpleTable(ctx, rows, cancellation) {
 function renderQueue(ctx, queue) {
   const q = ff.search.trim().toLowerCase();
   const rows = queue.filter((r) => (ff.department === 'all' || empDept(ctx, r.employee_id) === ff.department) &&
-    (!q || (empName(ctx, r.employee_id) + ' ' + (r.leave_request_number || '') + ' ' + typeName(ctx, r.leave_type_id)).toLowerCase().includes(q)));
+    (!q || (empName(ctx, r.employee_id) + ' ' + empCode(ctx, r.employee_id) + ' ' + (r.leave_request_number || '') + ' ' + typeName(ctx, r.leave_type_id)).toLowerCase().includes(q)));
   const box = $('fa-queue');
   if (!rows.length) {
     box.innerHTML = emptyStateHtml({ message: queue.length ? 'No requests match these filters.' : 'Nothing is waiting for your decision.', hasFilters: queue.length > 0, clearId: 'fa-clear' });
@@ -259,7 +261,7 @@ function renderQueue(ctx, queue) {
       const avail = balanceOf(ctx, r.employee_id, r.leave_type_id);
       const short = r.payment_type === 'Paid' && t.requires_credit && Number(r.requested_days) > avail;
       return '<tr><td data-label="Request No.">' + esc(r.leave_request_number || '') + '</td>' +
-        '<td data-label="Employee"><b>' + esc(empName(ctx, r.employee_id)) + '</b></td>' +
+        '<td data-label="Employee">' + personCell(ctx.dirById[r.employee_id]) + '</td>' +
         '<td data-label="Department">' + esc(empDept(ctx, r.employee_id)) + '</td>' +
         '<td data-label="Leave Type">' + esc(t.name || '—') + '</td>' +
         '<td data-label="Dates">' + esc(rangeText(r.start_date, r.end_date)) + '</td>' +

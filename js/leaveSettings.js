@@ -2,9 +2,9 @@
 // day + immediate supervisor, and the policy numbers. HR writes these tables directly (row
 // level security limits that to leave.hr) and every change is recorded in the audit log by a
 // database trigger, not by this file.
-import { esc, fmtDate, num, WEEKDAYS, kv } from './leaveUi.js?v=20261011e';
-import { openSide, closeSide, sideBody } from './leaveSide.js?v=20261011e';
-import { accrualHtml, wireAccrual } from './leaveAccrual.js?v=20261011e';
+import { esc, fmtDate, num, WEEKDAYS, kv, personLabel, personCell, byTenure } from './leaveUi.js?v=20261012a';
+import { openSide, closeSide, sideBody } from './leaveSide.js?v=20261012a';
+import { accrualHtml, wireAccrual } from './leaveAccrual.js?v=20261012a';
 
 const $ = (id) => document.getElementById(id);
 const openSections = new Set(['schedules']);
@@ -31,7 +31,7 @@ export async function renderSettings(ctx, root) {
     return;
   }
   if (seq !== renderSeq) return;
-  const people = ctx.dir.filter((e) => e.status === 'Active').sort((a, b) => String(a.full_name).localeCompare(String(b.full_name)));
+  const people = ctx.dir.filter((e) => e.status === 'Active').sort(byTenure);
   const notSet = people.filter((p) => !p.rest_day_set).length;
 
   root.innerHTML =
@@ -62,15 +62,15 @@ function schedulesHtml(ctx, people) {
   const def = Number(ctx.settings.default_rest_day || 0);
   return '<p class="muted" style="margin-top:0;">Everyone works six days a week with one rest day. The rest day is not counted as leave. ' +
     'Anyone without one set uses the default (' + esc(WEEKDAYS[def]) + ') — set it here for anyone whose day off is different.</p>' +
-    '<div class="field" style="max-width:260px;margin-bottom:10px;"><label>Search</label><input type="text" id="sch-search" placeholder="Employee name…"></div>' +
+    '<div class="field" style="max-width:260px;margin-bottom:10px;"><label>Search</label><input type="text" id="sch-search" placeholder="Employee name or ID…"></div>' +
     '<div class="table-scroll table-2col"><table><thead><tr><th>Employee</th><th>Department</th><th>Rest Day</th><th>Immediate Supervisor</th><th>Action</th></tr></thead><tbody id="sch-body">' +
-    people.map((p) => '<tr data-emp="' + esc(p.employee_id) + '" data-name="' + esc(String(p.full_name).toLowerCase()) + '">' +
-      '<td data-label="Employee"><b>' + esc(p.full_name) + '</b>' + (p.has_login === false ? '<div class="muted">no login</div>' : '') + '</td>' +
+    people.map((p) => '<tr data-emp="' + esc(p.employee_id) + '" data-name="' + esc((String(p.full_name) + ' ' + (p.employee_code || '')).toLowerCase()) + '">' +
+      '<td data-label="Employee">' + personCell(p, p.has_login === false ? '<div class="muted">no login</div>' : '') + '</td>' +
       '<td data-label="Department">' + esc(p.department || '—') + '</td>' +
       '<td data-label="Rest Day"><select data-f="rest">' + WEEKDAYS.map((d, i) => '<option value="' + i + '"' + (Number(p.rest_day) === i ? ' selected' : '') + '>' + d + '</option>').join('') + '</select>' +
         (p.rest_day_set ? '' : '<div class="muted">Not set — using default</div>') + '</td>' +
       '<td data-label="Immediate Supervisor"><select data-f="sup"><option value="">— None —</option>' + people.filter((x) => x.employee_id !== p.employee_id).map((x) =>
-        '<option value="' + esc(x.employee_id) + '"' + (x.employee_id === p.supervisor_id ? ' selected' : '') + '>' + esc(x.full_name) + '</option>').join('') + '</select></td>' +
+        '<option value="' + esc(x.employee_id) + '"' + (x.employee_id === p.supervisor_id ? ' selected' : '') + '>' + esc(personLabel(x)) + '</option>').join('') + '</select></td>' +
       '<td data-label="Action" class="full-row"><button type="button" class="btn small" data-save disabled>Save</button></td></tr>').join('') + '</tbody></table></div>';
 }
 
@@ -95,7 +95,7 @@ function wireSchedules(ctx, people) {
     btn.addEventListener('click', () => {
       btn.disabled = true;
       run(ctx, () => ctx.api.saveSchedule(tr.dataset.emp, Number(tr.querySelector('[data-f="rest"]').value), tr.querySelector('[data-f="sup"]').value || null),
-        'Saved for ' + p.full_name + '.');
+        'Saved for ' + personLabel(p) + '.');
     });
   });
 }

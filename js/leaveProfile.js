@@ -2,11 +2,11 @@
 // Shown to HR and the Final Approver (the 201-File page itself is already limited to them) and built
 // on exactly the same data, drawers and rules as the Leave Management page -- there is no second copy
 // of any leave logic here.
-import { esc, fmtDate, rangeText, num, daysText, statusBadge, tile } from './leaveUi.js?v=20261011e';
-import { summarizeLeave } from './leaveSummary.js?v=20261011e';
-import { createLeaveContext, drawersHtml, bindDrawerEvents } from './leavePage.js?v=20261011e';
-import { openAdjust, openLedger } from './leaveCredits.js?v=20261011e';
-import * as api from './leaveApi.js?v=20261011e';
+import { esc, fmtDate, rangeText, num, daysText, statusBadge, tile, personLabel } from './leaveUi.js?v=20261012a';
+import { summarizeLeave } from './leaveSummary.js?v=20261012a';
+import { createLeaveContext, drawersHtml, bindDrawerEvents } from './leavePage.js?v=20261012a';
+import { openAdjust, openLedger } from './leaveCredits.js?v=20261012a';
+import * as api from './leaveApi.js?v=20261012a';
 
 let ctx = null;
 let current = null;
@@ -65,7 +65,7 @@ function draw(host, employeeId) {
     '<h4 class="lv-h">Upcoming Leave</h4>' + (upcoming.length
       ? '<ul class="lv-people" style="margin-bottom:12px;">' + upcoming.map((r) => '<li data-lp-open="' + esc(r.id) + '"><b>' + esc(tName(r.leave_type_id)) + '</b> <span class="muted">· ' + esc(rangeText(r.start_date, r.end_date)) + ' · ' + esc(daysText(r.requested_days)) + '</span></li>').join('') + '</ul>'
       : '<p class="muted" style="margin-top:0;">No upcoming approved leave.</p>') +
-    '<h4 class="lv-h">Leave History' + (person.full_name ? ' — ' + esc(person.full_name) : '') + '</h4>' + (reqs.length
+    '<h4 class="lv-h">Leave History' + (person.full_name ? ' — ' + esc(personLabel(person)) : '') + '</h4>' + (reqs.length
       ? '<div class="table-scroll table-2col"><table><thead><tr><th>Request No.</th><th>Leave Type</th><th>Dates</th><th>Days</th><th>Paid / Unpaid</th><th>Status</th><th></th></tr></thead><tbody>' +
         reqs.slice(0, 10).map((r) => '<tr><td data-label="Request No.">' + esc(r.leave_request_number || '') + '</td><td data-label="Leave Type">' + esc(tName(r.leave_type_id)) + '</td>' +
           '<td data-label="Dates">' + esc(rangeText(r.start_date, r.end_date)) + '</td><td data-label="Days">' + esc(num(r.requested_days)) + '</td><td data-label="Paid / Unpaid">' + esc(r.payment_type) + '</td>' +
