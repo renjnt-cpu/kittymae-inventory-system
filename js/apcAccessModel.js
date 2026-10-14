@@ -32,6 +32,10 @@ export const KEY_MAP = {
   'extra_access.transactions': ['ACCOUNTING', 'view'],
   'bills.access': ['FINANCE', 'view'], 'bills.view': ['FINANCE', 'view'], 'bills.branch': ['FINANCE', 'add'], 'bills.manage': ['FINANCE', 'edit'], 'bills.admin': ['FINANCE', 'delete'],
   'refunds.view': ['FINANCE', 'view'], 'refunds.approve': ['FINANCE', 'approve'], 'refunds.pay': ['FINANCE', 'edit'], 'refunds.admin': ['FINANCE', 'delete'],
+  // Branch Capital (daily cash, expenses, petty cash, receipts, reports) -- migration 226
+  'branch_cash.view': ['FINANCE', 'view'], 'branch_cash.view_all': ['FINANCE', 'view'], 'branch_cash.view_petty': ['FINANCE', 'view'], 'branch_cash.view_reports': ['FINANCE', 'view'],
+  'branch_cash.add_expense': ['FINANCE', 'add'], 'branch_cash.use_petty': ['FINANCE', 'add'], 'branch_cash.approve_expense': ['FINANCE', 'approve'], 'branch_cash.replenish_petty': ['FINANCE', 'approve'],
+  'branch_cash.close_daily': ['FINANCE', 'approve'], 'branch_cash.adjust_petty': ['FINANCE', 'edit'], 'branch_cash.manage': ['FINANCE', 'edit'], 'branch_cash.export': ['FINANCE', 'export'],
   'hr.view_profile': ['PEOPLE', 'view'], 'hr.view_documents': ['PEOPLE', 'view'], 'hr.view_notes': ['PEOPLE', 'view'], 'hr.view_management_notes': ['PEOPLE', 'view'],
   'hr.view_government_ids': ['PEOPLE', 'view'], 'hr.reveal_government_ids': ['PEOPLE', 'view'], 'hr.view_compensation': ['PEOPLE', 'view'], 'hr.view_access': ['PEOPLE', 'view'], 'hr.view_audit_log': ['PEOPLE', 'view'],
   'hr.add_employee': ['PEOPLE', 'add'], 'hr.add_notes': ['PEOPLE', 'add'], 'hr.edit_profile': ['PEOPLE', 'edit'], 'hr.edit_employment': ['PEOPLE', 'edit'], 'hr.edit_compensation': ['PEOPLE', 'edit'],
@@ -59,6 +63,7 @@ export const SENSITIVE = {
   'dashboard.profit': 'View Gross / Net Profit',
   'dashboard.capital': 'View Owner Capital', 'dashboard.capital_manage': 'View Owner Capital',
   'bills.access': 'View Accounting', 'bills.view': 'View Accounting', 'bills.manage': 'View Accounting', 'bills.admin': 'View Accounting', 'dashboard.expenses': 'View Accounting', 'extra_access.transactions': 'View Accounting',
+  'branch_cash.view': 'View Accounting', 'branch_cash.view_all': 'View Accounting', 'branch_cash.view_petty': 'View Accounting', 'branch_cash.view_reports': 'View Accounting', 'branch_cash.manage': 'View Accounting',
   'hr.view_compensation': 'View Payroll', 'hr.edit_compensation': 'View Payroll',
   'activity.audit': 'View Audit Log', 'hr.view_audit_log': 'View Audit Log', 'leave.audit': 'View Audit Log', 'assets.admin': 'View Audit Log',
   'hr.view_access': 'View Access Control', 'access_checklist.view': 'View Access Control', 'access_perf.view': 'View Access Control', 'staff_analytics.view': 'View Access Control', 'system.admin': 'View Access Control', 'hr.reset_password': 'View Access Control',
@@ -77,7 +82,8 @@ export const REVIEW_GROUPS = [
   { id: 'refund', question: 'Does this person still need to work with refunds?', keys: ['refunds.view', 'refunds.approve', 'refunds.pay', 'refunds.admin'], module: 'FINANCE' },
   { id: 'inventory', question: 'Does this person still need to edit inventory?', keys: ['inventory.pull_out.create', 'inventory.pull_out.edit', 'inventory.record_factory_purchase_any_branch', 'extra_access.products_edit', 'transfer.receive_any_branch'], module: 'INVENTORY' },
   { id: 'cost', question: 'Does this person still need to see supplier and product cost?', keys: ['catalog.cost_view', 'catalog.cost_edit', 'dashboard.cost', 'datafix.cost', 'datafix.purchase', 'assets.view_cost'], module: 'SKU CATALOG' },
-  { id: 'accounting', question: 'Does this person still need accounting, expenses or profit figures?', keys: ['bills.access', 'bills.view', 'bills.branch', 'bills.manage', 'bills.admin', 'dashboard.expenses', 'dashboard.profit', 'dashboard.capital', 'dashboard.capital_manage', 'extra_access.transactions'], module: 'FINANCE' },
+  { id: 'accounting', question: 'Does this person still need accounting, expenses or profit figures?', keys: ['bills.access', 'bills.view', 'bills.branch', 'bills.manage', 'bills.admin', 'dashboard.expenses', 'dashboard.profit', 'dashboard.capital', 'dashboard.capital_manage', 'extra_access.transactions',
+    'branch_cash.view', 'branch_cash.view_all', 'branch_cash.add_expense', 'branch_cash.approve_expense', 'branch_cash.view_petty', 'branch_cash.use_petty', 'branch_cash.replenish_petty', 'branch_cash.adjust_petty', 'branch_cash.close_daily', 'branch_cash.view_reports', 'branch_cash.export', 'branch_cash.manage'], module: 'FINANCE' },
   { id: 'branches', question: 'Does this person still need access to other branches?', keys: BRANCH_SCOPE_KEYS, module: 'SALES' },
 ];
 

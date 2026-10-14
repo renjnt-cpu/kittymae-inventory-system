@@ -25,6 +25,8 @@ const SOURCES = [
   // asset photos and documents (Asset & Supplies Custodian) -- a file removed from an asset is hidden from everyone, so only the current ones are included
   { table: 'asset_files', dateCol: 'created_at', pathCol: 'file_path', bucket: 'asset-attachments', label: 'Asset Files (photos & documents)' },
   { table: 'layaway_payments', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'layaway-attachments', label: 'Layaway Payments' },
+  // Branch Capital receipts, deposit slips and other proof (migrations 226 / 230 / 231). The table is closed to direct reads, so an Admin-only function hands the rows over.
+  { table: 'expense_attachments', rpc: 'bc_backup_attachments', pathCol: 'file_path', bucket: 'branch-cash-receipts', label: 'Branch Capital Receipts & Proof' },
 ];
 
 /** fromDate/toDate are 'YYYY-MM-DD' strings from <input type=date>, or '' for open-ended.
@@ -37,10 +39,19 @@ export async function buildBackupZip(fromDate, toDate, onProgress) {
 
   for (const src of SOURCES) {
     onProgress('Looking up ' + src.label + '…');
-    let query = supabase.from(src.table).select('*').not(src.pathCol, 'is', null);
-    if (fromDate) query = query.gte(src.dateCol, fromDate);
-    if (toDate) query = query.lte(src.dateCol, toDate + 'T23:59:59');
-    const { data: rows, error } = await query;
+    let rows, error;
+    if (src.rpc) {
+      // a source whose table cannot be read directly: an Admin-only function returns the rows of the date range
+      const res = await supabase.rpc(src.rpc, { p_from: fromDate || null, p_to: toDate || null });
+      rows = (res.data || []).filter((r) => r[src.pathCol]);
+      error = res.error;
+    } else {
+      let query = supabase.from(src.table).select('*').not(src.pathCol, 'is', null);
+      if (fromDate) query = query.gte(src.dateCol, fromDate);
+      if (toDate) query = query.lte(src.dateCol, toDate + 'T23:59:59');
+      const res = await query;
+      rows = res.data; error = res.error;
+    }
     if (error) throw new Error(src.label + ': ' + error.message);
     if (!rows.length) continue;
 
