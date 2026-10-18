@@ -1,11 +1,11 @@
 // Sales & Profit Dashboard -- the Sales, Products, Channels, Purchases, Inventory, Expenses and Payments tabs.
 // Each tab asks the database for its own figures (so a slow or denied panel never blocks the others) and draws them with the shared charts and the shared table.
-import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS } from './sdCore.js?v=20261018a';
-import { panel, lockedBox, loadingBox, errorBox, emptyBox, hbars, donut, lineChart, columnChart, trendLabels, seriesOf, C, PALETTE, badge } from './sdUi.js?v=20261018a';
-import { createTable, staticTable } from './sdTable.js?v=20261018a';
-import { COLS, ROW_TITLE } from './sdColumns.js?v=20261018a';
-import { openDrill } from './sdOverview.js?v=20261018a';
-import { supabase } from './supabaseClient.js?v=20261018a';
+import { api, esc, money, moneyShort, int, pct, fin, change, toneOf, friendly, defaultGrain, GRAINS } from './sdCore.js?v=20261018b';
+import { panel, lockedBox, loadingBox, errorBox, emptyBox, hbars, donut, lineChart, columnChart, trendLabels, seriesOf, C, PALETTE, badge } from './sdUi.js?v=20261018b';
+import { createTable, staticTable } from './sdTable.js?v=20261018b';
+import { COLS, ROW_TITLE } from './sdColumns.js?v=20261018b';
+import { openDrill } from './sdOverview.js?v=20261018b';
+import { supabase } from './supabaseClient.js?v=20261018b';
 
 // Supplier payments (migration 218): asked here, in the one file that shows them, the same way sdCore's api asks for the other figures (a refusal from the database arrives as ok:false = denied)
 async function supplierPayments(f) {

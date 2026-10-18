@@ -1,9 +1,9 @@
 // Payment Verification on the Online Orders pages: a small payment badge next to each order (verified / pending / possible duplicate / needs review / rejected), and a
 // "Payment" section a person can open under an order line: how much the order needs, what is verified, pending and rejected, every payment proof with its status, and
 // a button to add another proof. Nothing here decides anything -- verifying happens in Payment Verification; this only shows where an order stands and links to it.
-import { esc, money, statusBadge, riskBadge, orderSummaryLines, fmtShortDateTime, imgTag, sourceLabel, friendly } from './pvFormat.js?v=20261018a';
-import { hydrateImages } from './pvApi.js?v=20261018a';
-import { openProofForm } from './pvProofForm.js?v=20261018a';
+import { esc, money, statusBadge, riskBadge, orderSummaryLines, fmtShortDateTime, imgTag, sourceLabel, friendly, attachedWhere } from './pvFormat.js?v=20261018b';
+import { hydrateImages } from './pvApi.js?v=20261018b';
+import { openProofForm } from './pvProofForm.js?v=20261018b';
 
 const BADGE = {
   VERIFIED: ['pv-st-verified', 'Payment verified'], PENDING: ['pv-st-pending', 'Payment pending'], POSSIBLE_DUPLICATE: ['pv-st-dup', 'Possible duplicate payment'],
@@ -55,7 +55,7 @@ export function createOrderPayments({ api, employee, erpBase = '', onChange }) {
         const lines = orderSummaryLines(s);
         body = '<div class="pv-orderpay-lines">' + lines.map((l) => '<span>' + esc(l[0]) + ': <b>' + esc(l[1]) + '</b></span>').join('') + '</div>' +
           (s.payments.length ? s.payments.map((p) => '<div class="pv-orderpay-row"><span>' + (p.thumb ? imgTag(p.thumb, { cls: 'pv-thumb' }) + ' ' : '') + '<b>' + esc(p.pv_code) + '</b> ' + esc(money(p.amount)) +
-              ' <span class="pv-ref">' + esc(p.reference || 'no reference') + '</span> <span class="muted">' + esc(sourceLabel(p.source)) + ' · ' + esc(fmtShortDateTime(p.submitted_at)) + '</span></span>' +
+              ' <span class="pv-ref">' + esc(p.reference || 'no reference') + '</span> <span class="muted">' + esc(sourceLabel(p.source)) + ' · ' + (p.submitted_by ? 'attached by <b>' + esc(p.submitted_by) + '</b> ' + attachedWhere(p.source) + ' · ' : '') + esc(fmtShortDateTime(p.submitted_at)) + '</span></span>' +
               '<span>' + statusBadge(p.status) + ' ' + riskBadge(p.duplicate_risk) + ' <a class="pv-link" target="_blank" rel="noopener" href="' + esc(link(p.id)) + '">Open ↗</a></span></div>').join('')
             : '<p class="muted">No payment proof has been recorded for this order yet.</p>');
       }

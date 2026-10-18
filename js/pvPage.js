@@ -3,15 +3,15 @@
 //
 // One module-wide rule holds everywhere in this page: the screen only hides buttons a person could not use; who may see, verify, override, reject, move or change
 // anything is decided -- and enforced -- by the database (the payment_verify.* keys in the Position Access Matrix, migrations 234-244).
-import { esc, friendly, money, statusBadge, riskBadge, sourceLabel, fmtShortDateTime, fmtDateTime, ago, manilaToday, debounce } from './pvFormat.js?v=20261018a';
-import { drawersHtml, makeToast, closeDrawer, isDrawerOpen, closeLightbox, lightboxOpen } from './pvUi.js?v=20261018a';
-import { hydrateImages } from './pvApi.js?v=20261018a';
-import { renderDashboard } from './pvDashboard.js?v=20261018a';
-import { renderList, LIST_TABS, newListState, blankListFilters } from './pvTable.js?v=20261018a';
-import { renderAccounts } from './pvAccounts.js?v=20261018a';
-import { renderReports, renderAudit } from './pvReports.js?v=20261018a';
-import { openDetail, closeDetail } from './pvDetail.js?v=20261018a';
-import { openProofForm } from './pvProofForm.js?v=20261018a';
+import { esc, friendly, money, statusBadge, riskBadge, sourceLabel, fmtShortDateTime, fmtDateTime, ago, manilaToday, debounce, shopChip, orderRefHtml, pancakeStatusBadge, attachedWhere } from './pvFormat.js?v=20261018b';
+import { drawersHtml, makeToast, closeDrawer, isDrawerOpen, closeLightbox, lightboxOpen } from './pvUi.js?v=20261018b';
+import { hydrateImages } from './pvApi.js?v=20261018b';
+import { renderDashboard } from './pvDashboard.js?v=20261018b';
+import { renderList, LIST_TABS, newListState, blankListFilters } from './pvTable.js?v=20261018b';
+import { renderAccounts } from './pvAccounts.js?v=20261018b';
+import { renderReports, renderAudit } from './pvReports.js?v=20261018b';
+import { openDetail, closeDetail } from './pvDetail.js?v=20261018b';
+import { openProofForm } from './pvProofForm.js?v=20261018b';
 
 const $ = (id) => document.getElementById(id);
 
@@ -147,14 +147,16 @@ export async function startPvPage({ root, api, employee, search, hash }) {
       const orders = new Set(pays.map((p) => (p.order_ref || p.pv_code) + '|' + (p.order_shop_id || ''))).size;
       out.innerHTML = '<div class="card pv-refresult ' + (orders > 1 ? 'pv-refresult-dup' : pays.length ? 'pv-refresult-found' : 'pv-refresult-none') + '">' +
         '<div class="pv-cardhead"><div><h3 class="pv-h3">Reference “' + esc(q) + '”</h3>' +
-          '<div>' + (pays.length || other.length ? '<b>Found in ' + pays.length + ' payment' + (pays.length === 1 ? '' : 's') + (other.length ? ' and ' + other.length + ' POS / layaway payment' + (other.length === 1 ? '' : 's') : '') + '</b>' + (orders > 1 ? ' — <span class="pv-dup-note">used on ' + orders + ' different orders</span>' : '')
+          '<div>' + (pays.length || other.length ? '<b>Found in ' + pays.length + ' payment' + (pays.length === 1 ? '' : 's') + (other.length ? ' and ' + other.length + ' POS / layaway payment' + (other.length === 1 ? '' : 's') : '') + '</b>' + (orders > 1 ? ' — <span class="pv-dup-note">used on ' + orders + ' different orders' + (new Set(pays.map((p) => p.shop_name).filter(Boolean)).size > 1 ? ' in both Pancake shops' : '') + '</span>' : '')
             : '<b>No payment uses this reference.</b> <span class="muted">It is not in Payment Verification, the POS or the layaway payments.</span>') + '</div></div>' +
           '<button type="button" class="btn small secondary" id="pv-ref-close">Close ✕</button></div>' +
-        (pays.length ? '<div class="table-scroll table-2col"><table class="pv-table"><thead><tr><th>Proof</th><th>PV #</th><th>Order / Customer</th><th>Amount</th><th>Method</th><th>Reference</th><th>Status</th><th>Verified</th><th></th></tr></thead><tbody>' +
+        (pays.length ? '<div class="table-scroll table-2col"><table class="pv-table"><thead><tr><th>Proof</th><th>PV #</th><th>Pancake order / Customer</th><th>Amount</th><th>Method</th><th>Reference</th><th>Attached by</th><th>Status</th><th>Verified</th><th></th></tr></thead><tbody>' +
           pays.map((p) => '<tr><td data-label="Proof" class="pv-c-proof">' + (p.thumb ? '<button type="button" class="pv-thumbbtn" data-open="' + esc(p.id) + '">' + imgTagFor(p.thumb) + '</button>' : '<span class="pv-noimg">—</span>') + '</td>' +
             '<td data-label="PV #"><b>' + esc(p.pv_code) + '</b><div class="muted">' + esc(sourceLabel(p.source)) + '</div></td>' +
-            '<td data-label="Order / Customer">' + (p.order_ref ? '<b>#' + esc(p.order_ref) + '</b> ' : '') + esc(p.customer_name || '—') + '<div class="muted">' + esc(p.branch_name || '') + '</div></td>' +
+            '<td data-label="Pancake order / Customer" class="pv-c-cust">' + (p.order_ref ? '<div class="pv-ordline">' + shopChip(p.shop_name) + ' ' + orderRefHtml(p) + '</div>' : '') + esc(p.customer_name || '—') + '<div class="muted">' + esc(p.branch_name || '') + '</div>' +
+              (p.order_status ? '<div class="pv-ordstat">' + pancakeStatusBadge(p.order_status) + '</div>' : '') + '</td>' +
             '<td data-label="Amount"><b>' + esc(money(p.amount)) + '</b></td><td data-label="Method">' + esc(p.method || '—') + '</td><td data-label="Reference"><span class="pv-ref">' + esc(p.reference || '—') + '</span></td>' +
+            '<td data-label="Attached by"><b>' + esc(p.submitted_by || '—') + '</b><div class="muted">' + esc(fmtShortDateTime(p.submitted_at)) + ' · ' + attachedWhere(p.source) + '</div></td>' +
             '<td data-label="Status">' + statusBadge(p.status) + ' ' + riskBadge(p.risk) + '</td>' +
             '<td data-label="Verified">' + (p.verified_at ? '<b>' + esc(p.verified_by || '—') + '</b><div class="muted">' + esc(fmtShortDateTime(p.verified_at)) + '</div>' : '<span class="muted">—</span>') + '</td>' +
             '<td class="full-row"><button type="button" class="btn small secondary" data-open="' + esc(p.id) + '">Open</button></td></tr>').join('') + '</tbody></table></div>' : '') +

@@ -4,11 +4,11 @@
 // again on the server, which also re-runs the duplicate check at the moment of verifying.
 import {
   esc, money, fmtDate, fmtDateTime, fmtShortDateTime, fmtTime, manilaDay, ago, statusBadge, riskBadge, sourceLabel, matchCardHtml, matchSentence, imgTag,
-  eventLabel, eventDetail, orderSummaryLines, REJECT_REASONS, friendly, debounce,
-} from './pvFormat.js?v=20261018a';
-import { prepareImage } from './pvImage.js?v=20261018a';
-import { hydrateImages } from './pvApi.js?v=20261018a';
-import { openDrawer, closeDrawer, drawerBody, drawerFooter, isDrawerOpen, actionPanel, openLightbox, kv } from './pvUi.js?v=20261018a';
+  eventLabel, eventDetail, orderSummaryLines, REJECT_REASONS, friendly, debounce, shopChip, pancakeStatusBadge, pancakeStatusLabel, orderRefHtml, attachedWhere,
+} from './pvFormat.js?v=20261018b';
+import { prepareImage } from './pvImage.js?v=20261018b';
+import { hydrateImages } from './pvApi.js?v=20261018b';
+import { openDrawer, closeDrawer, drawerBody, drawerFooter, isDrawerOpen, actionPanel, openLightbox, kv } from './pvUi.js?v=20261018b';
 
 const $ = (id) => document.getElementById(id);
 let cur = null;   // { id, d, ids }
@@ -82,7 +82,13 @@ function paymentRows(d) {
   const p = d.payment;
   const rows = [];
   rows.push(kv('Customer', esc(p.customer_name || '—') + (p.customer_phone ? ' <span class="muted">' + esc(p.customer_phone) + '</span>' : '')));
-  rows.push(kv('Order', p.order_ref ? '#' + esc(p.order_ref) + (p.order_status ? ' <span class="muted">(' + esc(p.order_status) + ')</span>' : '') + (p.order_date ? ' <span class="muted">' + esc(fmtDate(manilaDay(p.order_date))) + '</span>' : '') : '<span class="muted">not linked to an order</span>'));
+  // the order as Pancake knows it: shop, order number (opens it in Pancake), Pancake's own id, and its status there right now
+  rows.push(kv('Shop', p.shop_name ? shopChip(p.shop_name) : '<span class="muted">not known</span>'));
+  rows.push(kv('Pancake order', p.order_ref
+    ? orderRefHtml(p) + (p.pancake_order_id ? ' <span class="muted">Pancake ID ' + esc(p.pancake_order_id) + '</span>' : '') + (p.order_date ? ' <span class="muted">· ordered ' + esc(fmtDate(manilaDay(p.order_date))) + '</span>' : '')
+      + (p.pancake_url && /^https:\/\//.test(p.pancake_url) ? '<div><a class="pv-orderlink" href="' + esc(p.pancake_url) + '" target="_blank" rel="noopener noreferrer">Open this order in Pancake ↗</a></div>' : '')
+    : '<span class="muted">not linked to an order</span>'));
+  if (p.order_ref) rows.push(kv('Order status in Pancake', p.order_status ? pancakeStatusBadge(p.order_status) : '<span class="muted">not known</span>'));
   rows.push(kv('Branch', esc(p.branch_name || '—')));
   rows.push(kv('Amount on the proof', '<span class="pv-big">' + esc(money(p.amount)) + '</span>'));
   if (p.verified_amount != null) rows.push(kv('Verified amount', esc(money(p.verified_amount))));
@@ -90,8 +96,10 @@ function paymentRows(d) {
   rows.push(kv('Payment method', esc(p.method || '—')));
   rows.push(kv('Paid to account', p.account ? esc(p.account.name) + (p.account.masked ? ' <span class="muted">' + esc(p.account.masked) + '</span>' : '') : '<span class="muted">not known</span>'));
   rows.push(kv('Reference number', p.reference ? '<span class="pv-ref">' + esc(p.reference) + '</span>' + (p.reference_edited && p.reference_original && p.reference_original !== p.reference ? ' <span class="muted">(corrected from ' + esc(p.reference_original) + ')</span>' : '') + (p.ref_usable ? '' : ' <span class="pv-miss">too short to rely on</span>') : '<span class="pv-miss">none</span>'));
+  rows.push(kv('Reference attached by', p.submitted_by ? '<b>' + esc(p.submitted_by) + '</b> <span class="muted">' + attachedWhere(p.source) + ' · ' + esc(fmtDateTime(p.submitted_at)) + '</span>'
+    : '<span class="muted">not known</span> <span class="muted">· ' + esc(fmtDateTime(p.submitted_at)) + '</span>'));
   rows.push(kv('Date & time paid', p.payment_date ? esc(fmtDate(p.payment_date)) + (p.payment_time ? ' ' + esc(fmtTime(p.payment_time)) : '') : '<span class="muted">not given</span>'));
-  rows.push(kv('Received', esc(sourceLabel(p.source)) + ' · ' + esc(fmtDateTime(p.submitted_at)) + (p.submitted_by ? ' · ' + esc(p.submitted_by) : '')));
+  rows.push(kv('Source', esc(sourceLabel(p.source))));
   if (p.notes) rows.push(kv('Notes', esc(p.notes)));
   if (DONE.includes(p.status)) {
     rows.push(kv('Verified by', esc(p.verified_by || '—') + ' <span class="muted">' + esc(fmtDateTime(p.verified_at)) + (p.verified_via ? ' · ' + (p.verified_via === 'PANCAKE' ? 'in Pancake' : 'in the ERP') : '') + '</span>'));
@@ -111,9 +119,9 @@ function orderSection(d) {
   const state = s.state;
   const lines = orderSummaryLines(s).map((l) => '<div class="drawer-kv"><span>' + esc(l[0]) + '</span><b>' + esc(l[1]) + '</b></div>').join('');
   const others = (s.payments || []).filter((x) => x.id !== d.payment.id);
-  return '<div class="pv-ordersummary"><div class="pv-ordersummary-head">Order #' + esc(d.payment.order_ref) + ' payments: ' + statusBadge(state) + '</div>' + lines +
+  return '<div class="pv-ordersummary"><div class="pv-ordersummary-head">Order #' + esc(d.payment.order_ref) + ' ' + shopChip(d.payment.shop_name) + ' payments: ' + statusBadge(state) + '</div>' + lines +
     (others.length ? '<div class="pv-otherpay"><div class="muted">Other payments on this order</div>' + others.map((x) => '<button type="button" class="pv-compact-row" data-open-payment="' + esc(x.id) + '"><span class="pv-compact-main"><b>' + esc(x.pv_code) + '</b> ' +
-      esc(money(x.amount)) + ' <span class="pv-ref">' + esc(x.reference || '') + '</span></span><span class="pv-compact-side">' + statusBadge(x.status) + '</span></button>').join('') + '</div>' : '') + '</div>';
+      esc(money(x.amount)) + ' <span class="pv-ref">' + esc(x.reference || '') + '</span>' + (x.submitted_by ? ' <span class="muted">· attached by ' + esc(x.submitted_by) + '</span>' : '') + '</span><span class="pv-compact-side">' + statusBadge(x.status) + '</span></button>').join('') + '</div>' : '') + '</div>';
 }
 
 function timeline(d) {
@@ -160,7 +168,7 @@ function render(ctx, d) {
     '<section class="drawer-section"><h4>Duplicate check' + (real.length ? ' — ' + real.length + ' found' : '') + '</h4>' +
       (d.matches && d.matches.length ? d.matches.map((m) => matchCardHtml(m, { reference: p.reference, open: true, compare: d.can.proof })).join('') : '<p class="muted">No other payment uses this reference number or picture.</p>') + '</section>' +
     '<section class="drawer-section"><h4>History</h4>' + timeline(d) + '</section>';
-  openDrawer('detail', { title: p.pv_code + ' · ' + (p.customer_name || 'Customer'), sub: (p.order_ref ? 'Order #' + p.order_ref + ' · ' : '') + (p.branch_name || '') + ' · ' + money(p.amount), body, footer: actionButtons(d, ctx) });
+  openDrawer('detail', { title: p.pv_code + ' · ' + (p.customer_name || 'Customer'), sub: (p.order_ref ? 'Order #' + p.order_ref + (p.shop_name ? ' (' + p.shop_name + ')' : '') + ' · ' : '') + (p.branch_name || '') + ' · ' + money(p.amount), body, footer: actionButtons(d, ctx) });
   wire(ctx, d);
 }
 
@@ -237,7 +245,7 @@ function act(ctx, d, name) {
     const opts = realMatches(d).filter((m) => m.other && m.other.id);
     return actionPanel('detail', {
       title: 'Confirm this is a duplicate', danger: true, message: 'Choose the earlier payment it repeats. This payment is closed as <b>Duplicate Confirmed</b> and nothing is credited.',
-      fields: '<div class="field"><label for="pv-a-orig">It repeats</label><select id="pv-a-orig">' + opts.map((m) => '<option value="' + esc(m.other.id) + '">' + esc(m.other.pv_code) + ' · Order #' + esc(m.other.order_ref || '—') + ' · ' + esc(m.other.customer_name || '') + ' · ' + esc(money(m.other.amount)) + '</option>').join('') + '</select></div>' +
+      fields: '<div class="field"><label for="pv-a-orig">It repeats</label><select id="pv-a-orig">' + opts.map((m) => '<option value="' + esc(m.other.id) + '">' + esc(m.other.pv_code) + ' · Order #' + esc(m.other.order_ref || '—') + (m.other.shop_name ? ' (' + esc(m.other.shop_name) + ')' : '') + ' · ' + esc(m.other.customer_name || '') + ' · ' + esc(money(m.other.amount)) + '</option>').join('') + '</select></div>' +
         '<div class="field"><label for="pv-a-reason">Why is it a duplicate? (required)</label><input id="pv-a-reason" type="text" maxlength="200" placeholder="e.g. same receipt sent again"></div><div class="field"><label for="pv-a-note">Notes (optional)</label><textarea id="pv-a-note" rows="2" maxlength="500"></textarea></div>',
       okLabel: 'Confirm duplicate',
       onOk: async (slot) => { const r = await api.markDuplicate(id, slot.querySelector('#pv-a-orig').value, slot.querySelector('#pv-a-reason').value, slot.querySelector('#pv-a-note').value); if (r.ok === false) throw new Error(r.message); ctx.toast('Confirmed as a duplicate.'); await afterChange(ctx, id, { advance: true }); },
@@ -365,8 +373,8 @@ function movePanel(ctx, d) {
     try {
       found = await api.findOrders(text, 12);
       found = Array.isArray(found) ? found : [];
-      res.innerHTML = found.length ? found.map((o, i) => '<button type="button" class="pv-orderpick" data-pick="' + i + '"><b>#' + esc(o.order_ref) + '</b> ' + esc(o.customer_name || '') +
-        '<span class="muted"> · ' + [o.customer_phone, o.status, o.order_amount != null ? money(o.order_amount) : ''].filter(Boolean).map(esc).join(' · ') + '</span></button>').join('') : '<div class="muted">No order found.</div>';
+      res.innerHTML = found.length ? found.map((o, i) => '<button type="button" class="pv-orderpick" data-pick="' + i + '"><b>#' + esc(o.order_ref) + '</b> ' + shopChip(o.shop_name) + ' ' + esc(o.customer_name || '') +
+        '<span class="muted"> · ' + [o.customer_phone, pancakeStatusLabel(o.status), o.order_amount != null ? money(o.order_amount) : ''].filter(Boolean).map(esc).join(' · ') + '</span></button>').join('') : '<div class="muted">No order found.</div>';
     } catch (e) { res.innerHTML = '<div class="msg error">' + esc(friendly(e)) + '</div>'; }
   }, 350);
   q.addEventListener('input', search); search();
@@ -374,7 +382,7 @@ function movePanel(ctx, d) {
     const b = e.target.closest('[data-pick]');
     if (!b) return;
     picked = found[Number(b.dataset.pick)];
-    $('pv-m-pick').innerHTML = 'Move to <b>Order #' + esc(picked.order_ref) + '</b> — ' + esc(picked.customer_name || '') + ' · ' + esc(money(picked.order_amount));
+    $('pv-m-pick').innerHTML = 'Move to <b>Order #' + esc(picked.order_ref) + '</b> ' + shopChip(picked.shop_name) + ' — ' + esc(picked.customer_name || '') + ' · ' + esc(money(picked.order_amount));
   });
 }
 

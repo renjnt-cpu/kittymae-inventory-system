@@ -1,7 +1,7 @@
 // Payment Verification page -- the Reports tab (verified, pending, rejected, duplicate references and pictures, by account / method / branch / source / customer / staff
 // verifier, and a daily summary) and the Audit Log tab (every action: who, when, what changed, why). Both can be exported to a spreadsheet by people holding the export key.
-import { esc, money, fmtDate, fmtDateTime, manilaToday, statusLabel, riskLabel, sourceLabel, eventLabel, eventDetail, EVENT_TYPES_FOR_FILTER, toCsv, downloadText, friendly, debounce, plural } from './pvFormat.js?v=20261018a';
-import { emptyBox } from './pvUi.js?v=20261018a';
+import { esc, money, fmtDate, fmtDateTime, manilaToday, statusLabel, riskLabel, sourceLabel, eventLabel, eventDetail, EVENT_TYPES_FOR_FILTER, toCsv, downloadText, friendly, debounce, plural, pancakeStatusLabel } from './pvFormat.js?v=20261018b';
+import { emptyBox } from './pvUi.js?v=20261018b';
 
 const REPORTS = [
   ['verified', 'Verified payments', 'Everything a person verified in the period'],
@@ -13,6 +13,8 @@ const REPORTS = [
   ['by_method', 'By payment method', 'GCash, Maya, bank transfers…'],
   ['by_branch', 'By branch', 'Payments per branch'],
   ['by_source', 'By source', 'Pancake chat, Online Orders, manual entry'],
+  ['by_shop', 'By Pancake shop', 'Miss Kittymae Jewels and Kittymae.co side by side'],
+  ['by_attacher', 'By who attached it', 'The Pancake admins and ERP staff who attached the reference, and how much of it was verified'],
   ['by_customer', 'By customer', 'Payments per customer'],
   ['by_verifier', 'By staff verifier', 'Who verified how much'],
   ['daily', 'Daily summary', 'Received, verified, rejected and overridden each day'],
@@ -22,6 +24,8 @@ const AMOUNT_COL = /amount/i;
 function cellText(col, v) {
   if (v === null || v === undefined || v === '') return '';
   if (col.key === 'status') return statusLabel(v);
+  if (col.key === 'pancake_status') return pancakeStatusLabel(v);
+  if (col.type === 'link') return 'Open ↗';
   if (col.key === 'resolution' || col.key === 'statuses') return String(v).split(', ').map(statusLabel).join(', ');
   if (col.key === 'risk') return v === 'NONE' ? '' : riskLabel(v);
   if (col.key === 'source' || col.key === 'sources') return String(v).split(', ').map(sourceLabel).join(', ');
@@ -31,8 +35,14 @@ function cellText(col, v) {
   if (col.key === 'day') return fmtDate(v);
   return String(v);
 }
-const rawCell = (col, v) => (v === null || v === undefined) ? '' : (col.type === 'datetime' ? (v ? new Date(v).toISOString() : '') : col.key === 'status' ? statusLabel(v)
+const rawCell = (col, v) => (v === null || v === undefined) ? '' : (col.type === 'datetime' ? (v ? new Date(v).toISOString() : '') : col.key === 'status' ? statusLabel(v) : col.key === 'pancake_status' ? pancakeStatusLabel(v)
   : (col.key === 'resolution' || col.key === 'statuses') ? String(v).split(', ').map(statusLabel).join(', ') : col.key === 'risk' ? (v === 'NONE' ? '' : riskLabel(v)) : v);
+
+/** a table cell: plain text, except a link column (the order in Pancake), which opens in a new tab when its address is a Pancake https address */
+function cellHtml(col, v) {
+  if (col.type === 'link') return v && /^https:\/\//.test(String(v)) ? '<a class="pv-orderlink" href="' + esc(v) + '" target="_blank" rel="noopener noreferrer">Open ↗</a>' : '';
+  return esc(cellText(col, v));
+}
 
 export async function renderReports(ctx, panel) {
   const st = ctx.ui.report;
@@ -61,7 +71,7 @@ export async function renderReports(ctx, panel) {
       const summable = (c) => c.type === 'number' && !/days|waiting/i.test(c.key);
       out.innerHTML = '<div class="card"><div class="pv-cardhead"><div><h3 class="pv-h3">' + esc(res.title) + '</h3><div class="muted">' + esc(fmtDate(res.from)) + ' – ' + esc(fmtDate(res.to)) + ' · ' + esc(plural(rows.length, 'row')) + '</div></div></div>' +
         (rows.length ? '<div class="table-scroll pv-reporttable"><table class="pv-table"><thead><tr>' + cols.map((c) => '<th' + (c.type === 'number' ? ' class="pv-num"' : '') + '>' + esc(c.label) + '</th>').join('') + '</tr></thead><tbody>' +
-          rows.map((r) => '<tr>' + cols.map((c) => '<td' + (c.type === 'number' ? ' class="pv-num"' : '') + ' data-label="' + esc(c.label) + '">' + esc(cellText(c, r[c.key])) + '</td>').join('') + '</tr>').join('') + '</tbody>' +
+          rows.map((r) => '<tr>' + cols.map((c) => '<td' + (c.type === 'number' ? ' class="pv-num"' : '') + ' data-label="' + esc(c.label) + '">' + cellHtml(c, r[c.key]) + '</td>').join('') + '</tr>').join('') + '</tbody>' +
           (cols.some(summable) && rows.length > 1 ? '<tfoot><tr>' + cols.map((c, i) => '<td' + (c.type === 'number' ? ' class="pv-num"' : '') + '>' + (i === 0 ? '<b>Total</b>' : summable(c) ? '<b>' + esc(cellText(c, totals[i])) + '</b>' : '') + '</td>').join('') + '</tr></tfoot>' : '') + '</table></div>'
           : emptyBox('Nothing to report for this period.')) + '</div>';
       const csv = panel.querySelector('#pv-r-csv');
@@ -107,7 +117,7 @@ export async function renderAudit(ctx, panel) {
       (rows.length ? '<div class="table-scroll table-2col"><table class="pv-table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Payment</th><th>Order / Customer</th><th>What happened</th></tr></thead><tbody>' +
         rows.map((e) => '<tr><td data-label="When">' + esc(fmtDateTime(e.at)) + '</td><td data-label="Who"><b>' + esc(e.by || '—') + '</b>' + (e.role ? '<div class="muted">' + esc(e.role) + '</div>' : '') + '</td>' +
           '<td data-label="Action">' + esc(eventLabel(e.type)) + '</td><td data-label="Payment">' + (e.payment_id ? '<button type="button" class="bl-link" data-open="' + esc(e.payment_id) + '">' + esc(e.pv_code || 'open') + '</button>' : '<span class="muted">settings</span>') + '</td>' +
-          '<td data-label="Order / Customer">' + (e.order_ref ? '#' + esc(e.order_ref) + ' ' : '') + esc(e.customer || '') + '</td><td data-label="What happened" class="full-row pv-wrap">' + esc(eventDetail(e)) + '</td></tr>').join('') + '</tbody></table></div>' +
+          '<td data-label="Order / Customer">' + (e.order_ref ? '#' + esc(e.order_ref) + ' ' : '') + esc(e.customer || '') + (e.shop_name ? '<div class="muted">' + esc(e.shop_name) + '</div>' : '') + '</td><td data-label="What happened" class="full-row pv-wrap">' + esc(eventDetail(e)) + '</td></tr>').join('') + '</tbody></table></div>' +
         (rows.length < total ? '<div class="pv-pager"><span class="muted">' + (total - rows.length).toLocaleString('en-PH') + ' older actions</span><button type="button" class="btn small secondary" id="pv-au-more">Load 100 more</button></div>' : '')
         : emptyBox('No actions match these filters.'));
     out.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => ctx.openDetail(b.dataset.open, { rows: [] })));
@@ -122,8 +132,8 @@ export async function renderAudit(ctx, panel) {
     try {
       let all = rows.slice(), guard = 0;
       while (all.length < total && guard++ < 30) { const res = await ctx.api.auditList(filters(), 300, all.length); if (!res || res.ok === false || !(res.rows || []).length) break; all = all.concat(res.rows); }
-      downloadText('payment-verification-audit-' + manilaToday() + '.csv', toCsv(['When', 'Who', 'Role', 'Action', 'PV #', 'Order', 'Customer', 'Reference', 'What happened'],
-        all.map((e) => [e.at ? new Date(e.at).toISOString() : '', e.by, e.role, eventLabel(e.type), e.pv_code, e.order_ref, e.customer, e.reference, eventDetail(e)])));
+      downloadText('payment-verification-audit-' + manilaToday() + '.csv', toCsv(['When', 'Who', 'Role', 'Action', 'PV #', 'Shop', 'Order', 'Customer', 'Reference', 'What happened'],
+        all.map((e) => [e.at ? new Date(e.at).toISOString() : '', e.by, e.role, eventLabel(e.type), e.pv_code, e.shop_name, e.order_ref, e.customer, e.reference, eventDetail(e)])));
     } catch (err) { ctx.toast(err.message || String(err), true); }
     csv.disabled = false;
   });

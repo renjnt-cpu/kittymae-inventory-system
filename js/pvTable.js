@@ -1,9 +1,10 @@
 // Payment Verification page -- the six list tabs (Pending Verification, Possible Duplicates, Verified, Unverified / Rejected, Needs Review, All Payment Proofs).
 // They share one component: the tab only decides which payments the database returns (pv_list's `tab`); the filters, the sort, the paging and the row look are the same.
 // The table collapses to one card per payment on a phone (the app-wide .table-scroll rule).
-import { esc, money, fmtShortDateTime, fmtDate, manilaToday, statusBadge, riskBadge, sourceLabel, STATUS, SOURCES, debounce, friendly, imgTag } from './pvFormat.js?v=20261018a';
-import { hydrateImages } from './pvApi.js?v=20261018a';
-import { openLightbox, emptyBox } from './pvUi.js?v=20261018a';
+import { esc, money, fmtShortDateTime, fmtDate, manilaToday, statusBadge, riskBadge, sourceLabel, STATUS, SOURCES, debounce, friendly, imgTag,
+  SHOPS, shopChip, orderRefHtml, pancakeStatusBadge, pancakeStatusLabel, PANCAKE_STATUS_ORDER, attachedWhere } from './pvFormat.js?v=20261018b';
+import { hydrateImages } from './pvApi.js?v=20261018b';
+import { openLightbox, emptyBox } from './pvUi.js?v=20261018b';
 
 export const LIST_TABS = {
   pending: { label: 'Pending Verification', sort: 'risk', hint: 'Payment proofs waiting for a person to check them — the ones waiting longest first.' },
@@ -15,7 +16,7 @@ export const LIST_TABS = {
 };
 const SORTS = [['risk', 'Riskiest first'], ['newest', 'Newest first'], ['oldest', 'Oldest first'], ['amount', 'Highest amount'], ['branch', 'Branch']];
 export const newListState = (key) => ({ filters: blankFilters(), sort: (LIST_TABS[key] || {}).sort || 'newest', page: 1, pageSize: 50, rows: [], total: 0, more: false, seq: 0, loaded: false });
-const blankFilters = () => ({ q: '', date_from: '', date_to: '', branch_id: '', source: '', method: '', account_id: '', status: '', customer: '', order_ref: '', reference: '', verified_by: '', amount_min: '', amount_max: '', dup_only: false, risk: '', pancake: '', no_reference: false, drift: false });
+const blankFilters = () => ({ q: '', date_from: '', date_to: '', branch_id: '', shop_id: '', source: '', method: '', account_id: '', status: '', customer: '', order_ref: '', reference: '', verified_by: '', attached_by: '', pancake_status: '', amount_min: '', amount_max: '', dup_only: false, risk: '', pancake: '', no_reference: false, drift: false });
 export const blankListFilters = blankFilters;
 
 const cleanFilters = (f, tab) => {
@@ -24,12 +25,13 @@ const cleanFilters = (f, tab) => {
   return out;
 };
 
-const FILTER_LABELS = { q: 'Search', date_from: 'From', date_to: 'To', branch_id: 'Branch', source: 'Source', method: 'Method', account_id: 'Account', status: 'Status', customer: 'Customer',
-  order_ref: 'Order #', reference: 'Reference', verified_by: 'Verified by', amount_min: 'Min amount', amount_max: 'Max amount', dup_only: 'Duplicates only', risk: 'Risk at least', pancake: 'Verified in Pancake',
+const FILTER_LABELS = { q: 'Search', date_from: 'From', date_to: 'To', branch_id: 'Branch', shop_id: 'Shop', source: 'Source', method: 'Method', account_id: 'Account', status: 'Status', customer: 'Customer',
+  order_ref: 'Order #', reference: 'Reference', verified_by: 'Verified by', attached_by: 'Attached by', pancake_status: 'Order status in Pancake', amount_min: 'Min amount', amount_max: 'Max amount', dup_only: 'Duplicates only', risk: 'Risk at least', pancake: 'Verified in Pancake',
   no_reference: 'No reference number', drift: 'Changed in Pancake' };
 
 function chips(ctx, f) {
-  const nice = (k, v) => k === 'branch_id' ? ((ctx.branches.find((b) => String(b.id) === String(v)) || {}).name || v) : k === 'source' ? sourceLabel(v) : k === 'status' ? STATUS[v] ? STATUS[v].label : v
+  const nice = (k, v) => k === 'branch_id' ? ((ctx.branches.find((b) => String(b.id) === String(v)) || {}).name || v) : k === 'shop_id' ? ((SHOPS.find((s) => String(s[0]) === String(v)) || [])[1] || v) : k === 'pancake_status' ? pancakeStatusLabel(v)
+    : k === 'source' ? sourceLabel(v) : k === 'status' ? STATUS[v] ? STATUS[v].label : v
     : k === 'account_id' ? ((ctx.accounts.find((a) => String(a.id) === String(v)) || {}).name || v) : (k === 'dup_only' || k === 'no_reference' || k === 'drift') ? 'yes' : k === 'pancake' ? (v === 'yes' ? 'yes' : 'no')
       : k === 'risk' ? String(v).replace('_', ' ').toLowerCase() : (k === 'amount_min' || k === 'amount_max') ? money(v) : (k === 'date_from' || k === 'date_to') ? fmtDate(v) : v;
   const on = Object.entries(f).filter(([, v]) => v !== '' && v !== false);
@@ -52,6 +54,7 @@ function filterBar(ctx, s) {
     '<div class="field"><label>&nbsp;</label><div class="pv-btnrow"><button type="button" class="btn small secondary" data-range="today">Today</button><button type="button" class="btn small secondary" data-range="7">7 days</button>' +
     '<button type="button" class="btn small secondary" data-range="30">30 days</button></div></div>' +
     (showBranch ? sel('pv-branch', 'Branch', ctx.branches.map((b) => [b.id, b.name]), f.branch_id) : '') +
+    sel('pv-shop', 'Shop', SHOPS, f.shop_id) +
     sel('pv-source', 'Source', Object.entries(SOURCE_OPTIONS), f.source) +
     '<div class="field"><label for="pv-sort">Sort by</label><select id="pv-sort">' + SORTS.map(([v, l]) => '<option value="' + v + '"' + (s.sort === v ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></div></div>' +
     '<div class="field"><label>&nbsp;</label><div class="pv-btnrow"><button type="button" class="btn small secondary" id="pv-more-btn" aria-expanded="' + s.more + '">' + (s.more ? 'Fewer filters' : 'More filters') + '</button>' +
@@ -61,6 +64,7 @@ function filterBar(ctx, s) {
       sel('pv-account', 'Account', ctx.accounts.map((a) => [a.id, a.name]), f.account_id) +
       sel('pv-status', 'Status', Object.entries(STATUS).filter(([k]) => !['NO_PROOF', 'OVERPAID'].includes(k)).map(([k, v]) => [k, v.label]), f.status) +
       inp('pv-customer', 'Customer name', 'text', f.customer) + inp('pv-order', 'Order #', 'text', f.order_ref) + inp('pv-reference', 'Reference number', 'text', f.reference) +
+      inp('pv-attby', 'Reference attached by', 'text', f.attached_by, 'Name') + sel('pv-pstatus', 'Order status in Pancake', PANCAKE_STATUS_ORDER.map((k) => [k, pancakeStatusLabel(k)]), f.pancake_status) +
       inp('pv-verifier', 'Verified by', 'text', f.verified_by) + inp('pv-amin', 'Amount from (₱)', 'number', f.amount_min, '', ' min="0" step="0.01"') + inp('pv-amax', 'Amount to (₱)', 'number', f.amount_max, '', ' min="0" step="0.01"') +
       sel('pv-risk', 'Duplicate risk at least', [['LOW', 'Low'], ['MEDIUM', 'Medium'], ['HIGH', 'High'], ['VERY_HIGH', 'Very high']], f.risk) +
       sel('pv-pancake', 'Verified in Pancake', [['yes', 'Yes'], ['no', 'No']], f.pancake) +
@@ -94,13 +98,22 @@ function verifiedCell(r) {
   if (!['VERIFIED', 'PARTIALLY_VERIFIED'].includes(r.status)) return '<span class="muted">—</span>';
   return '<b>' + esc(r.verified_by || '—') + '</b><div class="muted">' + esc(fmtShortDateTime(r.verified_at)) + (r.verified_via ? ' · ' + (r.verified_via === 'PANCAKE' ? 'in Pancake' : 'in the ERP') : '') + '</div>';
 }
+/** who attached the reference, when, and where (a Pancake admin inside Pancake for the Online Orders proofs, ERP staff otherwise) */
+export function attachedCell(r) {
+  return '<b>' + esc(r.submitted_by || '—') + '</b><div class="muted">' + esc(fmtShortDateTime(r.submitted_at)) + ' · ' + attachedWhere(r.source) + '</div>';
+}
+/** the Pancake order: its shop, its number (opens the order in Pancake), its status there, and the customer */
+export function pancakeOrderCell(r) {
+  return (r.order_ref ? '<div class="pv-ordline">' + shopChip(r.shop_name) + ' ' + orderRefHtml(r) + '</div>' : '<span class="muted">no order</span> ') + esc(r.customer_name || '—') +
+    (r.customer_phone ? '<div class="muted">' + esc(r.customer_phone) + '</div>' : '') + (r.order_status ? '<div class="pv-ordstat">' + pancakeStatusBadge(r.order_status) + '</div>' : '');
+}
 function rowHtml(r, ctx) {
   const part = r.status === 'PARTIALLY_VERIFIED' || (r.verified_amount != null && Number(r.verified_amount) !== Number(r.amount));
   return '<tr data-id="' + esc(r.id) + '" class="pv-row pv-row-' + esc(String(r.status).toLowerCase()) + (r.risk === 'VERY_HIGH' || r.risk === 'HIGH' ? ' pv-row-risky' : '') + '">' +
     td('Proof', proofCell(r, ctx), 'pv-c-proof') +
     td('PV #', '<button type="button" class="bl-link" data-open="' + esc(r.id) + '">' + esc(r.pv_code) + '</button><div class="muted">' + esc(sourceLabel(r.source)) + (r.historical ? ' · imported' : '') + '</div>') +
-    td('Received', esc(fmtShortDateTime(r.submitted_at)) + '<div class="muted">' + esc(r.submitted_by || '') + '</div>') +
-    td('Order / Customer', (r.order_ref ? '<b>#' + esc(r.order_ref) + '</b> ' : '<span class="muted">no order</span> ') + esc(r.customer_name || '—') + (r.customer_phone ? '<div class="muted">' + esc(r.customer_phone) + '</div>' : ''), 'pv-c-cust') +
+    td('Attached by', attachedCell(r)) +
+    td('Pancake order / Customer', pancakeOrderCell(r), 'pv-c-cust') +
     td('Branch', esc(r.branch_name || '—')) +
     td('Amount', '<b>' + esc(money(r.amount)) + '</b>' + (part && r.verified_amount != null ? '<div class="muted">verified ' + esc(money(r.verified_amount)) + '</div>' : (r.expected_amount != null && Number(r.expected_amount) !== Number(r.amount) ? '<div class="muted">order needs ' + esc(money(r.expected_amount)) + '</div>' : ''))) +
     td('Method / Account', esc(r.method || '—') + (r.account_name ? '<div class="muted">' + esc(r.account_name) + (r.account_masked ? ' ' + esc(r.account_masked) : '') + '</div>' : '')) +
@@ -110,7 +123,7 @@ function rowHtml(r, ctx) {
     td('', '<div class="pv-rowact"><button type="button" class="btn small' + (['PENDING', 'POSSIBLE_DUPLICATE', 'NEEDS_REVIEW', 'MISSING_INFORMATION'].includes(r.status) ? '' : ' secondary') + '" data-open="' + esc(r.id) + '">' +
       (['PENDING', 'POSSIBLE_DUPLICATE', 'NEEDS_REVIEW', 'MISSING_INFORMATION'].includes(r.status) ? 'Review' : 'View') + '</button></div>', 'full-row') + '</tr>';
 }
-export const tableHtml = (rows, ctx) => '<div class="table-scroll table-2col pv-tablewrap"><table class="pv-table"><thead><tr><th>Proof</th><th>PV #</th><th>Received</th><th>Order / Customer</th><th>Branch</th><th>Amount</th>' +
+export const tableHtml = (rows, ctx) => '<div class="table-scroll table-2col pv-tablewrap"><table class="pv-table"><thead><tr><th>Proof</th><th>PV #</th><th>Attached by</th><th>Pancake order / Customer</th><th>Branch</th><th>Amount</th>' +
   '<th>Method / Account</th><th>Reference</th><th>Status</th><th>Verified</th><th></th></tr></thead><tbody>' + rows.map((r) => rowHtml(r, ctx)).join('') + '</tbody></table></div>';
 
 // ---------------------------------------------------------------- the tab
@@ -162,9 +175,9 @@ export async function renderList(ctx, panel, key) {
     const clear = () => { s.filters = blankFilters(); paint(); load(true); };
     const bindSelect = (id, key2) => { const el = $(id); if (el) el.addEventListener('change', () => { f[key2] = el.value; apply(); }); };
     const bindText = (id, key2) => { const el = $(id); if (el) el.addEventListener('input', debounce(() => { f[key2] = el.value.trim(); apply(); }, 450)); };
-    bindText('pv-q', 'q'); bindSelect('pv-from', 'date_from'); bindSelect('pv-to', 'date_to'); bindSelect('pv-branch', 'branch_id'); bindSelect('pv-source', 'source');
-    bindSelect('pv-method', 'method'); bindSelect('pv-account', 'account_id'); bindSelect('pv-status', 'status'); bindSelect('pv-risk', 'risk'); bindSelect('pv-pancake', 'pancake');
-    bindText('pv-customer', 'customer'); bindText('pv-order', 'order_ref'); bindText('pv-reference', 'reference'); bindText('pv-verifier', 'verified_by'); bindText('pv-amin', 'amount_min'); bindText('pv-amax', 'amount_max');
+    bindText('pv-q', 'q'); bindSelect('pv-from', 'date_from'); bindSelect('pv-to', 'date_to'); bindSelect('pv-branch', 'branch_id'); bindSelect('pv-shop', 'shop_id'); bindSelect('pv-source', 'source');
+    bindSelect('pv-method', 'method'); bindSelect('pv-account', 'account_id'); bindSelect('pv-status', 'status'); bindSelect('pv-risk', 'risk'); bindSelect('pv-pancake', 'pancake'); bindSelect('pv-pstatus', 'pancake_status');
+    bindText('pv-customer', 'customer'); bindText('pv-order', 'order_ref'); bindText('pv-reference', 'reference'); bindText('pv-verifier', 'verified_by'); bindText('pv-attby', 'attached_by'); bindText('pv-amin', 'amount_min'); bindText('pv-amax', 'amount_max');
     [['pv-dup', 'dup_only'], ['pv-noref', 'no_reference'], ['pv-drift', 'drift']].forEach(([id, k2]) => { const el = $(id); if (el) el.addEventListener('change', () => { f[k2] = el.checked; apply(); }); });
     $('pv-sort').addEventListener('change', (e) => { s.sort = e.target.value; load(true); });
     $('pv-reload').addEventListener('click', () => { ctx.refreshCounts(); load(); });
@@ -191,7 +204,7 @@ export async function compactList(ctx, host, tab, limit, sort, emptyText) {
     if (!res || res.ok === false) { host.innerHTML = '<div class="msg error">' + esc((res && res.message) || 'Could not load.') + '</div>'; return; }
     if (!res.rows.length) { host.innerHTML = '<p class="muted">' + esc(emptyText) + '</p>'; return; }
     host.innerHTML = '<div class="pv-compact">' + res.rows.map((r) => '<button type="button" class="pv-compact-row" data-open="' + esc(r.id) + '"><span class="pv-compact-main"><b>' + esc(r.pv_code) + '</b> ' + esc(r.customer_name || '—') +
-      (r.order_ref ? ' <span class="muted">· order #' + esc(r.order_ref) + '</span>' : '') + '</span><span class="pv-compact-side">' + esc(money(r.amount)) + ' ' + statusBadge(r.status) + ' ' + riskBadge(r.risk) +
+      (r.order_ref ? ' <span class="muted">· order #' + esc(r.order_ref) + (r.shop_name ? ' (' + esc(r.shop_name) + ')' : '') + '</span>' : '') + '</span><span class="pv-compact-side">' + esc(money(r.amount)) + ' ' + statusBadge(r.status) + ' ' + riskBadge(r.risk) +
       '<span class="muted"> ' + esc(fmtShortDateTime(r.submitted_at)) + '</span></span></button>').join('') + '</div>';
     host.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => ctx.openDetail(b.dataset.open, { rows: res.rows.map((r) => ({ id: r.id, status: r.status })) })));
   } catch (err) { host.innerHTML = '<div class="msg error">' + esc(friendly(err)) + '</div>'; }

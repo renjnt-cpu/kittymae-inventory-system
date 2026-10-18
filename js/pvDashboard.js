@@ -1,8 +1,8 @@
 // Payment Verification page -- the Dashboard tab: what needs a person's attention right now, what was verified today and this month, where the proofs come from, and the
 // two short lists to start with (the payments waiting longest and the possible duplicates). Every card opens the matching list.
-import { esc, money, moneyShort, fmtDateTime, ago, plural, friendly } from './pvFormat.js?v=20261018a';
-import { kpiCard } from './pvUi.js?v=20261018a';
-import { compactList } from './pvTable.js?v=20261018a';
+import { esc, money, moneyShort, fmtDateTime, ago, plural, friendly } from './pvFormat.js?v=20261018b';
+import { kpiCard } from './pvUi.js?v=20261018b';
+import { compactList } from './pvTable.js?v=20261018b';
 
 export async function renderDashboard(ctx, panel) {
   panel.innerHTML = '<p class="muted">Loading…</p>';
@@ -25,6 +25,9 @@ export async function renderDashboard(ctx, panel) {
       kpiCard({ label: 'Needs review', value: n(c.needs_review), tone: attention(c.needs_review, 'orange'), go: 'needs_review' }),
       kpiCard({ label: 'No reference number', value: n(c.missing_reference), sub: 'cannot be verified yet', tone: attention(c.missing_reference, 'orange'), go: 'missing_reference', hint: 'Pending payments whose reference is missing or too short' }),
     ]) +
+    (Array.isArray(c.shops) && c.shops.length ? group('By Pancake shop', 'Miss Kittymae Jewels and Kittymae.co are checked together — one reference is searched in both', c.shops.map((s) =>
+      kpiCard({ label: s.shop_name || 'Shop not known', value: n(s.pending), sub: 'pending · ' + n(s.possible_duplicates) + ' possible duplicate' + (Number(s.possible_duplicates) === 1 ? '' : 's') + ' · ' + n(s.total) + ' proofs on file',
+        tone: attention(s.pending, 'yellow'), go: 'shop:' + (s.shop_id || ''), hint: 'Open the pending payments of this shop' }))) : '') +
     group('Today', '', [
       kpiCard({ label: 'Verified today', value: n(c.verified_today), sub: money(c.amount_verified_today), tone: 'green', go: 'verified_today' }),
       kpiCard({ label: 'Rejected today', value: n(c.rejected_today), tone: Number(c.rejected_today) > 0 ? 'red' : 'gray', go: 'unverified' }),
@@ -41,6 +44,7 @@ export async function renderDashboard(ctx, panel) {
 
   panel.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => {
     const g = b.dataset.go;
+    if (g.startsWith('shop:')) return ctx.gotoList('pending', g.length > 5 ? { shop_id: g.slice(5) } : {});
     if (g === 'missing_reference') return ctx.gotoList('pending', { no_reference: true });
     if (g === 'verified_today') return ctx.gotoList('verified', { date_from: ctx.today, date_to: ctx.today });
     if (g === 'from_pancake') return ctx.gotoList('pending', { source: 'PANCAKE' });
