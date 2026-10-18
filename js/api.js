@@ -2,8 +2,8 @@
 // `supabase` directly, so the query shape lives in one place. Mirrors the old app's
 // `api(name, ...args)` helper in spirit, just split into named functions since
 // supabase-js's table/RPC calls aren't as uniformly shaped as google.script.run's.
-import { supabase } from './supabaseClient.js?v=20261012a';
-import { localDateStr } from './uiKit.js?v=20261012a';
+import { supabase } from './supabaseClient.js?v=20261018a';
+import { localDateStr } from './uiKit.js?v=20261018a';
 
 /** Caps the core ledger list queries (Sales, Layaway, Scrap, Subasta) so a tab load
  * fetches recent history instead of the entire table unconditionally -- these had no
@@ -156,7 +156,7 @@ export async function listProducts({ search = '', status = 'Active' } = {}) {
     // Narrowed from select('*') -- products.html's table/edit form only ever reads
     // these columns, and with 7,400+ rows the unused ones (cost fields, gold rates,
     // audit columns) were pure payload/parse overhead on every search keystroke.
-    let query = supabase.from('products').select('sku, sub_sku, item_name, category, system_selling_price, gross_weight_g, product_status, pricing_mode, current_gold_rate_per_g');
+    let query = supabase.from('products').select('sku, sub_sku, item_name, category, system_selling_price, reseller_price, gross_weight_g, product_status, pricing_mode, current_gold_rate_per_g');
     if (status !== 'all') query = query.eq('product_status', status);
     if (term) {
       const pat = '%' + term + '%';
@@ -1505,7 +1505,7 @@ export const KITTYMAE_CO_SHOP_ID = 1328205188;
 // -- never needed by the UI, so it's deliberately left out of this column list rather
 // than using select('*'), which would otherwise pull it for every one of 40,000+ rows
 // on every page load.
-const ORDER_ITEM_STATUS_COLUMNS = 'id, order_reference, sku, item_name, qty, branch_id, customer_name, status, notes, created_by, created_at, updated_at, packed_by, packed_at, branches(name)';
+const ORDER_ITEM_STATUS_COLUMNS = 'id, order_reference, pancake_shop_id, sku, item_name, qty, branch_id, customer_name, status, notes, created_by, created_at, updated_at, packed_by, packed_at, branches(name)';
 
 // A single status like "new" alone has tens of thousands of active orders after the
 // historical Pancake backfill -- fetching everything active (even with terminal

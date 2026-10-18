@@ -1,10 +1,10 @@
 // Bills Management -- the Reports tab: the eight reports (Monthly, Overdue, Due This Week, Paid, Unpaid,
 // Branch, Category, Recurring) each with a preview and CSV / Excel / PDF export, plus the branch and
 // category summaries with charts. Every export covers exactly what the filters above show.
-import { esc, money, moneyShort, fmtDate, plural, donut, hbars, stackedHbars, lineChart, COLORS, statusColor, tagBadge } from './billsUi.js?v=20261012a';
-import { monthlyTrend, groupTotals, statusCounts, STATUSES, sum } from './billsLogic.js?v=20261012a';
-import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './billsFilters.js?v=20261012a';
-import { REPORTS, buildReport, exportReport } from './billsExport.js?v=20261012a';
+import { esc, money, moneyShort, fmtDate, plural, donut, hbars, stackedHbars, lineChart, COLORS, statusColor, tagBadge } from './billsUi.js?v=20261018a';
+import { monthlyTrend, groupTotals, statusCounts, STATUSES, sum } from './billsLogic.js?v=20261018a';
+import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './billsFilters.js?v=20261018a';
+import { REPORTS, buildReport, exportReport } from './billsExport.js?v=20261018a';
 
 const $ = (id) => document.getElementById(id);
 const PREVIEW = {

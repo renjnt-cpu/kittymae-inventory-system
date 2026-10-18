@@ -1,13 +1,13 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, getMyJobTitle, getMyLeaveOnlyCompany, signOut, updateMyName, isExpiredLogin, dropStaleSession } from './auth.js?v=20261012a';
-import { listMyPermissions } from './api.js?v=20261012a';
-import { initActivityFeed } from './activityFeed.js?v=20261012a';
-import { localDateStr } from './uiKit.js?v=20261012a';
-import { showBirthdayBanner } from './birthdayBanner.js?v=20261012a';
-import { initAdminChat } from './adminChat.js?v=20261012a';
-import { initLeaveNotifications } from './leaveNotifications.js?v=20261012a';
+import { requireSession, linkEmployee, getMyJobTitle, getMyLeaveOnlyCompany, signOut, updateMyName, isExpiredLogin, dropStaleSession } from './auth.js?v=20261018a';
+import { listMyPermissions } from './api.js?v=20261018a';
+import { initActivityFeed } from './activityFeed.js?v=20261018a';
+import { localDateStr } from './uiKit.js?v=20261018a';
+import { showBirthdayBanner } from './birthdayBanner.js?v=20261018a';
+import { initAdminChat } from './adminChat.js?v=20261018a';
+import { initLeaveNotifications } from './leaveNotifications.js?v=20261018a';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
@@ -124,6 +124,7 @@ export async function initShell(activePage) {
     'item-monitoring': { label: 'Item Monitoring', href: 'item-monitoring.html' },
     transfers: { label: 'Transfers', href: 'transfers.html' },
     'pull-out': { label: 'Pull Out Item', href: 'pull-out.html' },
+    'payment-verification': { label: 'Payment Verification', href: 'payment-verification.html' },
     bills: { label: 'Expenses', href: 'bills.html' },
     refunds: { label: 'Refunds', href: 'refunds.html' },
     transactions: { label: 'Transactions', href: 'transactions.html' },
@@ -150,6 +151,9 @@ export async function initShell(activePage) {
     // Fix Product Data (Ren, 2026-10-06): the focused screens behind the Dashboard's "Needs Attention" tasks -- shown to people holding the "datafix.view" key
     // (Position Access Matrix > Data Fixes). The database decides which fixes each person may actually make.
     if ((employee.permissions || []).includes('datafix.view')) pages.push({ id: 'fix-data', ...ALL_PAGE_DEFS['fix-data'] });
+    // Payment Verification (Ren, 2026-10-18): shown only to people holding the "payment_verify.view" key (Position Access Matrix > Finance). Which payments they see (all
+    // branches / their own), whether they see the proof pictures, and every decision they may make follow the other payment_verify.* keys, enforced by the database.
+    if ((employee.permissions || []).includes('payment_verify.view')) pages.push({ id: 'payment-verification', ...ALL_PAGE_DEFS['payment-verification'] });
     // Branches (POS Walk-In/Layaway/Scrap/Subasta) removed from the ERP (Ren,
     // 2026-09-28: "remove branches in ERP since theres already in the POS") -- the
     // kittymae-pos app's own branches.html has byte-identical functionality and, unlike
@@ -250,7 +254,7 @@ export async function initShell(activePage) {
     { label: 'Sales', ids: ['online-orders', 'online-orders-kmco', 'refunds'] },
     { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers', 'pull-out'] },
     { label: 'Operations', ids: ['lbc', 'assets'] },
-    { label: 'Finance', ids: ['bills', 'transactions'] },
+    { label: 'Finance', ids: ['payment-verification', 'bills', 'transactions'] },
     { label: 'People', ids: ['leave', 'hr', 'access-performance', 'access-matrix', 'data-backup'] },
   ];
   const pageById = Object.fromEntries(pages.map((p) => [p.id, p]));

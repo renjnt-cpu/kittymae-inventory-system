@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Online Orders — Kittymae.co — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261012a">
+<link rel="stylesheet" href="css/styles.css?v=20261018a">
+<link rel="stylesheet" href="css/pv.css?v=20261018a">
 </head>
 <body>
 <main>
@@ -26,16 +27,18 @@
 // pending-kmco (15-minute cron safety nets); no historical backfill has been run for
 // this shop yet (~8,600 total orders here, vs kittymae jewels' 35,000+, so a full
 // backfill would be far cheaper if Ren wants one later).
-import { initShell, toast, esc } from './js/shell.js?v=20261012a';
+import { initShell, toast, esc } from './js/shell.js?v=20261018a';
 import {
   getBranches, listOrderItemStatuses, listOrderHistoryForItem, getOrderItemStatusCounts,
   getOrderItemPackaging, ORDER_ITEM_STATUS_ROW_CAP, setOrderItemStatus, deleteOrderItemStatus,
   listDeliveredOrders, listPendingSkuMatches, resolveSkuMatch, remapSkuMatch, searchProducts,
   listSkuAliases, saveSkuAlias, deleteSkuAlias, subscribeToChanges, KITTYMAE_CO_SHOP_ID, getOnlineStageSummary,
-} from './js/api.js?v=20261012a';
-import { mountOnlineSalesSummary } from './js/onlineSalesSummary.js?v=20261012a';
-import { branchBadge } from './js/branchColors.js?v=20261012a';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20261012a';
+} from './js/api.js?v=20261018a';
+import { mountOnlineSalesSummary } from './js/onlineSalesSummary.js?v=20261018a';
+import { branchBadge } from './js/branchColors.js?v=20261018a';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20261018a';
+import * as pvApi from './js/pvApi.js?v=20261018a';
+import { createOrderPayments } from './js/pvOrders.js?v=20261018a';
 
 const OL_SORT_FIELDS = [
   { key: 'default', label: 'Default (most recent)' }, { key: 'item_name', label: 'Item' }, { key: 'qty', label: 'Qty' },
@@ -199,6 +202,8 @@ if (employee) {
     root.innerHTML = '<div class="center-screen"><div><h2>No access</h2><p class="muted">Ask an Admin if you need to see this.</p></div></div>';
   } else {
     const isAdmin = employee.role === 'Admin';
+    // Payment Verification (Ren, 2026-10-18): a payment badge under each order and a "Payment" section per line -- only for people holding payment_verify.view / .submit.
+    const pay = createOrderPayments({ api: pvApi, employee });
     const canResolveSkuMatch = isAdmin || SKU_MATCH_SUPERVISOR_POSITIONS.includes(employee.jobTitle);
     const branches = await getBranches();
     const sort = { field: 'default', dir: 'desc' };
@@ -633,13 +638,14 @@ if (employee) {
                 ? '<select data-status-for="' + r.id + '" class="badge ' + statusBadgeClass(r.status) + '" style="border:none;font:inherit;">' + statusOptionsFor(r.status) + '</select>'
                 : '<span class="badge ' + statusBadgeClass(r.status) + '" title="View only for this branch — only Admin can change status here.">' + esc(prettyStatus(r.status)) + '</span>') +
             '</td>' +
-            '<td data-label="Order / Customer" class="full-row" style="font-size:11px;">' + esc(r.order_reference || '—') + (r.customer_name ? '<div class="muted">' + esc(r.customer_name) + '</div>' : '') + '</td>' +
+            '<td data-label="Order / Customer" class="full-row" style="font-size:11px;">' + esc(r.order_reference || '—') + (r.customer_name ? '<div class="muted">' + esc(r.customer_name) + '</div>' : '') + (pay ? pay.badgeSlot(r.order_reference, r.pancake_shop_id) : '') + '</td>' +
             '<td data-label="Notes / By" class="full-row" style="font-size:11px;">' + esc(r.notes || '') +
               (r.creator ? '<div class="muted" style="font-size:10px;">Added by ' + esc(r.creator.full_name) + '</div>' : '') +
               (r.packer ? '<div class="muted" style="font-size:10px;">Packed by ' + esc(r.packer.full_name) + '</div>' : '') +
             '</td>' +
             '<td class="full-row" style="white-space:nowrap;">' +
               '<button type="button" class="btn small secondary" data-packaging-toggle="' + r.id + '" aria-expanded="false">📦 Packaging</button> ' +
+              (pay && r.order_reference ? pay.buttonHtml(r.id, r.order_reference, r.pancake_shop_id) + ' ' : '') +
               (rowEditable ? '<button class="btn small secondary" type="button" data-delete-id="' + r.id + '">Delete</button>' : '') +
             '</td>' +
           '</tr>' +
@@ -675,13 +681,20 @@ if (employee) {
       list.querySelectorAll('[data-packaging-toggle]').forEach((btn) => btn.addEventListener('click', () => {
         toggleExpand(btn.dataset.packagingToggle, 'packaging');
       }));
+      if (pay) {
+        list.querySelectorAll('[data-payment-toggle]').forEach((btn) => btn.addEventListener('click', () => {
+          const tr = btn.closest('tr');
+          toggleExpand(btn.dataset.paymentToggle, 'payment', { ref: btn.dataset.pvRef, shop: btn.dataset.pvShop, customer: tr && tr.querySelector('[data-label="Order / Customer"] .muted') ? tr.querySelector('[data-label="Order / Customer"] .muted').textContent : '' });
+        }));
+        pay.fillBadges(list);
+      }
     }
 
     async function toggleExpand(id, kind, meta) {
       const row = document.querySelector('tr[data-history-for="' + id + '"]');
       const alreadyThisKind = row.style.display !== 'none' && row.dataset.expandKind === kind;
       document.querySelectorAll('.history-row').forEach((r) => { r.style.display = 'none'; r.querySelector('td').innerHTML = ''; delete r.dataset.expandKind; });
-      document.querySelectorAll('[data-history-toggle], [data-packaging-toggle]').forEach((btn) => btn.setAttribute('aria-expanded', 'false'));
+      document.querySelectorAll('[data-history-toggle], [data-packaging-toggle], [data-payment-toggle]').forEach((btn) => btn.setAttribute('aria-expanded', 'false'));
       if (alreadyThisKind) return;
       row.dataset.expandKind = kind;
       row.style.display = '';
@@ -712,6 +725,9 @@ if (employee) {
             ).join('') +
             '</tbody></table></div>' +
           '</div>';
+      } else if (kind === 'payment') {
+        document.querySelector('[data-payment-toggle="' + id + '"]')?.setAttribute('aria-expanded', 'true');
+        await pay.renderSection(td, meta);
       } else {
         document.querySelector('[data-packaging-toggle="' + id + '"]')?.setAttribute('aria-expanded', 'true');
         td.innerHTML = '<div class="muted" style="padding:8px 4px;">Loading packaging details…</div>';

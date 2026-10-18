@@ -1,10 +1,10 @@
 // Access & Performance Control Center -- Errors & Data Quality: who creates bad data or mistakes, how many, how serious, how long they stayed open, and who keeps repeating the same one.
 // Built from records that already exist (classified corrections, POS corrections, Data Fix tasks, transfer discrepancies) -- nothing is tracked twice. An error is credited to a person only when
 // the record itself says who made it; otherwise it is "Unknown / System". The ranking is by error RATE against the person's workload, never by the raw count alone.
-import { esc, panel, stat, statGrid, int, rate, dash, toast, guarded, dialog, btn, accuracyOf, NOT_ENOUGH, chipFor, empLink, wireLinks, drillLink, fmtDateTime, badge, openDrawer, closeDrawer } from './apcCore.js?v=20261012a';
-import { createClientTable } from './apcTable.js?v=20261012a';
-import { hbars } from './sdUi.js?v=20261012a';
-import { unitsOf } from './apcMetrics.js?v=20261012a';
+import { esc, panel, stat, statGrid, int, rate, dash, toast, guarded, dialog, btn, accuracyOf, NOT_ENOUGH, chipFor, empLink, wireLinks, drillLink, fmtDateTime, badge, openDrawer, closeDrawer } from './apcCore.js?v=20261018a';
+import { createClientTable } from './apcTable.js?v=20261018a';
+import { hbars } from './sdUi.js?v=20261018a';
+import { unitsOf } from './apcMetrics.js?v=20261018a';
 
 const f = { type: '', module: '', status: '', employee: '', signals: true };
 const n = (v) => Number(v) || 0;

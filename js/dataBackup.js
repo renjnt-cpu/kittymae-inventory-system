@@ -3,7 +3,7 @@
 // This exists because Supabase's own daily backups only snapshot the Postgres database;
 // they explicitly do NOT include Storage bucket contents, so without this, the photos
 // themselves have no backup at all if something ever happens to them.
-import { supabase } from './supabaseClient.js?v=20261012a';
+import { supabase } from './supabaseClient.js?v=20261018a';
 
 const SOURCES = [
   { table: 'bills', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'bill-attachments', label: 'Expenses' },
@@ -27,6 +27,9 @@ const SOURCES = [
   { table: 'layaway_payments', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'layaway-attachments', label: 'Layaway Payments' },
   // Branch Capital receipts, deposit slips and other proof (migrations 226 / 230 / 231). The table is closed to direct reads, so an Admin-only function hands the rows over.
   { table: 'expense_attachments', rpc: 'bc_backup_attachments', pathCol: 'file_path', bucket: 'branch-cash-receipts', label: 'Branch Capital Receipts & Proof' },
+  // the customer payment pictures kept in Storage by Payment Verification (migration 245). Closed table -> an Admin-only function; two payments can carry pictures with the same
+  // file name (a pasted picture is always "image.png"), so the file name in the zip includes the folder the picture was stored in.
+  { table: 'pv_images', rpc: 'pv_backup_images', pathCol: 'file_path', bucket: 'payment-proofs', label: 'Payment Proofs (customer payment pictures)', uniqueName: true },
 ];
 
 /** fromDate/toDate are 'YYYY-MM-DD' strings from <input type=date>, or '' for open-ended.
@@ -64,7 +67,7 @@ export async function buildBackupZip(fromDate, toDate, onProgress) {
       try {
         const { data: blob, error: dlErr } = await supabase.storage.from(src.bucket).download(path);
         if (dlErr) throw dlErr;
-        folder.file(path.split('/').pop(), blob);
+        folder.file(src.uniqueName ? path.split('/').slice(-2).join('_') : path.split('/').pop(), blob);
         fileCount++;
       } catch (err) {
         skipped++;

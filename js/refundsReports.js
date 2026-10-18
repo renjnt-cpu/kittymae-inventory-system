@@ -1,8 +1,8 @@
 // Refund Management -- the Reports tab: the eleven reports, each with a preview and CSV / Excel / PDF export.
 // Every export covers exactly what the filters above show ("right now" reports ignore the Month / Year filter).
-import { esc, money, fmtDate, plural } from './refundsUi.js?v=20261012a';
-import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './refundsFilters.js?v=20261012a';
-import { REPORTS, buildReport, exportReport } from './refundsExport.js?v=20261012a';
+import { esc, money, fmtDate, plural } from './refundsUi.js?v=20261018a';
+import { filterBarHtml, bindFilterBar, scopedLive, scopedPeriod, periodLabel, scopeLabel } from './refundsFilters.js?v=20261018a';
+import { REPORTS, buildReport, exportReport } from './refundsExport.js?v=20261018a';
 
 const $ = (id) => document.getElementById(id);
 const PREVIEW = {
