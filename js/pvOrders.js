@@ -1,9 +1,9 @@
 // Payment Verification on the Online Orders pages: a small payment badge next to each order (verified / pending / possible duplicate / needs review / rejected), and a
 // "Payment" section a person can open under an order line: how much the order needs, what is verified, pending and rejected, every payment proof with its status, and
 // a button to add another proof. Nothing here decides anything -- verifying happens in Payment Verification; this only shows where an order stands and links to it.
-import { esc, money, statusBadge, riskBadge, orderSummaryLines, fmtShortDateTime, imgTag, sourceLabel, friendly, attachedWhere } from './pvFormat.js?v=20261018b';
-import { hydrateImages } from './pvApi.js?v=20261018b';
-import { openProofForm } from './pvProofForm.js?v=20261018b';
+import { esc, money, statusBadge, riskBadge, orderSummaryLines, fmtShortDateTime, imgTag, sourceLabel, friendly, attachedWhere } from './pvFormat.js?v=20261018c';
+import { hydrateImages } from './pvApi.js?v=20261018c';
+import { openProofForm } from './pvProofForm.js?v=20261018c';
 
 const BADGE = {
   VERIFIED: ['pv-st-verified', 'Payment verified'], PENDING: ['pv-st-pending', 'Payment pending'], POSSIBLE_DUPLICATE: ['pv-st-dup', 'Possible duplicate payment'],
@@ -11,7 +11,8 @@ const BADGE = {
 };
 
 export function createOrderPayments({ api, employee, erpBase = '', onChange }) {
-  const can = (k) => employee.role === 'Admin' || (employee.permissions || []).includes(k);
+  // the person's own list of keys decides (an Admin can be held to read-only by a personal override); the role alone only decides when the list could not be loaded
+  const can = (k) => (employee.permissions || []).length ? employee.permissions.includes(k) : employee.role === 'Admin';
   const canView = can('payment_verify.view'), canSubmit = can('payment_verify.submit');
   if (!canView && !canSubmit) return null;
   const link = (id) => (erpBase || '') + 'payment-verification.html?open=' + encodeURIComponent(id);

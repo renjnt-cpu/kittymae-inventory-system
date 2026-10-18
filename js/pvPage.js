@@ -3,21 +3,22 @@
 //
 // One module-wide rule holds everywhere in this page: the screen only hides buttons a person could not use; who may see, verify, override, reject, move or change
 // anything is decided -- and enforced -- by the database (the payment_verify.* keys in the Position Access Matrix, migrations 234-244).
-import { esc, friendly, money, statusBadge, riskBadge, sourceLabel, fmtShortDateTime, fmtDateTime, ago, manilaToday, debounce, shopChip, orderRefHtml, pancakeStatusBadge, attachedWhere } from './pvFormat.js?v=20261018b';
-import { drawersHtml, makeToast, closeDrawer, isDrawerOpen, closeLightbox, lightboxOpen } from './pvUi.js?v=20261018b';
-import { hydrateImages } from './pvApi.js?v=20261018b';
-import { renderDashboard } from './pvDashboard.js?v=20261018b';
-import { renderList, LIST_TABS, newListState, blankListFilters } from './pvTable.js?v=20261018b';
-import { renderAccounts } from './pvAccounts.js?v=20261018b';
-import { renderReports, renderAudit } from './pvReports.js?v=20261018b';
-import { openDetail, closeDetail } from './pvDetail.js?v=20261018b';
-import { openProofForm } from './pvProofForm.js?v=20261018b';
+import { esc, friendly, money, statusBadge, riskBadge, sourceLabel, fmtShortDateTime, fmtDateTime, ago, manilaToday, debounce, shopChip, orderRefHtml, pancakeStatusBadge, attachedWhere } from './pvFormat.js?v=20261018c';
+import { drawersHtml, makeToast, closeDrawer, isDrawerOpen, closeLightbox, lightboxOpen } from './pvUi.js?v=20261018c';
+import { hydrateImages } from './pvApi.js?v=20261018c';
+import { renderDashboard } from './pvDashboard.js?v=20261018c';
+import { renderList, LIST_TABS, newListState, blankListFilters } from './pvTable.js?v=20261018c';
+import { renderAccounts } from './pvAccounts.js?v=20261018c';
+import { renderReports, renderAudit } from './pvReports.js?v=20261018c';
+import { openDetail, closeDetail } from './pvDetail.js?v=20261018c';
+import { openProofForm } from './pvProofForm.js?v=20261018c';
 
 const $ = (id) => document.getElementById(id);
 
 export function createPvContext(api, employee) {
   const perms = new Set(employee.permissions || []);
-  const can = (k) => employee.role === 'Admin' || perms.has(k);
+  // the person's own list of keys decides: an Admin can be held to read-only (the Auditor) by a personal override. The role alone only decides when the list could not be loaded.
+  const can = (k) => perms.size ? perms.has(k) : employee.role === 'Admin';
   const ctx = {
     api, employee, can, today: manilaToday(), branches: [], accounts: [], methods: [], counts: null, listIds: [],
     scope: { allBranches: can('payment_verify.view_all_branches'), ownBranch: can('payment_verify.view_own_branch'), proof: can('payment_verify.view_proof') },
