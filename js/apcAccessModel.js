@@ -19,6 +19,8 @@ export const KEY_MAP = {
   'dashboard.cost': ['DASHBOARD', 'view'], 'dashboard.profit': ['DASHBOARD', 'view'], 'dashboard.capital': ['DASHBOARD', 'view'], 'dashboard.expenses': ['DASHBOARD', 'view'],
   'dashboard.export': ['DASHBOARD', 'export'], 'dashboard.capital_manage': ['FINANCE', 'edit'], 'dashboard.settings': ['SETTINGS', 'edit'],
   'branches.view_all': ['SALES', 'view'], 'layaway.request_delete': ['SALES', 'delete'],
+  // Handled By on Branches records (POS sales, scrap entries, Subasta items) -- migration 253
+  'branch_handler.view': ['SALES', 'view'], 'branch_handler.view_all': ['SALES', 'view'], 'branch_handler.assign': ['SALES', 'edit'],
   'message_pancake.view': ['SALES', 'view'], 'message_pancake.manage': ['SALES', 'edit'], 'message_pancake.view_alerts': ['SALES', 'view'], 'message_pancake.view_all_branches': ['SALES', 'view'], 'message_pancake.analytics': ['SALES', 'view'],
   'message_pancake.reply': ['SALES', 'edit'], 'message_pancake.assign': ['SALES', 'edit'], 'message_pancake.escalate': ['SALES', 'edit'], 'message_pancake.change_classification': ['SALES', 'edit'],
   'pos_sale.manage': ['POS', 'delete'], 'transaction.edit_amount': ['POS', 'edit'],
@@ -84,7 +86,7 @@ export const BRANCH_SCOPE_KEYS = ['branches.view_all', 'dashboard.all_branches',
 
 // the "do they still need this?" review (spec: Sales Edit? Refund? Inventory Edit? Supplier Cost? Accounting? Other Branch Access?)
 export const REVIEW_GROUPS = [
-  { id: 'sales', question: 'Does this person still need to edit sales and recorded amounts?', keys: ['transaction.edit_amount', 'pos_sale.manage', 'layaway.request_delete', 'scrap.edit', 'subasta.manage'], module: 'POS' },
+  { id: 'sales', question: 'Does this person still need to edit sales and recorded amounts?', keys: ['transaction.edit_amount', 'pos_sale.manage', 'layaway.request_delete', 'scrap.edit', 'subasta.manage', 'branch_handler.assign'], module: 'POS' },
   { id: 'refund', question: 'Does this person still need to work with refunds?', keys: ['refunds.view', 'refunds.approve', 'refunds.pay', 'refunds.admin'], module: 'FINANCE' },
   { id: 'inventory', question: 'Does this person still need to edit inventory?', keys: ['inventory.pull_out.create', 'inventory.pull_out.edit', 'inventory.record_factory_purchase_any_branch', 'extra_access.products_edit', 'transfer.receive_any_branch'], module: 'INVENTORY' },
   { id: 'cost', question: 'Does this person still need to see supplier and product cost?', keys: ['catalog.cost_view', 'catalog.cost_edit', 'dashboard.cost', 'datafix.cost', 'datafix.purchase', 'assets.view_cost'], module: 'SKU CATALOG' },
