@@ -124,6 +124,7 @@ export async function initShell(activePage) {
     'item-monitoring': { label: 'Item Monitoring', href: 'item-monitoring.html' },
     transfers: { label: 'Transfers', href: 'transfers.html' },
     'pull-out': { label: 'Pull Out Item', href: 'pull-out.html' },
+    'scrap-monitoring': { label: 'Scrap Monitoring', href: 'scrap-monitoring.html' },
     'payment-verification': { label: 'Payment Verification', href: 'payment-verification.html' },
     bills: { label: 'Expenses', href: 'bills.html' },
     refunds: { label: 'Refunds', href: 'refunds.html' },
@@ -154,6 +155,10 @@ export async function initShell(activePage) {
     // Payment Verification (Ren, 2026-10-18): shown only to people holding the "payment_verify.view" key (Position Access Matrix > Finance). Which payments they see (all
     // branches / their own), whether they see the proof pictures, and every decision they may make follow the other payment_verify.* keys, enforced by the database.
     if ((employee.permissions || []).includes('payment_verify.view')) pages.push({ id: 'payment-verification', ...ALL_PAGE_DEFS['payment-verification'] });
+    // Scrap Monitoring (Ren, 2026-10-24): the central view of every branch's scrap -- what is held, how old it is, what was sold or disposed of, who owes money -- shown only to
+    // people holding the "scrap_monitor.view" key (Position Access Matrix > Operations). Which branches they see, whether they see money and photos, and whether they may sell,
+    // approve, record payments, dispose or export follow the other scrap_monitor.* keys, and the database enforces every one of them (migrations 253-256).
+    if ((employee.permissions || []).includes('scrap_monitor.view')) pages.push({ id: 'scrap-monitoring', ...ALL_PAGE_DEFS['scrap-monitoring'] });
     // Branches (POS Walk-In/Layaway/Scrap/Subasta) removed from the ERP (Ren,
     // 2026-09-28: "remove branches in ERP since theres already in the POS") -- the
     // kittymae-pos app's own branches.html has byte-identical functionality and, unlike
@@ -252,7 +257,7 @@ export async function initShell(activePage) {
   const NAV_GROUPS = [
     { label: 'Overview', ids: ['dashboard', 'sales-dashboard', 'fix-data'] },
     { label: 'Sales', ids: ['online-orders', 'online-orders-kmco', 'refunds'] },
-    { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers', 'pull-out'] },
+    { label: 'Products & Inventory', ids: ['products', 'item-monitoring', 'transfers', 'pull-out', 'scrap-monitoring'] },
     { label: 'Operations', ids: ['lbc', 'assets'] },
     { label: 'Finance', ids: ['payment-verification', 'bills', 'transactions'] },
     { label: 'People', ids: ['leave', 'hr', 'access-performance', 'access-matrix', 'data-backup'] },

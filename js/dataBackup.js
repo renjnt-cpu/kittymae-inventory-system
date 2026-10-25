@@ -14,6 +14,9 @@ const SOURCES = [
   { table: 'scrap_payments', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'scrap-attachments', label: 'Scrap Payment Proofs' },
   // the photo of each metal line of a scrap entry (migration 195) -- the two lines above reach only the entry's own photo and the payment proofs
   { table: 'scrap_entry_lines', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'scrap-attachments', label: 'Scrap Line Photos' },
+  // the weighing slips, receipts and payment proofs attached to a scrap sale or disposal made in Scrap Monitoring (migration 257). The table is closed to direct reads, so an Admin-only
+  // function hands over the rows of the date range; each file is stored as <sale id>/<random id>_<name>, so the file names in the zip never clash.
+  { table: 'scrap_sale_files', rpc: 'scrap_backup_files', pathCol: 'file_path', bucket: 'scrap-sale-files', label: 'Scrap Sale Files (weighing slips, receipts & proofs)' },
   // the proof of payment on each Subasta sale payment (Subasta Mark Sold / add payment, migration 178)
   { table: 'subasta_payments', dateCol: 'created_at', pathCol: 'attachment_path', bucket: 'subasta-attachments', label: 'Subasta Payment Proofs' },
   { table: 'refunds', dateCol: 'created_at', pathCol: 'request_attachment_path', bucket: 'refund-attachments', label: 'Refund Requests' },
