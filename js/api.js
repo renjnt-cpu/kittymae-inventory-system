@@ -921,12 +921,14 @@ export async function createLbcShipment({ branchId, orderId, customerName, track
   if (error) throw new Error(error.message);
 }
 
-export async function updateLbcShipment(id, { branchId, orderId, customerName, trackingNumber, shipDate, codAmount, paymentType, status, remitted, remittedDate, remittanceNumber, notes }) {
+export async function updateLbcShipment(id, { branchId, orderId, customerName, trackingNumber, shipDate, codAmount, paymentType, status, remitted, remittedDate, remittanceNumber, remittedAmount, notes }) {
   const { error } = await supabase.from('lbc_shipments').update({
     branch_id: branchId || null, order_id: orderId, customer_name: customerName,
     tracking_number: trackingNumber || null, ship_date: shipDate || null,
     cod_amount: codAmount || null, payment_type: paymentType || null, status, remitted: !!remitted, remitted_date: remittedDate || null,
     remittance_number: remitted ? (remittanceNumber || null) : null,
+    // SF Paid never goes through remittance, so it never carries a remitted amount (same rule as setLbcPaymentType).
+    remitted_amount: paymentType === 'SF PAID' ? null : (remittedAmount ?? null),
     notes: notes || null, updated_at: new Date().toISOString(),
   }).eq('id', id);
   if (error) throw new Error(error.message);
@@ -943,8 +945,27 @@ export async function setLbcStatus(id, status) {
  * flow, so a stale number/flag from before the switch would be misleading. */
 export async function setLbcPaymentType(id, paymentType) {
   const patch = { payment_type: paymentType || null, updated_at: new Date().toISOString() };
-  if (paymentType === 'SF PAID') { patch.remitted = false; patch.remitted_date = null; patch.remittance_number = null; }
+  if (paymentType === 'SF PAID') { patch.remitted = false; patch.remitted_date = null; patch.remittance_number = null; patch.remitted_amount = null; }
   const { error } = await supabase.from('lbc_shipments').update(patch).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+/** Quick inline COD Amount edit from the list row (Ren, 2026-10-23: "under LBC
+ * monitoring amount can edit the cod amount"). null/blank clears it; 0 is kept as typed. */
+export async function setLbcCodAmount(id, codAmount) {
+  const { error } = await supabase.from('lbc_shipments')
+    .update({ cod_amount: codAmount ?? null, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+/** Amount LBC actually remitted for this parcel (Ren, 2026-10-23: "add amount for
+ * remitted") -- kept separate from the Remittance # so either can be filled first; only
+ * a parcel that is also marked remitted counts toward the remitted totals. */
+export async function setLbcRemittedAmount(id, remittedAmount) {
+  const { error } = await supabase.from('lbc_shipments')
+    .update({ remitted_amount: remittedAmount ?? null, updated_at: new Date().toISOString() })
+    .eq('id', id);
   if (error) throw new Error(error.message);
 }
 
@@ -952,16 +973,18 @@ export async function setLbcPaymentType(id, paymentType) {
  * shipment's tracking number (Ren, 2026-09-25: "it should be input the remittance
  * number based on the tracking number input") -- not just a Yes/No flag. Pass
  * remittanceNumber to mark remitted with that reference; omit/pass null to unmark
- * (clears the number and date too). */
-export async function setLbcRemitted(id, remittanceNumber) {
+ * (clears the number, date and remitted amount too). remittedAmount is optional when
+ * marking: undefined leaves whatever amount is already on the row, a number/null sets it. */
+export async function setLbcRemitted(id, remittanceNumber, remittedAmount) {
   const remitted = !!remittanceNumber;
-  const { error } = await supabase.from('lbc_shipments')
-    .update({
-      remitted, remitted_date: remitted ? localDateStr() : null,
-      remittance_number: remitted ? remittanceNumber : null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id);
+  const patch = {
+    remitted, remitted_date: remitted ? localDateStr() : null,
+    remittance_number: remitted ? remittanceNumber : null,
+    updated_at: new Date().toISOString(),
+  };
+  if (!remitted) patch.remitted_amount = null;
+  else if (remittedAmount !== undefined) patch.remitted_amount = remittedAmount;
+  const { error } = await supabase.from('lbc_shipments').update(patch).eq('id', id);
   if (error) throw new Error(error.message);
 }
 
