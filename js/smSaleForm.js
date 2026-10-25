@@ -1,8 +1,8 @@
 // Scrap Monitoring page -- the form for selling (or disposing of) scrap. Nothing is typed twice: the lots come from the branch's own purchase records, the person only says how many grams of
 // each lot go, to whom, and for how much. The database checks every lot again at the moment of confirming, so two people can never take the same grams, and a second click on the confirm
 // button hands back the same sale instead of making another (the request id stays the same until the form is closed).
-import { esc, grams as fmtG, num, money, fmtDate, ageBadge, scrapId, manilaToday, friendly, plural, DISPOSAL_REASONS, DISPOSAL_METHODS, PAY_METHODS } from './smFormat.js?v=20261018c';
-import { openDrawer, closeDrawer, drawerBody, drawerFooter } from './smUi.js?v=20261018c';
+import { esc, grams as fmtG, num, money, fmtDate, ageBadge, scrapId, manilaToday, friendly, plural, DISPOSAL_REASONS, DISPOSAL_METHODS, PAY_METHODS } from './smFormat.js?v=20261025a';
+import { openDrawer, closeDrawer, drawerBody, drawerFooter } from './smUi.js?v=20261025a';
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
 const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;

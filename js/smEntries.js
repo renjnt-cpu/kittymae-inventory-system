@@ -1,8 +1,8 @@
 // Scrap Monitoring page -- "All Scrap": every scrap record of every branch the person may see, read live from the branches' own records, and the drawer that shows one record in full.
 // Nothing here is typed in again: the list and the drawer only show what the POS (Branches > Scrap) already stores; "Open original record" goes back to it.
-import { esc, grams, money, num, fmtDate, fmtTime, fmtDateTime, fmtShortDateTime, kindBadge, statusBadge, markBadge, ageBadge, KINDS, STATUS, SORT_ENTRIES, SOURCE_TYPES, METALS, posEntryUrl, scrapId, friendly, saleStatusBadge, kindOfSale, plural } from './smFormat.js?v=20261018c';
-import { openDrawer, closeDrawer, drawerFooter, kv, emptyBox, fileThumb, wireFiles } from './smUi.js?v=20261018c';
-import { renderList } from './smList.js?v=20261018c';
+import { esc, grams, money, num, fmtDate, fmtTime, fmtDateTime, fmtShortDateTime, kindBadge, statusBadge, markBadge, ageBadge, KINDS, STATUS, SORT_ENTRIES, SOURCE_TYPES, METALS, posEntryUrl, scrapId, friendly, saleStatusBadge, kindOfSale, plural } from './smFormat.js?v=20261025a';
+import { openDrawer, closeDrawer, drawerFooter, kv, emptyBox, fileThumb, wireFiles } from './smUi.js?v=20261025a';
+import { renderList } from './smList.js?v=20261025a';
 
 export function entriesCfg(ctx) {
   const v = ctx.value;

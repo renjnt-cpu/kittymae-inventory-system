@@ -1,9 +1,9 @@
 // Scrap Monitoring page -- "Scrap Sales": every scrap sale and disposal, and the drawer for one of them (its lots, what the buyer paid, the files, the history, and the actions: approve,
 // reject, correct, reverse, record a payment, attach a file). What each person sees and may do is decided by the database (the scrap_monitor.* keys); the buttons only hide what a person could not use.
 import { esc, grams, money, num, fmtDate, fmtDateTime, fmtShortDateTime, saleStatusBadge, payBadge, SALE_STATUS, PAY_STATUS, PAY_METHODS, NEEDS_REFERENCE, FILE_TYPES, fileTypeLabel, manilaToday, friendly,
-  kindOfSale, scrapId, posEntryUrl, plural, DISPOSAL_REASONS, DISPOSAL_METHODS } from './smFormat.js?v=20261018c';
-import { openDrawer, closeDrawer, drawerFooter, kv, actionPanel, fileThumb, wireFiles, emptyBox } from './smUi.js?v=20261018c';
-import { renderList } from './smList.js?v=20261018c';
+  kindOfSale, scrapId, posEntryUrl, plural, DISPOSAL_REASONS, DISPOSAL_METHODS } from './smFormat.js?v=20261025a';
+import { openDrawer, closeDrawer, drawerFooter, kv, actionPanel, fileThumb, wireFiles, emptyBox } from './smUi.js?v=20261025a';
+import { renderList } from './smList.js?v=20261025a';
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
 

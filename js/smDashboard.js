@@ -1,7 +1,7 @@
 // Scrap Monitoring page -- the Dashboard: how much scrap is held, what is waiting for someone, what sold this month and who still owes money, plus the "Attention Needed" list.
 // Every figure is worked out by the database when the page asks (scrap_dashboard / scrap_attention); nothing here is stored or typed in. Cards that lead somewhere are buttons.
-import { esc, grams, money, num, fmtDate, plural, friendly, saleStatusBadge, payBadge, kindOfSale, ageBadge, monthStart } from './smFormat.js?v=20261018c';
-import { kpiCard, emptyBox } from './smUi.js?v=20261018c';
+import { esc, grams, money, num, fmtDate, plural, friendly, saleStatusBadge, payBadge, kindOfSale, ageBadge, monthStart } from './smFormat.js?v=20261025a';
+import { kpiCard, emptyBox } from './smUi.js?v=20261025a';
 
 const BUCKETS = [{ max_age: 7 }, { min_age: 8, max_age: 30 }, { min_age: 31, max_age: 60 }, { min_age: 61, max_age: 90 }, { min_age: 91 }];
 const SEVERITY = { high: 'Needs action', medium: 'Look at this', low: 'For information' };
