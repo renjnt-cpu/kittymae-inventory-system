@@ -31,6 +31,10 @@ export const KEY_MAP = {
   'inventory.record_factory_purchase_any_branch': ['PURCHASES', 'add'], 'datafix.purchase': ['PURCHASES', 'edit'],
   'datafix.supplier': ['SUPPLIERS', 'edit'], 'datafix.supplier_add': ['SUPPLIERS', 'add'],
   'scrap.edit': ['SCRAP', 'edit'], 'subasta.manage': ['SCRAP', 'edit'], 'subasta.pawner_history': ['SCRAP', 'view'],
+  // Scrap Monitoring (every branch's scrap in one place: what is held, sold and paid for; reports and audit log) -- migration 253. A sale or disposal entered without approve_sale waits for an approver.
+  'scrap_monitor.view': ['SCRAP', 'view'], 'scrap_monitor.view_own_branch': ['SCRAP', 'view'], 'scrap_monitor.view_all_branches': ['SCRAP', 'view'], 'scrap_monitor.view_value': ['SCRAP', 'view'], 'scrap_monitor.view_files': ['SCRAP', 'view'],
+  'scrap_monitor.view_reports': ['SCRAP', 'view'], 'scrap_monitor.sell': ['SCRAP', 'add'], 'scrap_monitor.dispose': ['SCRAP', 'add'], 'scrap_monitor.record_payment': ['SCRAP', 'edit'], 'scrap_monitor.manage_buyers': ['SCRAP', 'edit'],
+  'scrap_monitor.approve_sale': ['SCRAP', 'approve'], 'scrap_monitor.export_reports': ['SCRAP', 'export'],
   'extra_access.transactions': ['ACCOUNTING', 'view'],
   'bills.access': ['FINANCE', 'view'], 'bills.view': ['FINANCE', 'view'], 'bills.branch': ['FINANCE', 'add'], 'bills.manage': ['FINANCE', 'edit'], 'bills.admin': ['FINANCE', 'delete'],
   'refunds.view': ['FINANCE', 'view'], 'refunds.approve': ['FINANCE', 'approve'], 'refunds.pay': ['FINANCE', 'edit'], 'refunds.admin': ['FINANCE', 'delete'],
@@ -72,6 +76,7 @@ export const SENSITIVE = {
   'bills.access': 'View Accounting', 'bills.view': 'View Accounting', 'bills.manage': 'View Accounting', 'bills.admin': 'View Accounting', 'dashboard.expenses': 'View Accounting', 'extra_access.transactions': 'View Accounting',
   'branch_cash.view': 'View Accounting', 'branch_cash.view_all': 'View Accounting', 'branch_cash.view_petty': 'View Accounting', 'branch_cash.view_reports': 'View Accounting', 'branch_cash.manage': 'View Accounting',
   'payment_verify.view_reports': 'View Accounting', 'payment_verify.override_duplicate': 'View Accounting', 'payment_verify.manage_accounts': 'View Accounting',
+  'scrap_monitor.view_value': 'View Accounting', 'scrap_monitor.view_reports': 'View Audit Log',
   'hr.view_compensation': 'View Payroll', 'hr.edit_compensation': 'View Payroll',
   'activity.audit': 'View Audit Log', 'hr.view_audit_log': 'View Audit Log', 'leave.audit': 'View Audit Log', 'assets.admin': 'View Audit Log',
   'hr.view_access': 'View Access Control', 'access_checklist.view': 'View Access Control', 'access_perf.view': 'View Access Control', 'staff_analytics.view': 'View Access Control', 'system.admin': 'View Access Control', 'hr.reset_password': 'View Access Control',
@@ -82,11 +87,11 @@ export const SENSITIVE_NOTE = { 'View Bank Balance': 'There is no separate bank-
 /** Only a person who already holds access_perf.view can give or take these two (the database enforces it too). */
 export const LOCKED_KEYS = ['access_perf.view', 'staff_analytics.view'];
 
-export const BRANCH_SCOPE_KEYS = ['branches.view_all', 'dashboard.all_branches', 'assets.view_all_branches', 'activity.view.all_branches', 'transfer.receive_any_branch'];
+export const BRANCH_SCOPE_KEYS = ['branches.view_all', 'dashboard.all_branches', 'assets.view_all_branches', 'activity.view.all_branches', 'transfer.receive_any_branch', 'scrap_monitor.view_all_branches'];
 
 // the "do they still need this?" review (spec: Sales Edit? Refund? Inventory Edit? Supplier Cost? Accounting? Other Branch Access?)
 export const REVIEW_GROUPS = [
-  { id: 'sales', question: 'Does this person still need to edit sales and recorded amounts?', keys: ['transaction.edit_amount', 'pos_sale.manage', 'layaway.request_delete', 'scrap.edit', 'subasta.manage', 'branch_handler.assign'], module: 'POS' },
+  { id: 'sales', question: 'Does this person still need to edit sales and recorded amounts?', keys: ['transaction.edit_amount', 'pos_sale.manage', 'layaway.request_delete', 'scrap.edit', 'subasta.manage', 'branch_handler.assign', 'scrap_monitor.sell', 'scrap_monitor.dispose', 'scrap_monitor.approve_sale', 'scrap_monitor.record_payment'], module: 'POS' },
   { id: 'refund', question: 'Does this person still need to work with refunds?', keys: ['refunds.view', 'refunds.approve', 'refunds.pay', 'refunds.admin'], module: 'FINANCE' },
   { id: 'inventory', question: 'Does this person still need to edit inventory?', keys: ['inventory.pull_out.create', 'inventory.pull_out.edit', 'inventory.record_factory_purchase_any_branch', 'extra_access.products_edit', 'transfer.receive_any_branch'], module: 'INVENTORY' },
   { id: 'cost', question: 'Does this person still need to see supplier and product cost?', keys: ['catalog.cost_view', 'catalog.cost_edit', 'dashboard.cost', 'datafix.cost', 'datafix.purchase', 'assets.view_cost'], module: 'SKU CATALOG' },
