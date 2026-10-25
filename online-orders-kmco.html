@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Online Orders — Kittymae.co — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261025a">
-<link rel="stylesheet" href="css/pv.css?v=20261025a">
+<link rel="stylesheet" href="css/styles.css?v=20261025b">
+<link rel="stylesheet" href="css/pv.css?v=20261025b">
 </head>
 <body>
 <main>
@@ -27,18 +27,18 @@
 // pending-kmco (15-minute cron safety nets); no historical backfill has been run for
 // this shop yet (~8,600 total orders here, vs kittymae jewels' 35,000+, so a full
 // backfill would be far cheaper if Ren wants one later).
-import { initShell, toast, esc } from './js/shell.js?v=20261025a';
+import { initShell, toast, esc } from './js/shell.js?v=20261025b';
 import {
   getBranches, listOrderItemStatuses, listOrderHistoryForItem, getOrderItemStatusCounts,
   getOrderItemPackaging, ORDER_ITEM_STATUS_ROW_CAP, setOrderItemStatus, deleteOrderItemStatus,
   listDeliveredOrders, listPendingSkuMatches, resolveSkuMatch, remapSkuMatch, searchProducts,
   listSkuAliases, saveSkuAlias, deleteSkuAlias, subscribeToChanges, KITTYMAE_CO_SHOP_ID, getOnlineStageSummary,
-} from './js/api.js?v=20261025a';
-import { mountOnlineSalesSummary } from './js/onlineSalesSummary.js?v=20261025a';
-import { branchBadge } from './js/branchColors.js?v=20261025a';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20261025a';
-import * as pvApi from './js/pvApi.js?v=20261025a';
-import { createOrderPayments } from './js/pvOrders.js?v=20261025a';
+} from './js/api.js?v=20261025b';
+import { mountOnlineSalesSummary } from './js/onlineSalesSummary.js?v=20261025b';
+import { branchBadge } from './js/branchColors.js?v=20261025b';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20261025b';
+import * as pvApi from './js/pvApi.js?v=20261025b';
+import { createOrderPayments } from './js/pvOrders.js?v=20261025b';
 
 const OL_SORT_FIELDS = [
   { key: 'default', label: 'Default (most recent)' }, { key: 'item_name', label: 'Item' }, { key: 'qty', label: 'Qty' },
