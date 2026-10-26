@@ -3,9 +3,9 @@
 // plainly which is which. The one thing it never hides: the margin recorded in the system is only as good as the cost typed on each product, so a check of those costs sits right beside the margin.
 //   sales needed per month = (running costs + other costs + loan payment + profit wanted) / gross margin
 // "Profit wanted" is what is left each month after EVERY cost and the loan payment (cash left over), so it is the net figure.
-import { api, esc, fin, moneyShort, int, pct, startOfMonth, endOfMonth, addMonths, daysBetween, todayIn, friendly, bucketLabel } from './sdCore.js?v=20261026a';
-import { panel, loadingBox, errorBox, lockedBox, emptyBox, badge } from './sdUi.js?v=20261026a';
-import { stats } from './sdTabs.js?v=20261026a';
+import { api, esc, fin, moneyShort, int, pct, startOfMonth, endOfMonth, addMonths, daysBetween, todayIn, friendly, bucketLabel } from './sdCore.js?v=20261026b';
+import { panel, loadingBox, errorBox, lockedBox, emptyBox, badge } from './sdUi.js?v=20261026b';
+import { stats } from './sdTabs.js?v=20261026b';
 
 // ---------------------------------------------------------------- the arithmetic (pure: the tests call these directly)
 /** The monthly payment of a loan that is paid off in equal instalments (just the amount divided by the months when the rate is 0). */
