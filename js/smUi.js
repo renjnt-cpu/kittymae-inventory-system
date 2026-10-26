@@ -1,6 +1,6 @@
 // Scrap Monitoring page -- the drawers every screen uses, the toast, the inline confirmation / reason panel (the app never uses confirm() / prompt()), the photo viewer and the
 // small cards. Pure display code: no database calls here.
-import { esc, friendly } from './smFormat.js?v=20261026b';
+import { esc, friendly } from './smFormat.js?v=20261026c';
 
 const $ = (id) => document.getElementById(id);
 export { esc, friendly };

@@ -1,9 +1,9 @@
 // Payment Verification on the Online Orders pages: a small payment badge next to each order (verified / pending / possible duplicate / needs review / rejected), and a
 // "Payment" section a person can open under an order line: how much the order needs, what is verified, pending and rejected, every payment proof with its status, and
 // a button to add another proof. Nothing here decides anything -- verifying happens in Payment Verification; this only shows where an order stands and links to it.
-import { esc, money, statusBadge, riskBadge, orderSummaryLines, fmtShortDateTime, imgTag, sourceLabel, friendly, attachedWhere } from './pvFormat.js?v=20261026b';
-import { hydrateImages } from './pvApi.js?v=20261026b';
-import { openProofForm } from './pvProofForm.js?v=20261026b';
+import { esc, money, statusBadge, riskBadge, orderSummaryLines, fmtShortDateTime, imgTag, sourceLabel, friendly, attachedWhere } from './pvFormat.js?v=20261026c';
+import { hydrateImages } from './pvApi.js?v=20261026c';
+import { openProofForm } from './pvProofForm.js?v=20261026c';
 
 const BADGE = {
   VERIFIED: ['pv-st-verified', 'Payment verified'], PENDING: ['pv-st-pending', 'Payment pending'], POSSIBLE_DUPLICATE: ['pv-st-dup', 'Possible duplicate payment'],

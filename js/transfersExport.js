@@ -4,9 +4,9 @@
 //
 // Quantities are pieces. A cancelled or rejected transfer is listed but its pieces are never added into a total, so a report's total
 // always equals the dashboard.
-import { exportCsv, exportXlsx, exportPdf, download, ensureLib } from './leaveExport.js?v=20261026b';
-import { manilaDate } from './leaveUi.js?v=20261026b';
-import { sum, group, monthName } from './transfersLogic.js?v=20261026b';
+import { exportCsv, exportXlsx, exportPdf, download, ensureLib } from './leaveExport.js?v=20261026c';
+import { manilaDate } from './leaveUi.js?v=20261026c';
+import { sum, group, monthName } from './transfersLogic.js?v=20261026c';
 
 const FOOTER = 'Kittymae Jewels - Transfers';
 const col = (key, label, type) => ({ key, label, type: type || 'text' });

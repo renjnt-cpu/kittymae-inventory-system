@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Online Orders — Kittymae Jewels System</title>
-<link rel="stylesheet" href="css/styles.css?v=20261026b">
-<link rel="stylesheet" href="css/pv.css?v=20261026b">
+<link rel="stylesheet" href="css/styles.css?v=20261026c">
+<link rel="stylesheet" href="css/pv.css?v=20261026c">
 </head>
 <body>
 <main>
@@ -23,18 +23,18 @@
 // Function (live) and the one-time pancake-backfill pull of Pancake's order history;
 // monitoring only, no manual Add -- status can be corrected by hand if Pancake's own
 // value is off.
-import { initShell, toast, esc } from './js/shell.js?v=20261026b';
+import { initShell, toast, esc } from './js/shell.js?v=20261026c';
 import {
   getBranches, listOrderItemStatuses, listOrderHistoryForItem, getOrderItemStatusCounts,
   getOrderItemPackaging, ORDER_ITEM_STATUS_ROW_CAP, setOrderItemStatus, deleteOrderItemStatus,
   listDeliveredOrders, listPendingSkuMatches, resolveSkuMatch, remapSkuMatch, searchProducts,
   listSkuAliases, saveSkuAlias, deleteSkuAlias, subscribeToChanges, getOnlineStageSummary,
-} from './js/api.js?v=20261026b';
-import { mountOnlineSalesSummary } from './js/onlineSalesSummary.js?v=20261026b';
-import { branchBadge } from './js/branchColors.js?v=20261026b';
-import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20261026b';
-import * as pvApi from './js/pvApi.js?v=20261026b';
-import { createOrderPayments } from './js/pvOrders.js?v=20261026b';
+} from './js/api.js?v=20261026c';
+import { mountOnlineSalesSummary } from './js/onlineSalesSummary.js?v=20261026c';
+import { branchBadge } from './js/branchColors.js?v=20261026c';
+import { activeFiltersHtml, emptyStateHtml, wireProxyButtons, sortControlHtml, wireSortControl, applySort, byText, byNumber } from './js/uiKit.js?v=20261026c';
+import * as pvApi from './js/pvApi.js?v=20261026c';
+import { createOrderPayments } from './js/pvOrders.js?v=20261026c';
 
 const OL_SORT_FIELDS = [
   { key: 'default', label: 'Default (most recent)' }, { key: 'item_name', label: 'Item' }, { key: 'qty', label: 'Qty' },
