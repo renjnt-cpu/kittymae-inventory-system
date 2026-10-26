@@ -1,10 +1,10 @@
 // Scrap Monitoring page -- Reports and the Audit Log. Twelve reports, each built from the same scrap_* database functions the other tabs use, so a figure here always agrees with the tab it came
 // from. A report is only a list of columns plus a function that fetches rows; the filter bar, the table, the totals and the CSV / Excel / PDF downloads are shared. Money columns are dropped for
 // people without scrap_monitor.view_value (the database already sends them blank), downloads need scrap_monitor.export_reports, and the ledger / audit need scrap_monitor.view_reports.
-import { esc, num, money, fmtDate, fmtDateTime, manilaToday, monthStart, daysAgo, plural, debounce, TX_LABELS, SALE_STATUS, PAY_STATUS, KINDS, STATUS, MARKS, kindOfSale, scrapId, friendly } from './smFormat.js?v=20261025b';
-import { emptyBox } from './smUi.js?v=20261025b';
-import { renderList } from './smList.js?v=20261025b';
-import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261025b';
+import { esc, num, money, fmtDate, fmtDateTime, manilaToday, monthStart, daysAgo, plural, debounce, TX_LABELS, SALE_STATUS, PAY_STATUS, KINDS, STATUS, MARKS, kindOfSale, scrapId, friendly } from './smFormat.js?v=20261026a';
+import { emptyBox } from './smUi.js?v=20261026a';
+import { renderList } from './smList.js?v=20261026a';
+import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261026a';
 
 const PAGE = 500;          // rows asked for per call when a report is gathered from several calls
 const CAP = 10000;         // the most rows one report gathers (a note says so if that is reached)

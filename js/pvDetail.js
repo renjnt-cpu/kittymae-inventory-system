@@ -5,10 +5,10 @@
 import {
   esc, money, fmtDate, fmtDateTime, fmtShortDateTime, fmtTime, manilaDay, ago, statusBadge, riskBadge, sourceLabel, matchCardHtml, matchSentence, imgTag,
   eventLabel, eventDetail, orderSummaryLines, REJECT_REASONS, friendly, debounce, shopChip, pancakeStatusBadge, pancakeStatusLabel, orderRefHtml, attachedWhere,
-} from './pvFormat.js?v=20261025b';
-import { prepareImage } from './pvImage.js?v=20261025b';
-import { hydrateImages } from './pvApi.js?v=20261025b';
-import { openDrawer, closeDrawer, drawerBody, drawerFooter, isDrawerOpen, actionPanel, openLightbox, kv } from './pvUi.js?v=20261025b';
+} from './pvFormat.js?v=20261026a';
+import { prepareImage } from './pvImage.js?v=20261026a';
+import { hydrateImages } from './pvApi.js?v=20261026a';
+import { openDrawer, closeDrawer, drawerBody, drawerFooter, isDrawerOpen, actionPanel, openLightbox, kv } from './pvUi.js?v=20261026a';
 
 const $ = (id) => document.getElementById(id);
 let cur = null;   // { id, d, ids }

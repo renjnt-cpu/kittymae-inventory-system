@@ -1,13 +1,13 @@
 // Shared header/nav + the sign-in gate every page (except login.html) needs. No
 // framework/build step, so this is plain DOM injection — called once at the top of each
 // page's script, mirroring the old app's renderShell()/renderGate() split.
-import { requireSession, linkEmployee, getMyJobTitle, getMyLeaveOnlyCompany, signOut, updateMyName, isExpiredLogin, dropStaleSession } from './auth.js?v=20261025b';
-import { listMyPermissions } from './api.js?v=20261025b';
-import { initActivityFeed } from './activityFeed.js?v=20261025b';
-import { localDateStr } from './uiKit.js?v=20261025b';
-import { showBirthdayBanner } from './birthdayBanner.js?v=20261025b';
-import { initAdminChat } from './adminChat.js?v=20261025b';
-import { initLeaveNotifications } from './leaveNotifications.js?v=20261025b';
+import { requireSession, linkEmployee, getMyJobTitle, getMyLeaveOnlyCompany, signOut, updateMyName, isExpiredLogin, dropStaleSession } from './auth.js?v=20261026a';
+import { listMyPermissions } from './api.js?v=20261026a';
+import { initActivityFeed } from './activityFeed.js?v=20261026a';
+import { localDateStr } from './uiKit.js?v=20261026a';
+import { showBirthdayBanner } from './birthdayBanner.js?v=20261026a';
+import { initAdminChat } from './adminChat.js?v=20261026a';
+import { initLeaveNotifications } from './leaveNotifications.js?v=20261026a';
 
 // Where a clicked activity notification opens its record (spec 321) -- keyed by the
 // event's record_table. A trailing '=' means the record id is appended.
