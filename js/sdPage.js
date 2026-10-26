@@ -6,12 +6,15 @@ import { createFilters } from './sdFilters.js?v=20261025b';
 import { renderOverview } from './sdOverview.js?v=20261025b';
 import { renderSales, renderProducts, renderChannels, renderPurchases, renderInventory, renderExpenses, renderPayments } from './sdTabs.js?v=20261025b';
 import { renderCapital } from './sdCapital.js?v=20261025b';
+import { renderTarget } from './sdTarget.js?v=20261025b';
 import { renderReports, renderSettings } from './sdMore.js?v=20261025b';
 import { createTable } from './sdTable.js?v=20261025b';
 import { COLS, ROW_TITLE } from './sdColumns.js?v=20261025b';
 
 const TABS = [
   { id: 'overview', label: 'Overview', show: () => true, make: renderOverview },
+  // Sales Target (Ren, 2026-10-26): how much must be sold every month to pay the running costs, the loan and the profit wanted -- needs both the sales and the expense figures
+  { id: 'target', label: 'Sales Target', show: (c) => c.sales && c.expenses, make: renderTarget },
   { id: 'sales', label: 'Sales', show: (c) => c.sales, make: renderSales },
   { id: 'products', label: 'Products', show: (c) => c.sales, make: renderProducts },
   { id: 'channels', label: 'Channels', show: (c) => c.sales, make: renderChannels },

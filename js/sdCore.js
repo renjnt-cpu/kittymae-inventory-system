@@ -132,6 +132,7 @@ export const api = {
   inventoryTrend: (f, grain) => rpc('dash_inventory_trend', { p_f: f, p_grain: grain }),
   capitalSummary: (f) => rpc('dash_capital_summary', { p_f: f }),
   quality: (f) => rpc('dash_quality', { p_f: f }),
+  costCheck: (f) => rpc('dash_cost_check', { p_f: f }),
   table: (kind, f, o) => rpc('dash_table', { p_kind: kind, p_f: f, p_sort: (o && o.sort) || null, p_dir: (o && o.dir) || 'desc', p_page: (o && o.page) || 1, p_size: (o && o.size) || 25, p_search: (o && o.search) || null }),
   refreshNow: () => rpc('dash_refresh_now'),
   saveSettings: (values) => rpc('dash_save_settings', { p_values: values }),
