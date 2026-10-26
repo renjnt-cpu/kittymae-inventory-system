@@ -54,7 +54,7 @@ export const STATUS = {
   FOR_SALE: { label: 'For sale', cls: 'sm-st-forsale', hint: 'Marked by management as ready to sell.' },
   FOR_DISPOSAL: { label: 'For disposal', cls: 'sm-st-fordisposal', hint: 'Marked by management for disposal.' },
   RESERVED: { label: 'Reserved for buyer', cls: 'sm-st-reserved', hint: 'Set aside for a named buyer.' },
-  PENDING_SALE: { label: 'Waiting for approval', cls: 'sm-st-pending', hint: 'A sale or disposal that includes it is waiting for an approver. The grams are held back.' },
+  PENDING_SALE: { label: 'On hold', cls: 'sm-st-pending', hint: 'Some of it is on hold: in a sale or disposal waiting for an approver, or in a group waiting for the supplier\'s weighing. The grams are held back.' },
   PARTIALLY_SOLD: { label: 'Partially sold', cls: 'sm-st-partial', hint: 'Part of it was sold, released or disposed of; some is still held.' },
   SOLD: { label: 'Sold', cls: 'sm-st-sold', hint: 'All of it was sold or released.' },
   DISPOSED: { label: 'Disposed', cls: 'sm-st-disposed', hint: 'Disposed of (not sold).' },
@@ -73,6 +73,13 @@ export const SALE_STATUS = {
   REVERSED: { label: 'Reversed', cls: 'sm-st-reversed' },
 };
 export const saleStatusBadge = (s) => '<span class="badge sm-badge ' + (SALE_STATUS[s] || { cls: 'sm-st-converted' }).cls + '">' + esc((SALE_STATUS[s] || { label: s }).label) + '</span>';
+/** a group = a pending folder of scrap that is confirmed once the supplier has weighed it */
+export const GROUP_STATUS = {
+  PENDING: { label: 'Waiting for the supplier', cls: 'sm-st-pending', hint: 'The grams are held back. Confirm the group when the supplier\'s weighing arrives.' },
+  CONFIRMED: { label: 'Confirmed', cls: 'sm-st-confirmed', hint: 'The supplier weighed it and the sales were made.' },
+  CANCELLED: { label: 'Cancelled', cls: 'sm-st-rejected', hint: 'Cancelled: the grams are free again.' },
+};
+export const groupStatusBadge = (s) => '<span class="badge sm-badge ' + (GROUP_STATUS[s] || { cls: 'sm-st-converted' }).cls + '" title="' + esc((GROUP_STATUS[s] || {}).hint || '') + '">' + esc((GROUP_STATUS[s] || { label: s }).label) + '</span>';
 export const PAY_STATUS = { UNPAID: { label: 'Unpaid', cls: 'sm-pay-unpaid' }, PARTIALLY_PAID: { label: 'Partially paid', cls: 'sm-pay-partial' }, PAID: { label: 'Paid', cls: 'sm-pay-paid' } };
 export const payBadge = (s) => s ? '<span class="badge sm-badge ' + (PAY_STATUS[s] || { cls: 'sm-st-converted' }).cls + '">' + esc((PAY_STATUS[s] || { label: s }).label) + '</span>' : '';
 export const kindOfSale = (k) => k === 'DISPOSAL' ? 'Disposal' : 'Sale';

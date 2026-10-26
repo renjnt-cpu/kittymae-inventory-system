@@ -416,7 +416,7 @@ export function auditCfg(ctx) {
     fields: [
       { id: 'q', type: 'search', label: 'Search', ph: 'Action, record, person, reason…', grow: true },
       { id: 'date_from', type: 'date', label: 'From' }, { id: 'date_to', type: 'date', label: 'To' },
-      { id: 'branch_id', type: 'select', label: 'Branch', options: (c) => c.branches.map((b) => [b.id, b.name]), show: (c) => c.branches.length > 1 },
+      { id: 'branch_id', type: 'select', label: 'Branch', allLabel: 'All branches', options: (c) => c.branches.map((b) => [b.id, b.name]), show: (c) => c.branches.length > 1 },
       { id: 'source', type: 'select', label: 'Where', options: [['ERP', 'Scrap Monitoring'], ['POS', 'Branch POS']] },
       { id: 'actor', type: 'text', label: 'Done by', ph: 'Name', more: true }, { id: 'action', type: 'text', label: 'Action', ph: 'e.g. reversed', more: true },
     ],

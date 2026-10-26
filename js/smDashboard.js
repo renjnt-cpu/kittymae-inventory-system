@@ -10,6 +10,7 @@ const SEVERITY = { high: 'Needs action', medium: 'Look at this', low: 'For infor
 export function follow(ctx, go) {
   if (!go) return;
   const tab = go.tab === 'all' ? 'entries' : go.tab;
+  if (go.open_group) return ctx.openGroup(go.open_group);
   if (go.open && tab === 'sales') return ctx.openSale(Number(go.open));
   if (go.open) return ctx.openEntry(go.open);
   return ctx.gotoTab(tab, go.filters || {});
@@ -39,6 +40,7 @@ export async function renderDashboard(ctx, panel) {
     sale: () => ctx.gotoTab('marked', branchF, { view: 'sale' }),
     disposal: () => ctx.gotoTab('marked', branchF, { view: 'disposal' }),
     pending: () => ctx.gotoTab('marked', branchF, { view: 'sale' }),
+    groups: () => ctx.gotoTab('groups', Object.assign({ status: 'PENDING' }, branchF)),
     entries: () => ctx.gotoTab('entries', branchF),
     month: () => ctx.gotoTab('entries', Object.assign({ kind: 'Bought from Customer', date_from: monthStart() }, branchF)),
     sales: () => ctx.gotoTab('sales', Object.assign({ kind: 'SALE', status: 'CONFIRMED' }, branchF)),
@@ -51,6 +53,8 @@ export async function renderDashboard(ctx, panel) {
     kpiCard({ label: 'Marked for sale', value: esc(grams(k.marked_sale_g)), sub: esc(plural(k.marked_sale_lots || 0, 'lot')) + ' ready to sell or reserved', tone: 'yellow', go: 'sale' }),
     kpiCard({ label: 'Marked for disposal', value: esc(grams(k.marked_disposal_g)), sub: esc(plural(k.marked_disposal_lots || 0, 'lot')), tone: 'yellow', go: 'disposal' }),
     kpiCard({ label: 'Waiting for approval', value: esc(pending), sub: pending ? esc(grams(k.reserved_g)) + ' held back · ' + esc(plural(k.pending_sales || 0, 'sale')) + ', ' + esc(plural(k.pending_disposals || 0, 'disposal')) : 'Nothing is waiting', tone: pending ? 'orange' : 'green', go: 'pending' }),
+    ...(k.pending_groups !== undefined && k.pending_groups !== null ? [kpiCard({ label: 'Waiting for the supplier', value: esc(k.pending_groups || 0), sub: Number(k.group_g) > 0 ? esc(grams(k.group_g)) + ' held back in ' + esc(plural(k.pending_groups || 0, 'group')) : 'No group is waiting for a weighing',
+      tone: k.pending_groups ? 'orange' : 'green', go: 'groups', hint: 'Groups of scrap sent to a supplier and not yet weighed' })] : []),
   ];
   const monthCards = [
     kpiCard({ label: 'Bought this month', value: esc(grams(k.month_g)), sub: esc(plural(k.month_entries || 0, 'purchase')), tone: 'gray', go: 'month' }),

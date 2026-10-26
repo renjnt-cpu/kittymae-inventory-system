@@ -11,6 +11,7 @@ import { entriesCfg, renderEntries, openEntry } from './smEntries.js?v=20261026b
 import { availableCfg, renderAvailable, renderMarked } from './smAvailable.js?v=20261026b';
 import { renderByBranch, renderByPurity } from './smBranches.js?v=20261026b';
 import { salesCfg, renderSales, openSale } from './smSales.js?v=20261026b';
+import { groupsCfg, renderGroups, openGroup } from './smGroups.js?v=20261026b';
 import { renderBuyers } from './smBuyers.js?v=20261026b';
 import { renderReports, renderAudit, setReport } from './smReports.js?v=20261026b';
 import { openSaleForm } from './smSaleForm.js?v=20261026b';
@@ -24,6 +25,7 @@ const TABS = [
   { id: 'entries', label: 'All Scrap', render: renderEntries, cfg: entriesCfg },
   { id: 'branches', label: 'By Branch', render: renderByBranch },
   { id: 'purity', label: 'By Metal / Purity', render: renderByPurity },
+  { id: 'groups', label: 'By Group', render: renderGroups, cfg: groupsCfg, badge: 'groups', show: (c) => !!(c.can.sell || c.can.view_all_branches || c.can.view_reports) },
   { id: 'available', label: 'Available Scrap', render: renderAvailable, cfg: (c) => availableCfg(c, 'all') },
   { id: 'marked', label: 'For Sale / Disposal', render: renderMarked, cfg: (c) => availableCfg(c, 'marked'), badge: true },
   { id: 'sales', label: 'Sold Scrap', render: renderSales, cfg: salesCfg },
@@ -36,11 +38,12 @@ export function createSmContext(api, employee, access) {
   const can = access.can || {};
   const ctx = {
     api, employee, access, can, value: !!can.view_value, files: !!can.view_files, settings: access.settings || {}, branches: [],
-    refs: { karats: KARAT_GUESS.slice(), buyers: [], people: [] }, counts: { pending: 0 }, ui: { lists: {} },
+    refs: { karats: KARAT_GUESS.slice(), buyers: [], people: [] }, counts: { pending: 0, groups: 0 }, ui: { lists: {} },
   };
   ctx.toast = makeToast();
   ctx.openEntry = (id) => openEntry(ctx, id);
   ctx.openSale = (id) => openSale(ctx, id);
+  ctx.openGroup = (id) => openGroup(ctx, id);
   ctx.openSaleForm = (opts) => openSaleForm(ctx, opts || {});
   ctx.reloadList = null;
   ctx.afterChange = () => {};
@@ -92,13 +95,16 @@ export async function startSmPage({ root, api, employee, search, hash }) {
       (ctx.files ? '' : ', without the photos and receipts') + '</span></span>' +
       '<span class="sm-whoami-right"><a class="sm-link" href="' + esc(POS_BASE + 'branches.html?tab=scrap') + '" target="_blank" rel="noopener noreferrer" title="Where the branches record scrap">Branch scrap in the POS ↗</a></span>';
     $('sm-topbar').innerHTML = (ctx.can.sell || ctx.can.dispose ? '<div class="sm-btns">' + (ctx.can.sell ? '<button type="button" class="btn" id="sm-new-sale">+ New scrap sale</button>' : '') +
+      (ctx.can.sell ? '<button type="button" class="btn secondary" id="sm-new-group" title="A pending folder for scrap that goes to a supplier to be weighed">+ New group</button>' : '') +
       (ctx.can.dispose ? '<button type="button" class="btn secondary" id="sm-new-disposal">Dispose of scrap</button>' : '') + '</div>' : '');
     const ns = $('sm-new-sale'); if (ns) ns.addEventListener('click', () => ctx.openSaleForm({ mode: 'SALE' }));
+    const ng = $('sm-new-group'); if (ng) ng.addEventListener('click', () => ctx.openSaleForm({ mode: 'GROUP' }));
     const nd = $('sm-new-disposal'); if (nd) nd.addEventListener('click', () => ctx.openSaleForm({ mode: 'DISPOSAL' }));
   }
   function renderTabs() {
     $('sm-tabs').innerHTML = tabs.map((t) => {
-      const badge = t.badge && ctx.counts.pending ? ' <span class="lv-tab-badge">' + (ctx.counts.pending > 99 ? '99+' : ctx.counts.pending) + '</span>' : '';
+      const n = t.badge ? (ctx.counts[t.badge === true ? 'pending' : t.badge] || 0) : 0;
+      const badge = n ? ' <span class="lv-tab-badge">' + (n > 99 ? '99+' : n) + '</span>' : '';
       return '<button type="button" class="lv-tab' + (t.id === activeTab ? ' lv-tab-active' : '') + '" role="tab" aria-selected="' + (t.id === activeTab) + '" data-tab="' + t.id + '">' + esc(t.label) + badge + '</button>';
     }).join('');
     $('sm-tabs').querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
@@ -152,6 +158,9 @@ export async function startSmPage({ root, api, employee, search, hash }) {
   ctx.refreshCounts = async () => {
     try {
       const r = await api.salesList({ status: 'PENDING_APPROVAL' }, 1, 0, 'newest');
+      let g = null;
+      if (api.groupsList && visibleTab('groups')) { try { g = await api.groupsList({ status: 'PENDING' }, 1, 0, 'newest'); } catch (e) { /* the groups badge is a convenience */ } }
+      if (g && g.ok !== false) ctx.counts.groups = Number(g.total) || 0;
       if (r && r.ok !== false) { const before = ctx.counts.pending; ctx.counts.pending = Number(r.total) || 0; renderTabs(); renderNotice(); return before; }
     } catch (e) { /* the badge is a convenience */ }
     return null;
@@ -173,6 +182,7 @@ export async function startSmPage({ root, api, employee, search, hash }) {
   await showTab(visibleTab(wanted) ? wanted : 'dashboard');
   if (params.get('open_sale')) { ctx.openSale(Number(params.get('open_sale'))); try { history.replaceState(null, '', location.pathname + '#' + activeTab); } catch (e) { /* harmless */ } }
   else if (params.get('open_entry')) { ctx.openEntry(params.get('open_entry')); try { history.replaceState(null, '', location.pathname + '#' + activeTab); } catch (e) { /* harmless */ } }
+  else if (params.get('open_group')) { ctx.openGroup(params.get('open_group')); try { history.replaceState(null, '', location.pathname + '#' + activeTab); } catch (e) { /* harmless */ } }
 
   // every minute (while the page is visible): refresh the waiting-for-approval count, and say so when something new arrived for an approver
   setInterval(async () => {

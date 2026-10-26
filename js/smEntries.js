@@ -1,6 +1,6 @@
 // Scrap Monitoring page -- "All Scrap": every scrap record of every branch the person may see, read live from the branches' own records, and the drawer that shows one record in full.
 // Nothing here is typed in again: the list and the drawer only show what the POS (Branches > Scrap) already stores; "Open original record" goes back to it.
-import { esc, grams, money, num, fmtDate, fmtTime, fmtDateTime, fmtShortDateTime, kindBadge, statusBadge, markBadge, ageBadge, KINDS, STATUS, SORT_ENTRIES, SOURCE_TYPES, METALS, posEntryUrl, scrapId, friendly, saleStatusBadge, kindOfSale, plural } from './smFormat.js?v=20261026b';
+import { esc, grams, money, num, fmtDate, fmtTime, fmtDateTime, fmtShortDateTime, kindBadge, statusBadge, markBadge, ageBadge, KINDS, STATUS, SORT_ENTRIES, SOURCE_TYPES, METALS, posEntryUrl, scrapId, friendly, saleStatusBadge, groupStatusBadge, kindOfSale, plural } from './smFormat.js?v=20261026b';
 import { openDrawer, closeDrawer, drawerFooter, kv, emptyBox, fileThumb, wireFiles } from './smUi.js?v=20261026b';
 import { renderList } from './smList.js?v=20261026b';
 
@@ -12,7 +12,7 @@ export function entriesCfg(ctx) {
     fields: [
       { id: 'q', type: 'search', label: 'Search', ph: 'Scrap #, customer, buyer, sale number, recorded by…', grow: true },
       { id: 'date_from', type: 'date', label: 'From' }, { id: 'date_to', type: 'date', label: 'To' },
-      { id: 'branch_id', type: 'select', label: 'Branch', options: (c) => c.branches.map((b) => [b.id, b.name]), show: (c) => c.branches.length > 1 },
+      { id: 'branch_id', type: 'select', label: 'Branch', allLabel: 'All branches', options: (c) => c.branches.map((b) => [b.id, b.name]), show: (c) => c.branches.length > 1 },
       { id: 'kind', type: 'select', label: 'Type', options: Object.entries(KINDS).map(([k, x]) => [k, x.long]) },
       { id: 'status', type: 'select', label: 'Status', options: Object.entries(STATUS).map(([k, x]) => [k, x.label]) },
       { id: 'availability', type: 'select', label: 'Held now', options: [['available', 'Available now'], ['none', 'Nothing left']] },
@@ -135,19 +135,29 @@ export async function openEntry(ctx, id) {
         '<td data-label="Grams" class="sm-num">' + esc(num(s.grams)) + '</td>' + (v ? '<td data-label="Amount" class="sm-num">' + esc(s.amount === null || s.amount === undefined ? '—' : money(s.amount)) + '</td>' : '') + '</tr>').join('') + '</tbody></table></div>');
   }
 
+  const groups = res.groups || [];
+  if (groups.length) {
+    body += section('In a group', '<div class="table-scroll table-2col"><table class="sm-table"><thead><tr><th>Group</th><th>Status</th><th>Lot</th><th class="sm-num">Grams</th></tr></thead><tbody>' +
+      groups.map((x) => '<tr><td data-label="Group"><button type="button" class="sm-link" data-open-group="' + esc(x.group_id) + '"><b>' + esc(x.group_number) + '</b></button><div class="muted sm-small sm-wrap">' + esc(x.title) + '</div></td>' +
+        '<td data-label="Status">' + groupStatusBadge(x.status) + '</td><td data-label="Lot">' + esc([x.metal_type, x.karat].filter(Boolean).join(' ')) + '</td><td data-label="Grams" class="sm-num">' + esc(num(x.grams)) + ' g</td></tr>').join('') + '</tbody></table></div>' +
+      (groups.some((x) => x.status === 'PENDING') ? '<p class="muted sm-small">The grams in a group that is still waiting for the supplier are held back, so they are not available to sell.</p>' : ''));
+  }
+
   const hist = res.history || [];
   body += section('History', hist.length ? '<ul class="sm-tl">' + hist.map((h) => '<li class="' + (/delet|reverse|reject|void/i.test(h.action) ? 'sm-tl-bad' : /correct|photo|proof|payment/i.test(h.action) ? 'sm-tl-warn' : 'sm-tl-good') + '"><div class="sm-tl-head"><b>' + esc(h.action) + '</b> <span class="muted">· ' + esc(h.by || 'System') + ' · ' + esc(fmtShortDateTime(h.at)) + (h.source === 'ERP' ? ' · Scrap Monitoring' : '') + '</span></div>' +
     (h.details || h.reason ? '<div class="sm-tl-text">' + esc([h.details, h.reason].filter(Boolean).join(' — ')) + '</div>' : '') + '</li>').join('') + '</ul>' : '<p class="muted">No history recorded.</p>');
 
   const canSell = ctx.can.sell && isIn && e.available_g > 0.0005, canDispose = ctx.can.dispose && isIn && e.available_g > 0.0005;
   const footer = '<a class="sm-abtn" href="' + esc(posEntryUrl(e.id)) + '" target="_blank" rel="noopener noreferrer">Open original record ↗</a>' +
-    (canSell ? '<button type="button" class="btn" data-sell>Sell this scrap</button>' : '') + (canDispose ? '<button type="button" class="btn secondary" data-dispose>Dispose</button>' : '') +
+    (canSell ? '<button type="button" class="btn" data-sell>Sell this scrap</button><button type="button" class="btn secondary" data-group title="Hold it back in a pending group until the supplier has weighed it">Put in a group…</button>' : '') + (canDispose ? '<button type="button" class="btn secondary" data-dispose>Dispose</button>' : '') +
     (ctx.can.view_reports ? '<button type="button" class="btn secondary" data-ledger>View ledger</button>' : '') + '<button type="button" class="btn secondary" data-close>Close</button>';
   openDrawer('detail', { title: scrapId(e.id), sub: e.branch_name + ' · ' + (KINDS[e.kind] || { label: e.kind }).label, body, footer });
   const bodyEl = document.getElementById('sm-detail-body'), footEl = drawerFooter('detail');
   wireFiles(ctx, bodyEl);
   bodyEl.querySelectorAll('[data-open-sale]').forEach((b) => b.addEventListener('click', () => ctx.openSale(Number(b.dataset.openSale))));
+  bodyEl.querySelectorAll('[data-open-group]').forEach((b) => b.addEventListener('click', () => ctx.openGroup(b.dataset.openGroup)));
   footEl.querySelector('[data-close]').addEventListener('click', () => closeDrawer('detail'));
+  const grp = footEl.querySelector('[data-group]'); if (grp) grp.addEventListener('click', () => { closeDrawer('detail'); ctx.openSaleForm({ mode: 'GROUP', branchId: e.branch_id, entryId: e.id }); });
   const sell = footEl.querySelector('[data-sell]'); if (sell) sell.addEventListener('click', () => { closeDrawer('detail'); ctx.openSaleForm({ mode: 'SALE', branchId: e.branch_id, entryId: e.id }); });
   const disp = footEl.querySelector('[data-dispose]'); if (disp) disp.addEventListener('click', () => { closeDrawer('detail'); ctx.openSaleForm({ mode: 'DISPOSAL', branchId: e.branch_id, entryId: e.id }); });
   const led = footEl.querySelector('[data-ledger]'); if (led) led.addEventListener('click', () => { closeDrawer('detail'); ctx.gotoReport('ledger', { entry_id: e.id }); });

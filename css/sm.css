@@ -193,6 +193,35 @@ button.sm-aging-btn:hover { background:#fffbf0; }
 .sm-confirm-note { font-size:12.5px; color:#555; margin:6px 0 0; }
 .sm-ok-box { background:#eaf6ec; border:1px solid #cfe7d3; border-radius:10px; padding:14px 16px; }
 .sm-ok-box h4 { margin:0 0 4px; font-size:16px; }
+.sm-sale-list { margin:8px 0 6px 18px; padding:0; }
+.sm-sale-list li { margin:3px 0; }
+
+/* one sale for lots from several branches: a section per branch (click to open), and the sales made together */
+.sm-bg-tools { display:flex; flex-wrap:wrap; gap:4px 8px; align-items:center; margin:0 0 6px; font-size:12.5px; }
+.sm-bgroup { border:1px solid #e6e0c8; border-radius:10px; margin:0 0 8px; background:#fff; overflow:hidden; }
+.sm-bgroup[open] { border-color:#d9c77a; }
+.sm-bgroup > .sm-lots { border:0; border-top:1px solid #eee; border-radius:0; }
+.sm-bg-sum { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; padding:9px 12px; cursor:pointer; list-style:none; background:#fffdf3; }
+.sm-bg-sum::-webkit-details-marker { display:none; }
+.sm-bg-sum::before { content:'▸'; font-size:13px; color:var(--sm-muted); transition:transform .12s ease; }
+.sm-bgroup[open] > .sm-bg-sum::before { transform:rotate(90deg); }
+.sm-bg-sum:focus-visible { outline:2px solid var(--sm-accent-line); outline-offset:-2px; }
+.sm-bg-check { display:inline-flex; align-items:center; padding:2px 4px; cursor:pointer; }
+.sm-bg-check input { width:18px; height:18px; margin:0; }
+.sm-bg-name { font-weight:700; }
+.sm-bg-picked { margin-left:auto; font-size:12.5px; font-weight:700; color:#8a5a00; }
+.sm-bg-picked:empty { display:none; }
+.sm-bg-split { margin-top:8px; font-size:13px; background:#fff8e8; border:1px solid #f0c36d; border-radius:8px; padding:8px 10px; }
+.sm-bg-split .sm-confirm-note { margin:4px 0 0; }
+.sm-batch-tag { color:#8a5a00; }
+tr.sm-batch-me td { background:#fffbf0; }
+.sm-check { display:flex; gap:8px; align-items:flex-start; font-size:13px; line-height:1.35; cursor:pointer; }
+.sm-check input { width:auto; margin-top:2px; flex:0 0 auto; }
+
+/* a group (a pending folder of scrap, confirmed when the supplier has weighed it): the weighing table of the confirm screen */
+.sm-weigh td, .sm-weigh th { vertical-align:middle; }
+.sm-weigh input[type=number] { width:110px; padding:5px 7px; font-size:13px; text-align:right; }
+.sm-weigh tfoot td { font-weight:700; }
 
 /* ---------------------------------------------------------------- phones */
 @media (max-width:760px) {
@@ -208,5 +237,7 @@ button.sm-aging-btn:hover { background:#fffbf0; }
   .sm-pager { justify-content:center; }
   .sm-bulk { bottom:0; border-radius:12px 12px 0 0; }
   .sm-lots input[type=text], .sm-lots input[type=number] { width:100%; }
+  .sm-weigh input[type=number] { width:100%; }
+  .sm-bg-picked { margin-left:0; flex-basis:100%; }
 }
-@media (prefers-reduced-motion: reduce) { button.sm-kpi { transition:none; } button.sm-kpi:hover { transform:none; } .sm-loading { transition:none; } }
+@media (prefers-reduced-motion: reduce) { button.sm-kpi { transition:none; } button.sm-kpi:hover { transform:none; } .sm-loading { transition:none; } .sm-bg-sum::before { transition:none; } }

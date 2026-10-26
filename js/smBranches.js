@@ -8,7 +8,7 @@ function rangeBar(ctx, st, idPrefix, withBranch) {
     '<div class="field"><label for="' + idPrefix + '-to">To</label><input id="' + idPrefix + '-to" type="date" value="' + esc(st.to) + '"></div>' +
     '<div class="field"><label>&nbsp;</label><div class="sm-btnrow"><button type="button" class="btn small secondary" data-range="month">This month</button><button type="button" class="btn small secondary" data-range="30">30 days</button>' +
     '<button type="button" class="btn small secondary" data-range="all">All time</button></div></div>' +
-    (withBranch && ctx.branches.length > 1 ? '<div class="field"><label for="' + idPrefix + '-branch">Branch</label><select id="' + idPrefix + '-branch"><option value="">All</option>' + ctx.branches.map((b) => '<option value="' + esc(b.id) + '"' + (String(st.branch) === String(b.id) ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('') + '</select></div>' : '') +
+    (withBranch && ctx.branches.length > 1 ? '<div class="field"><label for="' + idPrefix + '-branch">Branch</label><select id="' + idPrefix + '-branch"><option value="">All branches</option>' + ctx.branches.map((b) => '<option value="' + esc(b.id) + '"' + (String(st.branch) === String(b.id) ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('') + '</select></div>' : '') +
     '<div class="field"><label>&nbsp;</label><button type="button" class="btn small secondary" id="' + idPrefix + '-reload">↻ Refresh</button></div></div></div>';
 }
 function wireRange(panel, st, idPrefix, reload) {

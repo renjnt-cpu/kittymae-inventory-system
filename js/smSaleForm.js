@@ -1,6 +1,8 @@
 // Scrap Monitoring page -- the form for selling (or disposing of) scrap. Nothing is typed twice: the lots come from the branch's own purchase records, the person only says how many grams of
 // each lot go, to whom, and for how much. The database checks every lot again at the moment of confirming, so two people can never take the same grams, and a second click on the confirm
 // button hands back the same sale instead of making another (the request id stays the same until the form is closed).
+// A SALE or a DISPOSAL can take lots from several branches at once ("All branches": one section per branch, click a branch to open it). Each branch's scrap is recorded in that branch's own
+// books, so the database makes one sale (or disposal) per branch, all in one step and linked together (a "batch").
 import { esc, grams as fmtG, num, money, fmtDate, ageBadge, scrapId, manilaToday, friendly, plural, DISPOSAL_REASONS, DISPOSAL_METHODS, PAY_METHODS } from './smFormat.js?v=20261026b';
 import { openDrawer, closeDrawer, drawerBody, drawerFooter } from './smUi.js?v=20261026b';
 
@@ -27,27 +29,35 @@ export function priceItems(picks, method, flat) {
   return { items: out, total: r2(out.reduce((t, i) => t + i.amount, 0)) };
 }
 
+/** opts: { mode: 'SALE' | 'DISPOSAL' | 'GROUP' (a new pending group, no price yet) | 'GROUP_ADD' (more scrap for the pending group opts.groupId), branchId, lineIds, pickGrams: {line_id: grams}, entryId, excludeLines, groupNumber } */
 export async function openSaleForm(ctx, opts) {
-  const mode = opts.mode === 'DISPOSAL' ? 'DISPOSAL' : 'SALE', sale = mode === 'SALE';
-  const st = { mode, requestId: uuid(), branchId: opts.branchId || (ctx.branches.length === 1 ? ctx.branches[0].id : null), lockBranch: !!opts.branchId, buyerId: '', date: manilaToday(), method: 'PER_GRAM', flat: '',
-    reference: '', rep: '', releasedBy: ctx.access.me.id, notes: '', reason: DISPOSAL_REASONS[0], dmethod: DISPOSAL_METHODS[0], lots: [], picks: new Map(), rate: {}, lotRate: {}, busy: false, done: false, filter: '', purity: '' };
-  const title = sale ? 'New scrap sale' : 'Dispose of scrap';
+  const mode = opts.mode === 'DISPOSAL' ? 'DISPOSAL' : opts.mode === 'GROUP' ? 'GROUP' : opts.mode === 'GROUP_ADD' ? 'GROUP_ADD' : 'SALE';
+  const sale = mode === 'SALE', disposal = mode === 'DISPOSAL', group = mode === 'GROUP' || mode === 'GROUP_ADD', addTo = mode === 'GROUP_ADD';
+  // "All branches" is for a person who can see more than one branch (opened from a branch's own record, the branch stays fixed)
+  const st = { mode, requestId: uuid(), branchId: opts.branchId || (ctx.branches.length === 1 ? ctx.branches[0].id : (ctx.branches.length > 1 ? 'all' : null)), lockBranch: !!opts.branchId && opts.branchId !== 'all',
+    buyerId: '', date: manilaToday(), method: 'PER_GRAM', flat: '', reference: '', rep: '', releasedBy: ctx.access.me.id, notes: '', reason: DISPOSAL_REASONS[0], dmethod: DISPOSAL_METHODS[0], title: '',
+    lots: [], picks: new Map(), rate: {}, lotRate: {}, busy: false, done: false, filter: '', purity: '', openBr: new Set() };
+  const title = sale ? 'New scrap sale' : disposal ? 'Dispose of scrap' : addTo ? 'Add scrap to ' + (opts.groupNumber || 'the group') : 'New group';
   const rates = loadRates();
   const lastRate = (karat) => (rates[karat] ? 'last ' + rates[karat] : '');
+  const isAll = () => st.branchId === 'all';
+  const branchName = (id) => (ctx.branches.find((b) => Number(b.id) === Number(id)) || {}).name || ('Branch ' + id);
+  const branchTitle = () => (isAll() ? 'All branches' : st.branchId ? branchName(st.branchId) : 'Choose a branch');
   let opt = { buyers: [], people: [] };
   openDrawer('side', { title, sub: 'Loading…', body: '<div id="sm-side-msg"></div><p class="muted">Loading…</p>', footer: '' });
   try { opt = await ctx.loadOptions(); } catch (err) { drawerBody('side').innerHTML = '<div class="msg error">' + esc(friendly(err)) + '</div>'; return; }
 
   async function loadLots() {
-    st.lots = []; st.picks.clear();
+    st.lots = []; st.picks.clear(); st.openBr = new Set();
     if (!st.branchId) return;
-    const filters = { branch_id: st.branchId }; if (opts.entryId) filters.entry_id = opts.entryId;
+    const filters = {}; if (!isAll()) filters.branch_id = st.branchId; if (opts.entryId) filters.entry_id = opts.entryId;
     const res = await ctx.api.available(filters, 2000, 0, 'oldest');
     if (!res || res.ok === false) throw new Error((res && res.message) || 'The lots could not be loaded.');
     st.lots = res.rows || [];
+    if (opts.excludeLines && opts.excludeLines.length) { const ex = new Set(opts.excludeLines.map(Number)); st.lots = st.lots.filter((l) => !ex.has(l.line_id)); }   // scrap already in the group
     st.lots.forEach((l) => { st.lotRate[l.line_id] = ''; });   // gold prices move daily: last time's rate is shown as a hint, never filled in for the person
-    const want = new Set((opts.lineIds || []).map(Number));
-    st.lots.forEach((l) => { if (want.has(l.line_id) || (opts.entryId && l.entry_id === opts.entryId)) st.picks.set(l.line_id, { line_id: l.line_id, grams: l.available_g, rate: st.lotRate[l.line_id] }); });
+    const want = new Set((opts.lineIds || []).map(Number)), keep = opts.pickGrams || {};
+    st.lots.forEach((l) => { if (want.has(l.line_id) || (opts.entryId && l.entry_id === opts.entryId)) { const kept = Number(keep[l.line_id]); st.picks.set(l.line_id, { line_id: l.line_id, grams: kept > 0 && kept <= Number(l.available_g) ? kept : l.available_g, rate: st.lotRate[l.line_id] }); st.openBr.add(l.branch_id); } });
     st.missing = (opts.lineIds || []).length - [...st.picks.keys()].filter((id) => want.has(id)).length;
   }
   try { await loadLots(); } catch (err) { drawerBody('side').innerHTML = '<div class="msg error">' + esc(friendly(err)) + '</div>'; return; }
@@ -55,13 +65,15 @@ export async function openSaleForm(ctx, opts) {
   const $ = (id) => document.getElementById(id);
   const lotById = (id) => st.lots.find((l) => l.line_id === Number(id));
   const rateOf = (id) => st.lotRate[id];
+  /** the branches the chosen lots belong to */
+  const pickedBranches = () => [...new Set([...st.picks.keys()].map((id) => lotById(id).branch_id))];
 
   function problems() {
     const p = [];
-    if (!st.branchId) p.push('Choose the branch.');
+    if (!st.branchId) p.push('Choose the branch (or All branches).');
     if (sale && !st.buyerId) p.push('Choose the buyer.');
-    if (!st.date) p.push('Choose the date.'); else if (st.date > manilaToday()) p.push('The date cannot be in the future.');
-    if (!sale && !String(st.reason || '').trim()) p.push('Say why the scrap is being disposed of.');
+    if (!addTo) { if (!st.date) p.push(group ? 'Choose the date it was sent.' : 'Choose the date.'); else if (st.date > manilaToday()) p.push('The date cannot be in the future.'); }
+    if (disposal && !String(st.reason || '').trim()) p.push('Say why the scrap is being disposed of.');
     if (!st.picks.size) p.push('Choose the lots (tick them in the list below).');
     st.picks.forEach((pk, id) => {
       const l = lotById(id), g = Number(pk.grams);
@@ -78,13 +90,22 @@ export async function openSaleForm(ctx, opts) {
     if (!host) return;
     const picks = pickList(), pr = sale ? priceItems(picks, st.method, st.flat) : null, byId = new Map((pr ? pr.items : picks).map((i) => [i.line_id, i]));
     const totalG = r3(picks.reduce((t, i) => t + (i.grams || 0), 0));
-    const probs = problems();
-    host.innerHTML = '<h4>Before you confirm</h4>' + (picks.length ? '<div class="table-scroll"><table class="sm-table"><thead><tr><th>Scrap ID</th><th>Metal / purity</th><th class="sm-num">Available</th><th class="sm-num">Selling</th><th class="sm-num">Remaining</th>' +
-      (sale && ctx.value ? '<th class="sm-num">Rate / g</th><th class="sm-num">Amount</th>' : '') + '</tr></thead><tbody>' +
+    const probs = problems(), money_ = sale && ctx.value, showBranch = isAll();
+    const perBranch = new Map();
+    picks.forEach((pk) => { const l = lotById(pk.line_id), o = perBranch.get(l.branch_id) || { g: 0, amt: 0, n: 0 }; o.g += pk.grams || 0; o.n += 1; o.amt += (byId.get(pk.line_id) || {}).amount || 0; perBranch.set(l.branch_id, o); });
+    const noun = sale ? 'sale' : 'disposal', split = !group && perBranch.size > 1, takingWord = sale ? 'Selling' : disposal ? 'Disposing' : 'Putting in';
+    host.innerHTML = '<h4>' + (group ? 'Before you save' : 'Before you confirm') + '</h4>' + (picks.length ? '<div class="table-scroll"><table class="sm-table"><thead><tr>' + (showBranch ? '<th>Branch</th>' : '') + '<th>Scrap ID</th><th>Metal / purity</th><th class="sm-num">Available</th><th class="sm-num">' + takingWord + '</th><th class="sm-num">Remaining</th>' +
+      (money_ ? '<th class="sm-num">Rate / g</th><th class="sm-num">Amount</th>' : '') + '</tr></thead><tbody>' +
       picks.map((pk) => { const l = lotById(pk.line_id), it = byId.get(pk.line_id), rem = r3(Number(l.available_g) - pk.grams);
-        return '<tr><td>' + esc(scrapId(l.entry_id)) + '</td><td>' + esc(l.metal_type + ' ' + (l.karat || '')) + '</td><td class="sm-num">' + esc(num(l.available_g)) + ' g</td><td class="sm-num"><b>' + esc(num(pk.grams)) + ' g</b></td>' +
-          '<td class="sm-num"' + (rem < 0 ? ' style="color:#c62828;"' : '') + '>' + esc(num(rem)) + ' g</td>' + (sale && ctx.value ? '<td class="sm-num">' + (st.method === 'PER_GRAM' ? esc(money(pk.rate)) : '<span class="muted">flat</span>') + '</td><td class="sm-num">' + esc(money(it ? it.amount : 0)) + '</td>' : '') + '</tr>'; }).join('') +
-      '</tbody><tfoot><tr><td colspan="3">Total · ' + plural(picks.length, 'lot') + '</td><td class="sm-num">' + esc(num(totalG)) + ' g</td><td></td>' + (sale && ctx.value ? '<td></td><td class="sm-num">' + esc(money(pr.total)) + '</td>' : '') + '</tr></tfoot></table></div>' : '<p class="muted">No lot is chosen yet.</p>') +
+        return '<tr>' + (showBranch ? '<td data-label="Branch">' + esc(branchName(l.branch_id)) + '</td>' : '') + '<td data-label="Scrap ID">' + esc(scrapId(l.entry_id)) + '</td><td data-label="Metal / purity">' + esc(l.metal_type + ' ' + (l.karat || '')) + '</td><td data-label="Available" class="sm-num">' + esc(num(l.available_g)) + ' g</td><td data-label="' + takingWord + '" class="sm-num"><b>' + esc(num(pk.grams)) + ' g</b></td>' +
+          '<td data-label="Remaining" class="sm-num"' + (rem < 0 ? ' style="color:#c62828;"' : '') + '>' + esc(num(rem)) + ' g</td>' + (money_ ? '<td data-label="Rate / g" class="sm-num">' + (st.method === 'PER_GRAM' ? esc(money(pk.rate)) : '<span class="muted">flat</span>') + '</td><td data-label="Amount" class="sm-num">' + esc(money(it ? it.amount : 0)) + '</td>' : '') + '</tr>'; }).join('') +
+      '</tbody><tfoot><tr><td colspan="' + (showBranch ? 4 : 3) + '">Total · ' + plural(picks.length, 'lot') + '</td><td class="sm-num">' + esc(num(totalG)) + ' g</td><td></td>' + (money_ ? '<td></td><td class="sm-num">' + esc(money(pr.total)) + '</td>' : '') + '</tr></tfoot></table></div>' : '<p class="muted">No lot is chosen yet.</p>') +
+      (split ? '<div class="sm-bg-split"><b>' + esc(plural(perBranch.size, 'branch', 'branches')) + ' → ' + esc(plural(perBranch.size, noun)) + ':</b> ' +
+        [...perBranch.entries()].map(([id, o]) => esc(branchName(id)) + ' ' + esc(num(r3(o.g))) + ' g' + (money_ ? ' · ' + esc(money(r2(o.amt))) : '')).join(' &nbsp;·&nbsp; ') +
+        '<p class="sm-confirm-note">One ' + noun + ' is made for each branch (each branch\'s scrap is recorded in its own branch books), all in this one step and linked together — ' + (sale ? 'one payment, approval or file' : 'one approval') + ' can then cover them all.</p></div>' : '') +
+      (group && picks.length ? '<div class="sm-bg-split"><b>' + esc(plural(picks.length, 'lot')) + ' · ' + esc(num(totalG)) + ' g held back' + (perBranch.size > 1 ? ' · ' + esc(plural(perBranch.size, 'branch', 'branches')) : '') + ':</b> ' +
+        [...perBranch.entries()].map(([id, o]) => esc(branchName(id)) + ' ' + esc(num(r3(o.g))) + ' g').join(' &nbsp;·&nbsp; ') +
+        '<p class="sm-confirm-note">Nothing leaves the branches yet and nothing is sold. These grams are only held back, so nobody else can sell them. When the supplier\'s weighing arrives, open the group and confirm it with the supplier\'s grams and rate for each purity — the sales are made then, one for each branch.</p></div>' : '') +
       (probs.length ? '<ul class="sm-small" style="margin:8px 0 0 18px;color:#a14400;">' + probs.slice(0, 6).map((x) => '<li>' + esc(x) + '</li>').join('') + (probs.length > 6 ? '<li>…and ' + (probs.length - 6) + ' more</li>' : '') + '</ul>' : '');
     const ok = $('sm-sf-ok'); if (ok) ok.disabled = st.busy || probs.length > 0;
   }
@@ -97,22 +118,52 @@ export async function openSaleForm(ctx, opts) {
       '<td class="sm-num"><input type="number" min="0" step="0.001" max="' + esc(l.available_g) + '" data-lot-grams="' + esc(l.line_id) + '" value="' + (on ? esc(pk.grams) : '') + '"' + (on ? '' : ' disabled') + ' aria-label="Grams to take"></td>' +
       (sale && st.method === 'PER_GRAM' ? '<td class="sm-num"><input type="number" min="0" step="0.01" data-lot-rate="' + esc(l.line_id) + '" value="' + esc(st.lotRate[l.line_id]) + '" placeholder="' + esc(lastRate((l.karat || '').toUpperCase())) + '" aria-label="Rate per gram"></td>' : '') + '</tr>';
   }
-  const visibleLots = () => st.lots.filter((l) => (!st.purity || (l.karat || '').toUpperCase() === st.purity) && (!st.filter || (scrapId(l.entry_id) + ' ' + (l.customer_name || '') + ' ' + l.metal_type + ' ' + (l.karat || '')).toLowerCase().includes(st.filter.toLowerCase())));
+  const visibleLots = () => st.lots.filter((l) => (!st.purity || (l.karat || '').toUpperCase() === st.purity) && (!st.filter || (scrapId(l.entry_id) + ' ' + (l.customer_name || '') + ' ' + l.metal_type + ' ' + (l.karat || '') + ' ' + (l.branch_name || '')).toLowerCase().includes(st.filter.toLowerCase())));
   const purities = () => [...new Set(st.lots.map((l) => (l.karat || '').toUpperCase()))].filter(Boolean).sort();
+
+  /** the table of lots: gid is '' for one branch, or the branch id inside an "All branches" section (the header tick-box then takes just that branch) */
+  function lotsTable(lots, gid) {
+    return '<div class="sm-lots"><table class="sm-table"><thead><tr><th class="sm-c-check"><input type="checkbox" data-lot-all="' + esc(gid) + '" aria-label="Choose every lot shown' + (gid ? ' for ' + esc(branchName(gid)) : '') + '"></th><th>Scrap ID</th><th>Held</th><th>Metal / purity</th><th class="sm-num">Available</th><th class="sm-num">Take (g)</th>' +
+      (sale && st.method === 'PER_GRAM' ? '<th class="sm-num">Rate / g</th>' : '') + '</tr></thead><tbody>' + lots.map(lotRow).join('') + '</tbody></table></div>';
+  }
+  function branchHead(id, all) {
+    const g = all.reduce((t, l) => t + Number(l.available_g), 0);
+    return '<summary class="sm-bg-sum"><label class="sm-bg-check" title="Take every lot of ' + esc(branchName(id)) + ' that is shown"><input type="checkbox" data-bg-all="' + esc(id) + '" aria-label="Choose every lot of ' + esc(branchName(id)) + '"></label>' +
+      '<span class="sm-bg-name">' + esc(branchName(id)) + '</span><span class="muted sm-small">' + esc(plural(all.length, 'lot')) + ' · ' + esc(num(g)) + ' g available</span><span class="sm-bg-picked" data-bg-picked="' + esc(id) + '"></span></summary>';
+  }
 
   function drawLots() {
     const host = $('sm-lots-host');
-    if (!st.branchId) { host.innerHTML = '<p class="muted">Choose the branch to see its scrap.</p>'; return; }
-    if (!st.lots.length) { host.innerHTML = '<div class="sm-banner sm-banner-warn">This branch has no available scrap to ' + (sale ? 'sell' : 'dispose of') + '.</div>'; return; }
+    if (!st.branchId) { host.innerHTML = '<p class="muted">Choose the branch to see its scrap' + (ctx.branches.length > 1 ? ', or All branches' : '') + '.</p>'; return; }
+    if (!st.lots.length) { host.innerHTML = '<div class="sm-banner sm-banner-warn">' + (isAll() ? 'No branch has any available scrap to ' : 'This branch has no available scrap to ') + (sale ? 'sell' : disposal ? 'dispose of' : 'put in a group') + '.</div>'; return; }
     const lots = visibleLots();
-    host.innerHTML = '<div class="sm-grid"><div class="field"><label for="sm-lotq">Find a lot</label><input id="sm-lotq" type="search" value="' + esc(st.filter) + '" placeholder="Scrap #, customer…"></div>' +
+    const tools = '<div class="sm-grid"><div class="field"><label for="sm-lotq">Find a lot</label><input id="sm-lotq" type="search" value="' + esc(st.filter) + '" placeholder="Scrap #, customer' + (isAll() ? ', branch' : '') + '…"></div>' +
       '<div class="field"><label for="sm-lotp">Purity</label><select id="sm-lotp"><option value="">All</option>' + purities().map((p) => '<option' + (st.purity === p ? ' selected' : '') + '>' + esc(p) + '</option>').join('') + '</select></div></div>' +
       '<div class="sm-ratebar"><div class="field"><label for="sm-qp-p">Take the oldest</label><select id="sm-qp-p">' + purities().map((p) => '<option>' + esc(p) + '</option>').join('') + '</select></div>' +
-      '<div class="field"><label for="sm-qp-g">grams of that purity</label><input id="sm-qp-g" type="number" min="0" step="0.001" placeholder="e.g. 100"></div><button type="button" class="btn small secondary" id="sm-qp-go">Pick oldest first</button>' +
-      (sale && st.method === 'PER_GRAM' ? purities().map((p) => '<div class="field"><label for="sm-pr-' + esc(p) + '">Rate / g for ' + esc(p) + '</label><input id="sm-pr-' + esc(p) + '" type="number" min="0" step="0.01" data-purity-rate="' + esc(p) + '" value="' + esc(st.rate[p] !== undefined ? st.rate[p] : '') + '" placeholder="' + esc(lastRate(p) || '₱') + '"></div>').join('') : '') + '</div>' +
-      '<div class="sm-lots"><table class="sm-table"><thead><tr><th class="sm-c-check"><input type="checkbox" data-lot-all aria-label="Choose every lot shown"></th><th>Scrap ID</th><th>Held</th><th>Metal / purity</th><th class="sm-num">Available</th><th class="sm-num">Take (g)</th>' +
-      (sale && st.method === 'PER_GRAM' ? '<th class="sm-num">Rate / g</th>' : '') + '</tr></thead><tbody>' + lots.map(lotRow).join('') + '</tbody></table></div>' + (lots.length < st.lots.length ? '<p class="muted sm-small">' + (st.lots.length - lots.length) + ' more lots are hidden by the filter.</p>' : '');
-    wireLots();
+      '<div class="field"><label for="sm-qp-g">grams of that purity' + (isAll() ? ' (from any branch)' : '') + '</label><input id="sm-qp-g" type="number" min="0" step="0.001" placeholder="e.g. 100"></div><button type="button" class="btn small secondary" id="sm-qp-go">Pick oldest first</button>' +
+      (sale && st.method === 'PER_GRAM' ? purities().map((p) => '<div class="field"><label for="sm-pr-' + esc(p) + '">Rate / g for ' + esc(p) + '</label><input id="sm-pr-' + esc(p) + '" type="number" min="0" step="0.01" data-purity-rate="' + esc(p) + '" value="' + esc(st.rate[p] !== undefined ? st.rate[p] : '') + '" placeholder="' + esc(lastRate(p) || '₱') + '"></div>').join('') : '') + '</div>';
+    const hidden = lots.length < st.lots.length ? '<p class="muted sm-small">' + (st.lots.length - lots.length) + ' more lots are hidden by the filter.</p>' : '';
+    if (!isAll()) { host.innerHTML = tools + lotsTable(lots, '') + hidden; wireLots(); refreshHeads(); return; }
+    // All branches: one section per branch, in the person's own branch order; a section opens with a click (and stays open while a search or a purity is active)
+    const byBranch = (list) => { const m = new Map(); list.forEach((l) => { if (!m.has(l.branch_id)) m.set(l.branch_id, []); m.get(l.branch_id).push(l); }); return m; };
+    const shown = byBranch(lots), every = byBranch(st.lots), searching = !!(st.filter || st.purity);
+    const order = ctx.branches.map((b) => b.id).filter((id) => every.has(id));
+    host.innerHTML = tools + '<div class="sm-bg-tools"><span class="muted sm-small">Click a branch to see its scrap, or tick the box on a branch to take all of it.</span> <button type="button" class="act-link" data-bg-open="all">Open all</button> · <button type="button" class="act-link" data-bg-open="none">Close all</button></div>' +
+      (order.filter((id) => shown.has(id)).map((id) => '<details class="sm-bgroup" data-bg="' + esc(id) + '"' + (st.openBr.has(id) || searching ? ' open' : '') + '>' + branchHead(id, every.get(id)) + lotsTable(shown.get(id), String(id)) + '</details>').join('') || '<p class="muted">No lot matches this filter.</p>') + hidden;
+    wireLots(); refreshHeads();
+  }
+
+  /** the "3 lots · 45 g chosen" line and the tick-boxes of each branch section follow what is chosen */
+  function refreshHeads() {
+    const host = $('sm-lots-host'); if (!host) return;
+    host.querySelectorAll('[data-bg-picked]').forEach((el) => {
+      const id = Number(el.dataset.bgPicked), mine = [...st.picks.values()].filter((pk) => lotById(pk.line_id).branch_id === id), g = r3(mine.reduce((t, pk) => t + (Number(pk.grams) || 0), 0));
+      el.textContent = mine.length ? plural(mine.length, 'lot') + ' · ' + num(g) + ' g chosen' : '';
+    });
+    const state = (cb, list) => { const n = list.filter((l) => st.picks.has(l.line_id)).length; cb.checked = list.length > 0 && n === list.length; cb.indeterminate = n > 0 && n < list.length; };
+    host.querySelectorAll('[data-bg-all]').forEach((cb) => state(cb, visibleLots().filter((l) => String(l.branch_id) === cb.dataset.bgAll)));
+    host.querySelectorAll('[data-lot-all]').forEach((cb) => state(cb, visibleLots().filter((l) => !cb.dataset.lotAll || String(l.branch_id) === cb.dataset.lotAll)));
+    const sub = document.getElementById('sm-side-sub'); if (sub) sub.textContent = branchTitle() + (isAll() && st.picks.size ? ' · ' + plural(pickedBranches().length, 'branch', 'branches') + ' chosen' : '');
   }
 
   function setPick(id, on) {
@@ -123,15 +174,25 @@ export async function openSaleForm(ctx, opts) {
   }
   function wireLots() {
     const host = $('sm-lots-host');
-    host.querySelectorAll('[data-lot-pick]').forEach((c) => c.addEventListener('change', () => { setPick(Number(c.dataset.lotPick), c.checked); preview(); }));
-    host.querySelectorAll('[data-lot-grams]').forEach((i) => i.addEventListener('input', () => { const pk = st.picks.get(Number(i.dataset.lotGrams)); if (pk) pk.grams = i.value === '' ? 0 : Number(i.value); preview(); }));
+    host.querySelectorAll('[data-lot-pick]').forEach((c) => c.addEventListener('change', () => { setPick(Number(c.dataset.lotPick), c.checked); refreshHeads(); preview(); }));
+    host.querySelectorAll('[data-lot-grams]').forEach((i) => i.addEventListener('input', () => { const pk = st.picks.get(Number(i.dataset.lotGrams)); if (pk) pk.grams = i.value === '' ? 0 : Number(i.value); refreshHeads(); preview(); }));
     host.querySelectorAll('[data-lot-rate]').forEach((i) => i.addEventListener('input', () => { st.lotRate[Number(i.dataset.lotRate)] = i.value; const pk = st.picks.get(Number(i.dataset.lotRate)); if (pk) pk.rate = i.value; preview(); }));
     host.querySelectorAll('[data-purity-rate]').forEach((i) => i.addEventListener('input', () => {
       const p = i.dataset.purityRate; st.rate[p] = i.value;
       st.lots.forEach((l) => { if ((l.karat || '').toUpperCase() === p) { st.lotRate[l.line_id] = i.value; const el = host.querySelector('[data-lot-rate="' + l.line_id + '"]'); if (el) el.value = i.value; } });
       preview();
     }));
-    const all = host.querySelector('[data-lot-all]'); if (all) all.addEventListener('change', () => { visibleLots().forEach((l) => setPick(l.line_id, all.checked)); preview(); });
+    host.querySelectorAll('[data-lot-all]').forEach((all) => all.addEventListener('change', () => { visibleLots().filter((l) => !all.dataset.lotAll || String(l.branch_id) === all.dataset.lotAll).forEach((l) => setPick(l.line_id, all.checked)); refreshHeads(); preview(); }));
+    host.querySelectorAll('[data-bg-all]').forEach((all) => {
+      all.closest('label').addEventListener('click', (e) => e.stopPropagation());      // ticking the box must not also open / close the section
+      all.addEventListener('change', () => {
+        visibleLots().filter((l) => String(l.branch_id) === all.dataset.bgAll).forEach((l) => setPick(l.line_id, all.checked));
+        const d = all.closest('details'); if (d && all.checked) d.open = true;
+        refreshHeads(); preview();
+      });
+    });
+    host.querySelectorAll('details.sm-bgroup').forEach((d) => d.addEventListener('toggle', () => { const id = Number(d.dataset.bg); if (d.open) st.openBr.add(id); else st.openBr.delete(id); }));
+    host.querySelectorAll('[data-bg-open]').forEach((b) => b.addEventListener('click', () => host.querySelectorAll('details.sm-bgroup').forEach((d) => { d.open = b.dataset.bgOpen === 'all'; })));
     const q = $('sm-lotq'); if (q) q.addEventListener('input', () => { st.filter = q.value; const pos = q.selectionStart; drawLots(); const nq = $('sm-lotq'); nq.focus(); nq.setSelectionRange(pos, pos); preview(); });
     const p = $('sm-lotp'); if (p) p.addEventListener('change', () => { st.purity = p.value; drawLots(); preview(); });
     const go = $('sm-qp-go'); if (go) go.addEventListener('click', () => {
@@ -143,15 +204,27 @@ export async function openSaleForm(ctx, opts) {
         const take = Math.min(left, Number(l.available_g)); setPick(l.line_id, true); st.picks.get(l.line_id).grams = r3(take); const g = document.querySelector('[data-lot-grams="' + l.line_id + '"]'); if (g) g.value = r3(take); left = r3(left - take);
       });
       if (left > 0.0005) ctx.toast('Only ' + num(want - left) + ' g of ' + purity + ' is available — all of it was picked.', true);
-      preview();
+      refreshHeads(); preview();
     });
   }
 
   function fieldsHtml() {
-    const branchSel = '<div class="field"><label for="sf-branch">Branch *</label><select id="sf-branch"' + (st.lockBranch ? ' disabled' : '') + '><option value="">Choose…</option>' + ctx.branches.map((b) => '<option value="' + esc(b.id) + '"' + (b.id === st.branchId ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('') + '</select></div>';
+    const branchSel = '<div class="field"><label for="sf-branch">Branch *</label><select id="sf-branch"' + (st.lockBranch ? ' disabled' : '') + '><option value="">Choose…</option>' +
+      (ctx.branches.length > 1 && !st.lockBranch ? '<option value="all"' + (isAll() ? ' selected' : '') + '>All branches</option>' : '') +
+      ctx.branches.map((b) => '<option value="' + esc(b.id) + '"' + (b.id === st.branchId ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('') + '</select></div>';
     const people = '<div class="field"><label for="sf-by">Released by (who handed it over)</label><select id="sf-by"><option value="">—</option>' + (opt.people || []).map((p) => '<option value="' + esc(p.id) + '"' + (p.id === st.releasedBy ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select></div>';
+    if (addTo) return '<div class="sm-form-sec"><h4>The scrap to add</h4><div class="sm-grid">' + branchSel + '</div></div>';
+    if (group) {
+      return '<div class="sm-form-sec"><h4>The group</h4><div class="sm-grid">' + branchSel +
+        '<div class="field"><label for="sf-title">Name of the group</label><input id="sf-title" type="text" maxlength="80" value="' + esc(st.title) + '" placeholder="e.g. Metro Gold — Oct 26 pick-up"></div>' +
+        '<div class="field"><label for="sf-supplier">Supplier / buyer (if you already know)</label><select id="sf-supplier"><option value="">Not decided yet</option>' + (opt.buyers || []).map((b) => '<option value="' + esc(b.id) + '"' + (Number(st.buyerId) === Number(b.id) ? ' selected' : '') + '>' + esc(b.name) + '</option>').join('') + '</select>' +
+        (ctx.can.manage_buyers || ctx.can.sell ? '<button type="button" class="act-link" id="sf-newbuyer">+ New buyer</button>' : '') + '</div>' +
+        '<div class="field"><label for="sf-date">Date sent *</label><input id="sf-date" type="date" value="' + esc(st.date) + '" max="' + esc(manilaToday()) + '"></div>' +
+        '<div class="field"><label for="sf-notes">Notes</label><input id="sf-notes" type="text" value="' + esc(st.notes) + '"></div></div><div id="sf-newbuyer-host"></div></div>';
+    }
     if (sale) {
-      return '<div class="sm-form-sec"><h4>The sale</h4><div class="sm-grid">' + branchSel +
+      return '<div class="sm-form-sec"><h4>The sale</h4>' +
+        '<p class="muted sm-small" style="margin:0 0 8px;">Will the supplier weigh it first? <button type="button" class="act-link" id="sf-to-group">Put these lots in a group instead</button> — the sale is made later, from the supplier\'s grams.</p><div class="sm-grid">' + branchSel +
         '<div class="field"><label for="sf-buyer">Buyer *</label><select id="sf-buyer"><option value="">Choose…</option>' + (opt.buyers || []).map((b) => '<option value="' + esc(b.id) + '">' + esc(b.name) + '</option>').join('') + '</select>' +
         (ctx.can.manage_buyers || ctx.can.sell ? '<button type="button" class="act-link" id="sf-newbuyer">+ New buyer</button>' : '') + '</div>' +
         '<div class="field"><label for="sf-date">Date of sale *</label><input id="sf-date" type="date" value="' + esc(st.date) + '" max="' + esc(manilaToday()) + '"></div>' +
@@ -168,28 +241,34 @@ export async function openSaleForm(ctx, opts) {
       '<div class="field"><label for="sf-notes">Notes</label><input id="sf-notes" type="text" value="' + esc(st.notes) + '"></div></div></div>';
   }
 
+  const okLabel = () => (group ? (addTo ? 'ADD TO THE GROUP' : 'SAVE THE GROUP') : ctx.can.approve_sale ? (sale ? 'CONFIRM SCRAP SALE' : 'CONFIRM DISPOSAL') : 'SUBMIT FOR APPROVAL');
   function render() {
     const approver = ctx.can.approve_sale;
     drawerBody('side').innerHTML = '<div id="sm-side-msg"></div>' + (st.missing > 0 ? '<div class="sm-banner sm-banner-warn">' + plural(st.missing, 'lot') + ' you chose ' + (st.missing === 1 ? 'is' : 'are') + ' no longer available.</div>' : '') +
-      (!approver ? '<div class="sm-banner sm-banner-info">You can enter this ' + (sale ? 'sale' : 'disposal') + ', but an approver must confirm it. The grams are held back meanwhile, so nobody else can sell them.</div>' : '') +
+      (!approver && !group ? '<div class="sm-banner sm-banner-info">You can enter this ' + (sale ? 'sale' : 'disposal') + ', but an approver must confirm it. The grams are held back meanwhile, so nobody else can sell them.</div>' : '') +
+      (group && !addTo ? '<div class="sm-banner sm-banner-info">A group is a pending folder for scrap that goes to a supplier to be weighed. Saving it only <b>holds the grams back</b>; nothing is sold and nothing leaves the branches until you confirm the group with the supplier\'s weighing.</div>' : '') +
       fieldsHtml() + '<div class="sm-form-sec"><h4>The lots</h4><div id="sm-lots-host"></div></div><div class="sm-form-sec"><div class="sm-preview" id="sm-preview"></div></div>';
     drawerFooter('side').hidden = false;
-    drawerFooter('side').innerHTML = '<button type="button" class="btn" id="sm-sf-ok" disabled>' + (approver ? (sale ? 'CONFIRM SCRAP SALE' : 'CONFIRM DISPOSAL') : 'SUBMIT FOR APPROVAL') + '</button><button type="button" class="btn secondary" id="sm-sf-cancel">Cancel</button>';
-    document.getElementById('sm-side-sub').textContent = ctx.branches.find((b) => b.id === st.branchId) ? ctx.branches.find((b) => b.id === st.branchId).name : 'Choose a branch';
+    drawerFooter('side').innerHTML = '<button type="button" class="btn" id="sm-sf-ok" disabled>' + okLabel() + '</button><button type="button" class="btn secondary" id="sm-sf-cancel">Cancel</button>';
+    document.getElementById('sm-side-sub').textContent = branchTitle();
     if (sale) { $('sf-method').value = st.method; $('sf-flat-wrap').hidden = st.method !== 'FLAT'; if (st.buyerId) $('sf-buyer').value = st.buyerId; }
     drawLots(); preview(); wireFields();
   }
 
   function wireFields() {
     const bind = (id, key, num_) => { const el = $(id); if (el) el.addEventListener('input', () => { st[key] = num_ ? el.value : el.value; preview(); }); };
-    bind('sf-date', 'date'); bind('sf-ref', 'reference'); bind('sf-rep', 'rep'); bind('sf-notes', 'notes'); bind('sf-flat', 'flat'); bind('sf-reason', 'reason'); bind('sf-dmethod', 'dmethod');
+    bind('sf-date', 'date'); bind('sf-ref', 'reference'); bind('sf-rep', 'rep'); bind('sf-notes', 'notes'); bind('sf-flat', 'flat'); bind('sf-reason', 'reason'); bind('sf-dmethod', 'dmethod'); bind('sf-title', 'title');
     const by = $('sf-by'); if (by) by.addEventListener('change', () => { st.releasedBy = by.value; });
-    const buyer = $('sf-buyer'); if (buyer) buyer.addEventListener('change', () => { st.buyerId = buyer.value ? Number(buyer.value) : ''; preview(); });
+    const buyer = $('sf-buyer') || $('sf-supplier'); if (buyer) buyer.addEventListener('change', () => { st.buyerId = buyer.value ? Number(buyer.value) : ''; preview(); });
+    const toGroup = $('sf-to-group'); if (toGroup) toGroup.addEventListener('click', () => {      // the lots chosen so far (and their grams) carry over to the group form
+      const keep = {}; st.picks.forEach((pk, id) => { keep[id] = pk.grams; });
+      closeDrawer('side'); ctx.openSaleForm({ mode: 'GROUP', branchId: st.branchId, lineIds: [...st.picks.keys()], pickGrams: keep });
+    });
     const method = $('sf-method'); if (method) method.addEventListener('change', () => { st.method = method.value; $('sf-flat-wrap').hidden = st.method !== 'FLAT'; drawLots(); preview(); });
     const br = $('sf-branch'); if (br && !st.lockBranch) br.addEventListener('change', async () => {
-      st.branchId = br.value ? Number(br.value) : null; st.picks.clear(); $('sm-lots-host').innerHTML = '<p class="muted">Loading…</p>';
+      st.branchId = br.value === 'all' ? 'all' : br.value ? Number(br.value) : null; st.picks.clear(); $('sm-lots-host').innerHTML = '<p class="muted">Loading…</p>';
       try { await loadLots(); } catch (err) { ctx.toast(err, true); }
-      document.getElementById('sm-side-sub').textContent = st.branchId ? ctx.branches.find((b) => b.id === st.branchId).name : 'Choose a branch'; drawLots(); preview();
+      document.getElementById('sm-side-sub').textContent = branchTitle(); drawLots(); preview();
     });
     const nb = $('sf-newbuyer'); if (nb) nb.addEventListener('click', () => newBuyerBox());
     $('sm-sf-cancel').addEventListener('click', () => closeDrawer('side'));
@@ -209,10 +288,47 @@ export async function openSaleForm(ctx, opts) {
         const r = await ctx.api.buyerSave({ name, contact_person: $('nb-person').value.trim(), contact_number: $('nb-num').value.trim(), address: $('nb-addr').value.trim(), payment_method: $('nb-pm').value });
         if (r && r.ok === false) throw new Error(r.message);
         opt = await ctx.reloadOptions(); st.buyerId = r.id;
-        const sel = $('sf-buyer'); sel.innerHTML = '<option value="">Choose…</option>' + (opt.buyers || []).map((b) => '<option value="' + esc(b.id) + '">' + esc(b.name) + '</option>').join(''); sel.value = r.id; host.innerHTML = ''; preview();
+        const sel = $('sf-buyer') || $('sf-supplier'); sel.innerHTML = '<option value="">' + ($('sf-buyer') ? 'Choose…' : 'Not decided yet') + '</option>' + (opt.buyers || []).map((b) => '<option value="' + esc(b.id) + '">' + esc(b.name) + '</option>').join(''); sel.value = r.id; host.innerHTML = ''; preview();
         ctx.toast('Buyer saved.');
       } catch (err) { ctx.toast(err, true); $('nb-save').disabled = false; }
     });
+  }
+
+  /** the screen after a sale (or disposal) made in several branches: every one of them, with its number */
+  function doneMulti(res) {
+    const list = res.sales || [], waiting = res.status === 'PENDING_APPROVAL', noun = sale ? 'sale' : 'disposal';
+    drawerBody('side').innerHTML = '<div class="sm-ok-box"><h4>' + esc(plural(list.length, noun)) + (waiting ? ' are waiting for approval' : ' are confirmed') + '</h4><p>' +
+      (waiting ? 'The grams are held back until an approver confirms them. ' : 'The scrap was taken from each branch. ') +
+      'One ' + noun + ' was made for each branch, because each branch\'s scrap is recorded in its own branch books. They are linked together, so ' + (sale ? 'one payment, approval or file' : 'one approval') + ' can cover them all — open any of them.</p>' +
+      '<ul class="sm-sale-list">' + list.map((s) => '<li><button type="button" class="sm-link" data-open-sale="' + esc(s.sale_id) + '"><b>' + esc(s.sale_number) + '</b></button> · ' + esc(s.branch_name) + ' · ' + esc(fmtG(s.total_grams)) +
+        (ctx.value && s.total_amount !== null && s.total_amount !== undefined ? ' · ' + esc(money(s.total_amount)) : '') + '</li>').join('') + '</ul>' +
+      (res.total_grams !== null && res.total_grams !== undefined ? '<p><b>Together: ' + esc(fmtG(res.total_grams)) + (ctx.value && res.total_amount !== null && res.total_amount !== undefined ? ' · ' + esc(money(res.total_amount)) : '') + '</b></p>' : '') +
+      (res.duplicate ? '<p class="muted">(This was already saved — no second record was made.)</p>' : '') + '</div>';
+    drawerFooter('side').innerHTML = '<button type="button" class="btn" id="sm-sf-open">Open ' + esc(list[0].sale_number) + '</button><button type="button" class="btn secondary" id="sm-sf-done">Done</button>';
+    drawerBody('side').querySelectorAll('[data-open-sale]').forEach((b) => b.addEventListener('click', () => { closeDrawer('side'); ctx.openSale(Number(b.dataset.openSale)); }));
+    $('sm-sf-open').addEventListener('click', () => { closeDrawer('side'); ctx.openSale(list[0].sale_id); });
+    $('sm-sf-done').addEventListener('click', () => closeDrawer('side'));
+  }
+
+  /** a group: the lots are only held back (nothing is sold, nothing leaves a branch) until the group is confirmed with the supplier's weighing */
+  async function saveGroup(items) {
+    if (addTo) {
+      const res = await ctx.api.groupAddLots(opts.groupId, items);
+      if (res && res.ok === false) throw new Error(res.message);
+      st.done = true; closeDrawer('side');
+      ctx.toast(plural(items.length, 'lot') + ' added to ' + (opts.groupNumber || 'the group') + '.');
+      ctx.afterChange(); if (opts.onDone) opts.onDone();
+      return;
+    }
+    const res = await ctx.api.groupCreate({ requestId: st.requestId, title: st.title.trim(), buyerId: st.buyerId || null, sentDate: st.date, items, notes: st.notes.trim() });
+    if (res && res.ok === false) throw new Error(res.message);
+    st.done = true; ctx.afterChange();
+    const nb = (res.branches || []).length;
+    drawerBody('side').innerHTML = '<div class="sm-ok-box"><h4>' + esc(res.group_number) + ' is saved — waiting for the supplier</h4><p>' + esc(fmtG(res.total_grams)) + ' in ' + esc(plural(res.lots, 'lot')) + (nb > 1 ? ' from ' + esc(plural(nb, 'branch', 'branches')) : '') +
+      ' is held back, so nobody else can sell it. Nothing was sold and nothing left the branches. When the supplier\'s weighing arrives, open the group and confirm it.</p>' + (res.duplicate ? '<p class="muted">(This was already saved — no second group was made.)</p>' : '') + '</div>';
+    drawerFooter('side').innerHTML = '<button type="button" class="btn" id="sm-sf-open">Open ' + esc(res.group_number) + '</button><button type="button" class="btn secondary" id="sm-sf-done">Done</button>';
+    $('sm-sf-open').addEventListener('click', () => { closeDrawer('side'); ctx.openGroup(res.group_id); });
+    $('sm-sf-done').addEventListener('click', () => closeDrawer('side'));
   }
 
   async function confirm_() {
@@ -221,20 +337,29 @@ export async function openSaleForm(ctx, opts) {
     st.busy = true; const ok = $('sm-sf-ok'); ok.disabled = true; ok.textContent = 'Saving…';
     try {
       const items = pickList().map((i) => (sale && st.method === 'PER_GRAM' ? { line_id: i.line_id, grams: i.grams, rate: i.rate } : { line_id: i.line_id, grams: i.grams }));
-      const res = sale ? await ctx.api.saleCreate({ requestId: st.requestId, buyerId: st.buyerId, branchId: st.branchId, date: st.date, method: st.method, items, flatTotal: Number(st.flat) || null,
-          reference: st.reference.trim(), representative: st.rep.trim(), releasedBy: st.releasedBy || null, notes: st.notes.trim() })
-        : await ctx.api.disposeCreate({ requestId: st.requestId, branchId: st.branchId, date: st.date, reason: String(st.reason).trim(), method: st.dmethod, items, releasedBy: st.releasedBy || null, notes: st.notes.trim() });
+      if (group) return await saveGroup(items);
+      const branches = pickedBranches(), common = { requestId: st.requestId, date: st.date, method: st.method, items, reference: st.reference.trim(), representative: st.rep.trim(), releasedBy: st.releasedBy || null, notes: st.notes.trim() };
+      let res;
+      if (isAll() && branches.length > 1) {
+        res = sale ? await ctx.api.saleCreateMulti({ ...common, buyerId: st.buyerId, flatTotal: Number(st.flat) || null })
+          : await ctx.api.disposeCreateMulti({ requestId: st.requestId, date: st.date, reason: String(st.reason).trim(), method: st.dmethod, items, releasedBy: st.releasedBy || null, notes: st.notes.trim() });
+      } else {
+        const branchId = isAll() ? branches[0] : st.branchId;
+        res = sale ? await ctx.api.saleCreate({ ...common, buyerId: st.buyerId, branchId, flatTotal: Number(st.flat) || null })
+          : await ctx.api.disposeCreate({ requestId: st.requestId, branchId, date: st.date, reason: String(st.reason).trim(), method: st.dmethod, items, releasedBy: st.releasedBy || null, notes: st.notes.trim() });
+      }
       if (res && res.ok === false) throw new Error(res.message);
       st.done = true;
       if (sale) { PER_GRAM_REMEMBER(st, rates, saveRates); }
+      ctx.afterChange();
+      if (res.sales && res.sales.length > 1) return doneMulti(res);
       const waiting = res.status === 'PENDING_APPROVAL';
       drawerBody('side').innerHTML = '<div class="sm-ok-box"><h4>' + esc(res.sale_number) + (waiting ? ' is waiting for approval' : sale ? ' is confirmed' : ' is recorded') + '</h4><p>' +
         (waiting ? 'The grams are held back until an approver confirms it.' : sale ? 'The scrap was taken from the branch and the sale is recorded. Record the buyer\'s payment and attach the weighing slip or receipt from the sale\'s page.' : 'The scrap was taken from the branch\'s available scrap.') + '</p>' + (res.duplicate ? '<p class="muted">(This was already saved — no second record was made.)</p>' : '') + '</div>';
       drawerFooter('side').innerHTML = '<button type="button" class="btn" id="sm-sf-open">Open ' + esc(res.sale_number) + '</button><button type="button" class="btn secondary" id="sm-sf-done">Done</button>';
       $('sm-sf-open').addEventListener('click', () => { closeDrawer('side'); ctx.openSale(res.sale_id); });
       $('sm-sf-done').addEventListener('click', () => closeDrawer('side'));
-      ctx.afterChange();
-    } catch (err) { st.busy = false; ok.textContent = ctx.can.approve_sale ? (sale ? 'CONFIRM SCRAP SALE' : 'CONFIRM DISPOSAL') : 'SUBMIT FOR APPROVAL'; ctx.toast(err, true); preview(); }
+    } catch (err) { st.busy = false; ok.textContent = okLabel(); ctx.toast(err, true); preview(); }
   }
   render();
 }

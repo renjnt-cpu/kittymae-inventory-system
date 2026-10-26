@@ -12,10 +12,10 @@ export function availableCfg(ctx, mode) {
   return {
     key,
     hint: marked ? 'Scrap that management has marked as ready to sell, reserved for a buyer or set for disposal. Sales and disposals that are waiting for an approver are listed above.'
-      : 'Scrap still held by the branches, oldest first. Tick lots to sell or dispose of them, or to mark them for sale. A lot already sold, disposed of or held back by a sale waiting for approval is not listed.',
+      : 'Scrap still held by the branches, oldest first. Tick lots to sell them, put them in a group (to confirm once the supplier has weighed them) or dispose of them, or to mark them for sale. A lot already sold, disposed of or held back by a sale waiting for approval or by a group is not listed.',
     fields: [
       { id: 'q', type: 'search', label: 'Search', ph: 'Scrap #, customer, purity, branch, buyer…', grow: true },
-      { id: 'branch_id', type: 'select', label: 'Branch', options: (c) => c.branches.map((b) => [b.id, b.name]), show: (c) => c.branches.length > 1 },
+      { id: 'branch_id', type: 'select', label: 'Branch', allLabel: 'All branches', options: (c) => c.branches.map((b) => [b.id, b.name]), show: (c) => c.branches.length > 1 },
       { id: 'metal', type: 'select', label: 'Metal', options: METALS.map((m) => [m, m]) },
       { id: 'karat', type: 'select', label: 'Purity', options: (c) => c.refs.karats.map((k) => [k, k]) },
       ...(marked ? [] : [{ id: 'mark', type: 'select', label: 'Mark', options: MARK_OPTIONS }]),
@@ -73,17 +73,19 @@ function wirePicking(ctx, body, rows, s, reload, key) {
     const g = picked.reduce((t, r) => t + Number(r.available_g), 0), branches = new Set(picked.map((r) => r.branch_id)), one = branches.size === 1;
     const can = ctx.can;
     host.innerHTML = '<div class="sm-bulk"><div class="sm-bulk-info"><b>' + plural(picked.length, 'lot') + '</b> selected · ' + esc(num(g)) + ' g' + (one ? ' · ' + esc(picked[0].branch_name) : '') +
-      (!one ? '<div class="muted sm-small">A sale or disposal is for one branch — you have lots from ' + branches.size + ' branches selected.</div>' : '') + '</div>' +
-      (can.sell ? '<button type="button" class="btn" data-bulk="sell"' + (one ? '' : ' disabled') + '>Sell selected</button>' : '') +
-      (can.dispose ? '<button type="button" class="btn secondary" data-bulk="dispose"' + (one ? '' : ' disabled') + '>Dispose selected</button>' : '') +
+      (!one ? '<div class="muted sm-small">These lots are from ' + branches.size + ' branches: selling or disposing of them makes one sale (or disposal) for each branch, all in one step and linked together; a group can hold lots from all of them.</div>' : '') + '</div>' +
+      (can.sell ? '<button type="button" class="btn" data-bulk="sell">Sell selected</button>' : '') +
+      (can.sell ? '<button type="button" class="btn secondary" data-bulk="group" title="Hold these lots back in a pending group until the supplier has weighed them">Put in a group…</button>' : '') +
+      (can.dispose ? '<button type="button" class="btn secondary" data-bulk="dispose">Dispose selected</button>' : '') +
       (can.sell ? '<button type="button" class="btn secondary" data-bulk="FOR_SALE">Mark for sale</button><button type="button" class="btn secondary" data-bulk="RESERVED">Reserve for a buyer…</button>' : '') +
       (can.dispose ? '<button type="button" class="btn secondary" data-bulk="FOR_DISPOSAL">Mark for disposal</button>' : '') +
       (can.sell || can.dispose ? '<button type="button" class="btn secondary" data-bulk="CLEAR">Clear mark</button>' : '') + '<button type="button" class="btn small secondary" data-bulk="none">Clear selection</button></div>';
     host.querySelectorAll('[data-bulk]').forEach((b) => b.addEventListener('click', async () => {
       const act = b.dataset.bulk, ids = picked.map((r) => r.line_id);
       if (act === 'none') { s.picked.clear(); repaintBoxes(); paintBulk(); return; }
-      if (act === 'sell') return ctx.openSaleForm({ mode: 'SALE', branchId: picked[0].branch_id, lineIds: ids });
-      if (act === 'dispose') return ctx.openSaleForm({ mode: 'DISPOSAL', branchId: picked[0].branch_id, lineIds: ids });
+      if (act === 'sell') return ctx.openSaleForm({ mode: 'SALE', branchId: one ? picked[0].branch_id : 'all', lineIds: ids });
+      if (act === 'group') return ctx.openSaleForm({ mode: 'GROUP', branchId: one ? picked[0].branch_id : 'all', lineIds: ids });
+      if (act === 'dispose') return ctx.openSaleForm({ mode: 'DISPOSAL', branchId: one ? picked[0].branch_id : 'all', lineIds: ids });
       if (act === 'RESERVED') return openReserveForm(ctx, ids, () => { s.picked.clear(); reload(); ctx.refreshCounts(); });
       b.disabled = true;
       try { const res = await ctx.api.markLots(ids, act, null, null); if (res && res.ok === false) throw new Error(res.message); ctx.toast(act === 'CLEAR' ? 'Mark cleared on ' + plural(res.count, 'lot') + '.' : plural(res.count, 'lot') + ' marked.'); s.picked.clear(); reload(); ctx.refreshCounts(); }
