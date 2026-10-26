@@ -53,11 +53,21 @@ export function renderTarget(root, ctx) {
     const today = todayIn(tz), thisMonth = startOfMonth(today);
     const trend = await A.trend({ from: startOfMonth(addMonths(today, -6)), to: today }, 'month');
     const pts = (trend.points || []).map((p) => ({ b: String(p.bucket).slice(0, 10), net: fin(p.net_sales) || 0, opex: fin(p.opex), gp: fin(p.gross_profit) }));
-    const complete = pts.filter((p) => p.b < thisMonth && p.net > 0 && p.opex !== null && p.opex > 0);
-    let basis = complete.slice(-(st.basis === 'last1' ? 1 : 3)), partial = false;
+    const withCosts = pts.filter((p) => p.b < thisMonth && p.net > 0 && p.opex !== null && p.opex > 0);
+    // Bills only started to be entered in August, so a month whose expenses are under half of the typical month was only partly entered; averaging it in would understate the costs
+    const sortedCosts = withCosts.map((p) => p.opex).sort((a, b) => a - b), mid = sortedCosts.length >> 1;
+    const typical = sortedCosts.length ? (sortedCosts.length % 2 ? sortedCosts[mid] : (sortedCosts[mid - 1] + sortedCosts[mid]) / 2) : 0;
+    const thin = (p) => p.opex < typical * 0.5, want = st.basis === 'last1' ? 1 : 3;
+    const complete = withCosts.filter((p) => !thin(p)), left = withCosts.slice(-want).filter(thin);
+    let basis = [], partial = false;
+    // the months must follow each other: the expense split and the cost check are asked for one date range
+    for (let i = complete.length - 1; i >= 0 && basis.length < want; i--) {
+      if (basis.length && addMonths(complete[i].b, 1) !== basis[0].b) break;
+      basis.unshift(complete[i]);
+    }
     const cur = pts.find((p) => p.b === thisMonth) || null;
     if (!basis.length && cur && cur.net > 0) { basis = [cur]; partial = true; }
-    const rec = { today, months: basis, partial, avgSales: null, avgCosts: null, mtd: null, groups: [], recordedMargin: null, check: null, believable: null, shares: null, errors: [] };
+    const rec = { today, months: basis, partial, left, avgSales: null, avgCosts: null, mtd: null, groups: [], recordedMargin: null, check: null, believable: null, shares: null, errors: [] };
     if (cur) {
       const elapsed = daysBetween(thisMonth, today) + 1, inMonth = daysBetween(thisMonth, endOfMonth(thisMonth)) + 1;
       rec.mtd = { net: cur.net, elapsed, inMonth, pace: cur.net / elapsed * inMonth };
@@ -112,7 +122,9 @@ export function renderTarget(root, ctx) {
     ];
     const split = r.groups.length ? '<details class="sd-tg-split"><summary>Where the running costs go <span class="muted">(per month)</span></summary><ul>' +
       r.groups.map((g) => '<li><span>' + esc(g.label) + '</span><b>' + esc(peso(g.perMonth)) + '</b><span class="muted">' + esc(pct(r.avgCosts > 0 ? g.perMonth / r.avgCosts * 100 : 0, 0)) + '</span></li>').join('') + '</ul></details>' : '';
-    return stats(items) + split + (r.errors.length ? '<p class="muted sd-note">' + esc(r.errors.join(' ')) + '</p>' : '');
+    const leftNote = r.left && r.left.length ? '<p class="muted sd-note">Left out of the average: ' + r.left.map((p) => esc(bucketLabel(p.b, 'month')) + ' (only ' + esc(peso(p.opex)) + ' of expenses entered)').join(', ') +
+      ' — far less than the other months, so its bills were probably not all in the system yet. Type your own costs below if you know them.</p>' : '';
+    return stats(items) + split + leftNote + (r.errors.length ? '<p class="muted sd-note">' + esc(r.errors.join(' ')) + '</p>' : '');
   }
   function checkHtml() {
     const r = st.rec;
