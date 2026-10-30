@@ -1,7 +1,7 @@
 // Payment Verification page -- the Reports tab (verified, pending, rejected, duplicate references and pictures, by account / method / branch / source / customer / staff
 // verifier, and a daily summary) and the Audit Log tab (every action: who, when, what changed, why). Both can be exported to a spreadsheet by people holding the export key.
-import { esc, money, fmtDate, fmtDateTime, manilaToday, statusLabel, riskLabel, sourceLabel, eventLabel, eventDetail, EVENT_TYPES_FOR_FILTER, toCsv, downloadText, friendly, debounce, plural, pancakeStatusLabel } from './pvFormat.js?v=20261026c';
-import { emptyBox } from './pvUi.js?v=20261026c';
+import { esc, money, fmtDate, fmtDateTime, manilaToday, statusLabel, riskLabel, sourceLabel, eventLabel, eventDetail, EVENT_TYPES_FOR_FILTER, toCsv, downloadText, friendly, debounce, plural, pancakeStatusLabel } from './pvFormat.js?v=20261030a';
+import { emptyBox } from './pvUi.js?v=20261030a';
 
 const REPORTS = [
   ['verified', 'Verified payments', 'Everything a person verified in the period'],

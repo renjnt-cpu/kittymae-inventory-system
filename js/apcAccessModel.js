@@ -28,7 +28,7 @@ export const KEY_MAP = {
   'datafix.sku_match': ['PRODUCTS', 'edit'], 'datafix.bulk': ['PRODUCTS', 'edit'], 'datafix.assign': ['PRODUCTS', 'approve'],
   'catalog.cost_view': ['SKU CATALOG', 'view'], 'catalog.cost_edit': ['SKU CATALOG', 'edit'], 'catalog.reseller_edit': ['SKU CATALOG', 'edit'], 'extra_access.products_edit': ['SKU CATALOG', 'edit'],
   'inventory.pull_out.create': ['INVENTORY', 'add'], 'inventory.pull_out.edit': ['INVENTORY', 'edit'], 'transfer.receive_any_branch': ['INVENTORY', 'edit'],
-  'inventory.record_factory_purchase_any_branch': ['PURCHASES', 'add'], 'datafix.purchase': ['PURCHASES', 'edit'],
+  'inventory.record_factory_purchase_any_branch': ['PURCHASES', 'add'], 'inventory.final_approve_factory_purchase': ['PURCHASES', 'approve'], 'datafix.purchase': ['PURCHASES', 'edit'],
   'datafix.supplier': ['SUPPLIERS', 'edit'], 'datafix.supplier_add': ['SUPPLIERS', 'add'],
   'scrap.edit': ['SCRAP', 'edit'], 'subasta.manage': ['SCRAP', 'edit'], 'subasta.pawner_history': ['SCRAP', 'view'],
   // Scrap Monitoring (every branch's scrap in one place: what is held, sold and paid for; reports and audit log) -- migration 253. A sale or disposal entered without approve_sale waits for an approver.
@@ -93,7 +93,7 @@ export const BRANCH_SCOPE_KEYS = ['branches.view_all', 'dashboard.all_branches',
 export const REVIEW_GROUPS = [
   { id: 'sales', question: 'Does this person still need to edit sales and recorded amounts?', keys: ['transaction.edit_amount', 'pos_sale.manage', 'layaway.request_delete', 'scrap.edit', 'subasta.manage', 'branch_handler.assign', 'scrap_monitor.sell', 'scrap_monitor.dispose', 'scrap_monitor.approve_sale', 'scrap_monitor.record_payment'], module: 'POS' },
   { id: 'refund', question: 'Does this person still need to work with refunds?', keys: ['refunds.view', 'refunds.approve', 'refunds.pay', 'refunds.admin'], module: 'FINANCE' },
-  { id: 'inventory', question: 'Does this person still need to edit inventory?', keys: ['inventory.pull_out.create', 'inventory.pull_out.edit', 'inventory.record_factory_purchase_any_branch', 'extra_access.products_edit', 'transfer.receive_any_branch'], module: 'INVENTORY' },
+  { id: 'inventory', question: 'Does this person still need to edit inventory?', keys: ['inventory.pull_out.create', 'inventory.pull_out.edit', 'inventory.record_factory_purchase_any_branch', 'inventory.final_approve_factory_purchase', 'extra_access.products_edit', 'transfer.receive_any_branch'], module: 'INVENTORY' },
   { id: 'cost', question: 'Does this person still need to see supplier and product cost?', keys: ['catalog.cost_view', 'catalog.cost_edit', 'dashboard.cost', 'datafix.cost', 'datafix.purchase', 'assets.view_cost'], module: 'SKU CATALOG' },
   { id: 'accounting', question: 'Does this person still need accounting, expenses or profit figures?', keys: ['bills.access', 'bills.view', 'bills.branch', 'bills.manage', 'bills.admin', 'dashboard.expenses', 'dashboard.profit', 'dashboard.capital', 'dashboard.capital_manage', 'extra_access.transactions',
     'branch_cash.view', 'branch_cash.view_all', 'branch_cash.add_expense', 'branch_cash.approve_expense', 'branch_cash.view_petty', 'branch_cash.use_petty', 'branch_cash.replenish_petty', 'branch_cash.adjust_petty', 'branch_cash.close_daily', 'branch_cash.view_reports', 'branch_cash.export', 'branch_cash.manage',

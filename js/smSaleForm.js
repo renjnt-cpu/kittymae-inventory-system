@@ -3,8 +3,8 @@
 // button hands back the same sale instead of making another (the request id stays the same until the form is closed).
 // A SALE or a DISPOSAL can take lots from several branches at once ("All branches": one section per branch, click a branch to open it). Each branch's scrap is recorded in that branch's own
 // books, so the database makes one sale (or disposal) per branch, all in one step and linked together (a "batch").
-import { esc, grams as fmtG, num, money, fmtDate, ageBadge, scrapId, manilaToday, friendly, plural, DISPOSAL_REASONS, DISPOSAL_METHODS, PAY_METHODS } from './smFormat.js?v=20261026c';
-import { openDrawer, closeDrawer, drawerBody, drawerFooter } from './smUi.js?v=20261026c';
+import { esc, grams as fmtG, num, money, fmtDate, ageBadge, scrapId, manilaToday, friendly, plural, DISPOSAL_REASONS, DISPOSAL_METHODS, PAY_METHODS } from './smFormat.js?v=20261030a';
+import { openDrawer, closeDrawer, drawerBody, drawerFooter } from './smUi.js?v=20261030a';
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
 const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;

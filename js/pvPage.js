@@ -3,15 +3,15 @@
 //
 // One module-wide rule holds everywhere in this page: the screen only hides buttons a person could not use; who may see, verify, override, reject, move or change
 // anything is decided -- and enforced -- by the database (the payment_verify.* keys in the Position Access Matrix, migrations 234-244).
-import { esc, friendly, money, statusBadge, riskBadge, sourceLabel, fmtShortDateTime, fmtDateTime, ago, manilaToday, debounce, shopChip, orderRefHtml, pancakeStatusBadge, attachedWhere } from './pvFormat.js?v=20261026c';
-import { drawersHtml, makeToast, closeDrawer, isDrawerOpen, closeLightbox, lightboxOpen } from './pvUi.js?v=20261026c';
-import { hydrateImages } from './pvApi.js?v=20261026c';
-import { renderDashboard } from './pvDashboard.js?v=20261026c';
-import { renderList, LIST_TABS, newListState, blankListFilters } from './pvTable.js?v=20261026c';
-import { renderAccounts } from './pvAccounts.js?v=20261026c';
-import { renderReports, renderAudit } from './pvReports.js?v=20261026c';
-import { openDetail, closeDetail } from './pvDetail.js?v=20261026c';
-import { openProofForm } from './pvProofForm.js?v=20261026c';
+import { esc, friendly, money, statusBadge, riskBadge, sourceLabel, fmtShortDateTime, fmtDateTime, ago, manilaToday, debounce, shopChip, orderRefHtml, pancakeStatusBadge, attachedWhere } from './pvFormat.js?v=20261030a';
+import { drawersHtml, makeToast, closeDrawer, isDrawerOpen, closeLightbox, lightboxOpen } from './pvUi.js?v=20261030a';
+import { hydrateImages } from './pvApi.js?v=20261030a';
+import { renderDashboard } from './pvDashboard.js?v=20261030a';
+import { renderList, LIST_TABS, newListState, blankListFilters } from './pvTable.js?v=20261030a';
+import { renderAccounts } from './pvAccounts.js?v=20261030a';
+import { renderReports, renderAudit } from './pvReports.js?v=20261030a';
+import { openDetail, closeDetail } from './pvDetail.js?v=20261030a';
+import { openProofForm } from './pvProofForm.js?v=20261030a';
 
 const $ = (id) => document.getElementById(id);
 

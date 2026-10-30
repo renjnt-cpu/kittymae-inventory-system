@@ -1,8 +1,8 @@
 // Scrap Monitoring page -- "Available Scrap" (the lots still held, oldest first) and "For Sale / Disposal" (the lots management has marked, plus the sales and disposals waiting for approval).
 // A lot is one metal / purity line of a purchase. Select lots to sell or dispose of them, or to mark them for sale / disposal / reserve them for a buyer.
-import { esc, grams, num, fmtDate, markBadge, ageBadge, scrapId, kindBadge, money, friendly, saleStatusBadge, kindOfSale, METALS, plural } from './smFormat.js?v=20261026c';
-import { openDrawer, closeDrawer, kv, emptyBox, actionPanel } from './smUi.js?v=20261026c';
-import { renderList } from './smList.js?v=20261026c';
+import { esc, grams, num, fmtDate, markBadge, ageBadge, scrapId, kindBadge, money, friendly, saleStatusBadge, kindOfSale, METALS, plural } from './smFormat.js?v=20261030a';
+import { openDrawer, closeDrawer, kv, emptyBox, actionPanel } from './smUi.js?v=20261030a';
+import { renderList } from './smList.js?v=20261030a';
 
 const MARK_OPTIONS = [['FOR_SALE', 'For sale'], ['RESERVED', 'Reserved for a buyer'], ['FOR_DISPOSAL', 'For disposal'], ['NONE', 'Not marked']];
 

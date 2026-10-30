@@ -1,8 +1,8 @@
 // Payment Verification page -- the Dashboard tab: what needs a person's attention right now, what was verified today and this month, where the proofs come from, and the
 // two short lists to start with (the payments waiting longest and the possible duplicates). Every card opens the matching list.
-import { esc, money, moneyShort, fmtDateTime, ago, plural, friendly } from './pvFormat.js?v=20261026c';
-import { kpiCard } from './pvUi.js?v=20261026c';
-import { compactList } from './pvTable.js?v=20261026c';
+import { esc, money, moneyShort, fmtDateTime, ago, plural, friendly } from './pvFormat.js?v=20261030a';
+import { kpiCard } from './pvUi.js?v=20261030a';
+import { compactList } from './pvTable.js?v=20261030a';
 
 export async function renderDashboard(ctx, panel) {
   panel.innerHTML = '<p class="muted">Loading…</p>';

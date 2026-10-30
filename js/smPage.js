@@ -3,18 +3,18 @@
 //
 // One rule holds everywhere in this page: the screen only hides buttons a person could not use. Who may see which branch, see money or photos, sell, approve, record a payment, dispose, manage
 // buyers, read the reports or export them is decided -- and enforced -- by the database (the scrap_monitor.* keys in the Position Access Matrix, migrations 253-256).
-import { esc, friendly, plural, KARAT_GUESS, POS_BASE } from './smFormat.js?v=20261026c';
-import { drawersHtml, makeToast, closeDrawer, isDrawerOpen, lightboxOpen } from './smUi.js?v=20261026c';
-import { newListState } from './smList.js?v=20261026c';
-import { renderDashboard } from './smDashboard.js?v=20261026c';
-import { entriesCfg, renderEntries, openEntry } from './smEntries.js?v=20261026c';
-import { availableCfg, renderAvailable, renderMarked } from './smAvailable.js?v=20261026c';
-import { renderByBranch, renderByPurity } from './smBranches.js?v=20261026c';
-import { salesCfg, renderSales, openSale } from './smSales.js?v=20261026c';
-import { groupsCfg, renderGroups, openGroup } from './smGroups.js?v=20261026c';
-import { renderBuyers } from './smBuyers.js?v=20261026c';
-import { renderReports, renderAudit, setReport } from './smReports.js?v=20261026c';
-import { openSaleForm } from './smSaleForm.js?v=20261026c';
+import { esc, friendly, plural, KARAT_GUESS, POS_BASE } from './smFormat.js?v=20261030a';
+import { drawersHtml, makeToast, closeDrawer, isDrawerOpen, lightboxOpen } from './smUi.js?v=20261030a';
+import { newListState } from './smList.js?v=20261030a';
+import { renderDashboard } from './smDashboard.js?v=20261030a';
+import { entriesCfg, renderEntries, openEntry } from './smEntries.js?v=20261030a';
+import { availableCfg, renderAvailable, renderMarked } from './smAvailable.js?v=20261030a';
+import { renderByBranch, renderByPurity } from './smBranches.js?v=20261030a';
+import { salesCfg, renderSales, openSale } from './smSales.js?v=20261030a';
+import { groupsCfg, renderGroups, openGroup } from './smGroups.js?v=20261030a';
+import { renderBuyers } from './smBuyers.js?v=20261030a';
+import { renderReports, renderAudit, setReport } from './smReports.js?v=20261030a';
+import { openSaleForm } from './smSaleForm.js?v=20261030a';
 
 const $ = (id) => document.getElementById(id);
 const karatOrder = (a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0) || String(a).localeCompare(String(b));

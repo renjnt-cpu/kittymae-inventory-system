@@ -1,7 +1,7 @@
 // Scrap Monitoring -- every Supabase call the module makes lives here, so the screens never touch `supabase` directly (and can be exercised against a stand-in object in
 // tests). Nothing reads the scrap_* tables: each screen asks a scrap_* database function, which checks who is calling (the scrap_monitor.* keys), which branches they may see
 // and whether they may see money and files, and refuses (with a plain sentence) anything that is not allowed or not valid.
-import { supabase } from './supabaseClient.js?v=20261026c';
+import { supabase } from './supabaseClient.js?v=20261030a';
 
 export const SALE_BUCKET = 'scrap-sale-files';
 export const ENTRY_BUCKET = 'scrap-attachments';
