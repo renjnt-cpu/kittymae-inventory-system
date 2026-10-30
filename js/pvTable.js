@@ -2,9 +2,9 @@
 // They share one component: the tab only decides which payments the database returns (pv_list's `tab`); the filters, the sort, the paging and the row look are the same.
 // The table collapses to one card per payment on a phone (the app-wide .table-scroll rule).
 import { esc, money, fmtShortDateTime, fmtDate, manilaToday, statusBadge, riskBadge, sourceLabel, STATUS, SOURCES, debounce, friendly, imgTag,
-  SHOPS, shopChip, orderRefHtml, pancakeStatusBadge, pancakeStatusLabel, PANCAKE_STATUS_ORDER, attachedWhere } from './pvFormat.js?v=20261030a';
-import { hydrateImages } from './pvApi.js?v=20261030a';
-import { openLightbox, emptyBox } from './pvUi.js?v=20261030a';
+  SHOPS, shopChip, orderRefHtml, pancakeStatusBadge, pancakeStatusLabel, PANCAKE_STATUS_ORDER, attachedWhere } from './pvFormat.js?v=20261030b';
+import { hydrateImages } from './pvApi.js?v=20261030b';
+import { openLightbox, emptyBox } from './pvUi.js?v=20261030b';
 
 export const LIST_TABS = {
   pending: { label: 'Pending Verification', sort: 'risk', hint: 'Payment proofs waiting for a person to check them — the ones waiting longest first.' },

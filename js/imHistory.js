@@ -1,11 +1,11 @@
 // Item Monitoring > Purchase History -- every purchase that became stock, newest delivery first, with what the approval added: the request number, who submitted it, who approved it and when.
 // Purchases made before the approval existed show "Before approvals". The columns and totals are the old Factory Purchases table's; the only action is REQUEST REVERSAL (it asks the Final Approver; it
 // does not delete anything). Pending, returned and rejected requests are in the Approvals tab, because they are not purchases yet.
-import { esc, money, weight, num, fmtDate, fmtDateTime, plural, toCsv, downloadText } from './imFormat.js?v=20261030a';
-import { materialOf } from './imData.js?v=20261030a';
-import { MATERIAL_GROUPS } from './productMaterial.js?v=20261030a';
-import { emptyBox } from './imUi.js?v=20261030a';
-import { openReversalRequest, openDeleteReview } from './imReview.js?v=20261030a';
+import { esc, money, weight, num, fmtDate, fmtDateTime, plural, toCsv, downloadText } from './imFormat.js?v=20261030b';
+import { materialOf } from './imData.js?v=20261030b';
+import { MATERIAL_GROUPS } from './productMaterial.js?v=20261030b';
+import { emptyBox } from './imUi.js?v=20261030b';
+import { openReversalRequest, openDeleteReview } from './imReview.js?v=20261030b';
 
 const CAP = 200;
 

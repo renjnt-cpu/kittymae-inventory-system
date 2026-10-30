@@ -1,7 +1,7 @@
 // Item Monitoring > Overview -- the management picture: the numbers, what needs attention, and the latest purchases, low stock, counts due and activity. Every card and row opens the place that
 // answers it. Nothing here is calculated apart from the data the other tabs use.
-import { esc, money, num, plural, fmtDate, fmtDateTime, ago, reqBadge, delBadge } from './imFormat.js?v=20261030a';
-import { kpi, emptyBox } from './imUi.js?v=20261030a';
+import { esc, money, num, plural, fmtDate, fmtDateTime, ago, reqBadge, delBadge } from './imFormat.js?v=20261030b';
+import { kpi, emptyBox } from './imUi.js?v=20261030b';
 
 export function renderOverview(ctx, panel) {
   const o = ctx.data.overview || {};

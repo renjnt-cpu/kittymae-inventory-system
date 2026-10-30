@@ -1,7 +1,7 @@
 // Access & Performance Control Center -- the Task Checklist this page grew out of ("each task starts from what their role/position grants"), now showing three things per task:
 // POSITION DEFAULT (what the role/position rules give), OWNER RECORD (what the owner saw on the real account and recorded -- stored in access_checklist_verifications), and CURRENT.
 // The default is worked out from the same role/position rules the screens use; the record is the owner's own note and does not change what anyone can do.
-import { esc, toast, friendly, guarded, btn } from './apcCore.js?v=20261030a';
+import { esc, toast, friendly, guarded, btn } from './apcCore.js?v=20261030b';
 
 const POSITION_MANAGERS = ['Operations Supervisor', 'Inventory Supervisor', 'Admin Assistant'];
 const CATEGORY_ORDER = ['inventory', 'movement', 'orders', 'transfers', 'branches', 'capital', 'payments', 'assets', 'lbc', 'refund', 'bills'];
@@ -23,12 +23,12 @@ export function itemsForEmployee(emp) {
     set('capital', 'Can add (pending approval) and view Branch Capital for every branch — cannot approve or delete', ['view', 'encode']); set('payments', 'Can see, add, and import Transactions', ['edit']);
     set('assets', 'Can manage Asset & Supplies Custodian at every branch — cannot change its settings', ['edit']); set('lbc', 'Can see and manage LBC Monitoring', ['edit']);
   } else if (emp.role === 'Branch Supervisor') {
-    set('inventory', 'Sees inventory for ' + branch + ' only', ['view']); set('movement', 'Can record Stock In/Out, Damage, Missing at ' + branch + ' (not Adjustment/Correction)', ['encode']);
+    set('inventory', 'Sees inventory for ' + branch + ' only', ['view']); set('movement', 'Can record Stock Out, Damage, Missing at ' + branch + ' (not Adjustment/Correction; new stock comes in only through an approved Factory Purchase)', ['encode']);
     set('transfers', 'Can request, ship, and receive transfers involving ' + branch, ['edit']); set('branches', 'Can add, edit, and delete Subasta/Scrap for ' + branch, ['edit']);
     set('capital', 'Can add (pending approval) and view Branch Capital for ' + branch + ' — cannot approve or delete', ['view', 'encode']); set('payments', 'Can see Transactions and fill in FB Name/Customer/Order ID (not add/import/delete)', ['edit']);
     set('assets', 'Can assign, receive back, transfer, report and repair assets, and request / issue supplies, for ' + branch + ' only — cannot add assets or see prices', ['encode']); set('lbc', 'Can see and manage LBC Monitoring', ['edit']);
   } else if (emp.role === 'Staff') {
-    set('inventory', 'Sees inventory for ' + branch + ' only', ['view']); set('movement', 'Can record Stock In/Out, Damage, Missing at ' + branch, ['encode']);
+    set('inventory', 'Sees inventory for ' + branch + ' only', ['view']); set('movement', 'Can record Stock Out, Damage, Missing at ' + branch + ' (new stock comes in only through an approved Factory Purchase)', ['encode']);
     set('transfers', 'Can view transfers involving ' + branch + ' (cannot request/approve)', ['view']); set('branches', 'Can add Subasta/Scrap entries for ' + branch + ' (cannot edit/delete)', ['encode']);
   } else if (emp.role === 'None' && emp.position === 'Sales Admin Associate') {
     set('inventory', 'Sees inventory for every branch', ['view']); set('transfers', 'Can request transfers (cannot approve)', ['encode']); set('branches', 'Can view and add Subasta/Scrap for any branch (cannot edit/delete)', ['encode']);

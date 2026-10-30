@@ -1,7 +1,7 @@
 // Scrap Monitoring page -- "Scrap Buyers": who the scrap is sold to, what each buyer has taken and paid, and what they still owe. Buyers are never deleted (their sales must stay readable):
 // a buyer who is no longer used is switched to inactive and drops out of the pick-lists.
-import { esc, grams, money, num, fmtDate, friendly, plural, debounce, PAY_METHODS, saleStatusBadge, payBadge, kindOfSale } from './smFormat.js?v=20261030a';
-import { openDrawer, closeDrawer, drawerBody, drawerFooter, emptyBox, kv } from './smUi.js?v=20261030a';
+import { esc, grams, money, num, fmtDate, friendly, plural, debounce, PAY_METHODS, saleStatusBadge, payBadge, kindOfSale } from './smFormat.js?v=20261030b';
+import { openDrawer, closeDrawer, drawerBody, drawerFooter, emptyBox, kv } from './smUi.js?v=20261030b';
 
 const canEdit = (ctx) => !!ctx.can.manage_buyers;
 const canAdd = (ctx) => !!(ctx.can.manage_buyers || ctx.can.sell);

@@ -2,7 +2,7 @@
 //   * LOW STOCK     = the product has a reorder level and the quantity available is at or under it
 //   * COUNT CADENCE = by the product's Value Tier: A weekly (7 days), B monthly (30), C quarterly (90), anything else 30. Next due = last count + cadence; never counted = due now.
 //   * qty_available is what can still be sold; qty_reserved is held for layaway. What the branch physically holds is the two added together.
-import { materialGroup } from './productMaterial.js?v=20261030a';
+import { materialGroup } from './productMaterial.js?v=20261030b';
 
 export const CADENCE_DAYS = { A: 7, B: 30, C: 90 };
 export const cadenceForTier = (tier) => CADENCE_DAYS[tier] || 30;

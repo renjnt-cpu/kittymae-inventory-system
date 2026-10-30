@@ -1,11 +1,11 @@
 // Item Monitoring > Stock by Branch -- the part of the page used most, so it is a tab of its own with the search at the very top (no scrolling past forms and tables to reach it).
 // It reads the SAME inventory rows as everything else on the page (ctx.data.stock); nothing here calculates stock. qty_available is what can still be sold, qty_reserved is held for layaway,
 // and what the branch physically holds is the two added together -- the meaning the database already gives them is kept.
-import { esc, num, weight, fmtDate, plural } from './imFormat.js?v=20261030a';
-import { applySort, byText, byNumber, sortControlHtml, wireSortControl } from './uiKit.js?v=20261030a';
-import { branchBadge, branchButtonStyle } from './branchColors.js?v=20261030a';
-import { skuSummary, singleSku } from './imData.js?v=20261030a';
-import { emptyBox } from './imUi.js?v=20261030a';
+import { esc, num, weight, fmtDate, plural } from './imFormat.js?v=20261030b';
+import { applySort, byText, byNumber, sortControlHtml, wireSortControl } from './uiKit.js?v=20261030b';
+import { branchBadge, branchButtonStyle } from './branchColors.js?v=20261030b';
+import { skuSummary, singleSku } from './imData.js?v=20261030b';
+import { emptyBox } from './imUi.js?v=20261030b';
 
 const PAGE = 100;
 const SORT_FIELDS = [

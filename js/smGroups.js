@@ -3,9 +3,9 @@
 // flat amount): the database then makes the sales -- one for each branch, linked together -- so one payment, approval, file or reversal covers the whole group.
 // What each person sees and may do is decided by the database (the scrap_monitor.* keys, and a group is shown only to someone who can see EVERY branch it touches); the buttons only hide
 // what a person could not use.
-import { esc, grams as fmtG, money, num, fmtDate, fmtShortDateTime, groupStatusBadge, GROUP_STATUS, saleStatusBadge, manilaToday, friendly, plural, scrapId } from './smFormat.js?v=20261030a';
-import { openDrawer, closeDrawer, drawerBody, drawerFooter, kv, actionPanel } from './smUi.js?v=20261030a';
-import { renderList } from './smList.js?v=20261030a';
+import { esc, grams as fmtG, money, num, fmtDate, fmtShortDateTime, groupStatusBadge, GROUP_STATUS, saleStatusBadge, manilaToday, friendly, plural, scrapId } from './smFormat.js?v=20261030b';
+import { openDrawer, closeDrawer, drawerBody, drawerFooter, kv, actionPanel } from './smUi.js?v=20261030b';
+import { renderList } from './smList.js?v=20261030b';
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
 const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;

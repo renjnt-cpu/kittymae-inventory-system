@@ -1,10 +1,10 @@
 // Item Monitoring -- the review screens. One drawer shows a purchase request (everything the Final Approver needs to decide: who entered it, which SKUs, what is new, the stock before and after,
 // the catalog beside what was typed, possible duplicates, proof, the discussion and the timeline); another shows a reversal request. The same drawers serve staff, who see their own request
 // and its history. Buttons only appear for what the person may do -- the database refuses everything else (migrations 265-268).
-import { esc, money, weight, num, plural, fmtDate, fmtDateTime, reqBadge, delBadge, itemBadge, newSkuBadge, FILE_TYPES, DELETE_REASONS, friendly } from './imFormat.js?v=20261030a';
-import { materialOf } from './imData.js?v=20261030a';
-import { banner, kv, openDrawer, closeDrawer, drawerBody, drawerFooter, actionPanel, clearActionPanel, filesHtml, wireFiles, showModal } from './imUi.js?v=20261030a';
-import { showPostingResults } from './imForm.js?v=20261030a';
+import { esc, money, weight, num, plural, fmtDate, fmtDateTime, reqBadge, delBadge, itemBadge, newSkuBadge, FILE_TYPES, DELETE_REASONS, friendly } from './imFormat.js?v=20261030b';
+import { materialOf } from './imData.js?v=20261030b';
+import { banner, kv, openDrawer, closeDrawer, drawerBody, drawerFooter, actionPanel, clearActionPanel, filesHtml, wireFiles, showModal } from './imUi.js?v=20261030b';
+import { showPostingResults } from './imForm.js?v=20261030b';
 
 const uuid = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
 const safeName = (n) => String(n || 'file').replace(/[^\w.\-]+/g, '_').slice(-80);
