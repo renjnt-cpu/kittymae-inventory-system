@@ -1,7 +1,7 @@
 // Payment Verification page -- the Payment Accounts tab: the accounts customers pay into (only the last four digits of an account number are ever shown), which of
 // them each Pancake payment method really is, and what each payment method needs before it can be verified (a picture, a reference number).
-import { esc, money, fmtDate, manilaDay, friendly, plural } from './pvFormat.js?v=20261030b';
-import { openDrawer, closeDrawer, drawerBody, drawerFooter, emptyBox } from './pvUi.js?v=20261030b';
+import { esc, money, fmtDate, manilaDay, friendly, plural } from './pvFormat.js?v=20261031a';
+import { openDrawer, closeDrawer, drawerBody, drawerFooter, emptyBox } from './pvUi.js?v=20261031a';
 
 const ACCOUNT_TYPES = ['GCash', 'Maya', 'BDO', 'BPI', 'PS Bank', 'Union Bank', 'Palawan Pay', 'Bank Transfer', 'Other Bank', 'Other E-Wallet', 'Cash Deposit', 'Other'];
 

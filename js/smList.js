@@ -1,7 +1,7 @@
 // Scrap Monitoring page -- the one list component behind All Scrap, Available Scrap, Scrap Sales and the Audit Log. A tab only says WHICH filters it has, how to ask the database and how a row
 // looks; the filter bar, the active-filter chips, the sort, the paging, the "latest answer wins" guard and the phone layout (one card per row) are the same everywhere.
-import { esc, friendly, manilaToday, daysAgo, monthStart, debounce } from './smFormat.js?v=20261030b';
-import { emptyBox } from './smUi.js?v=20261030b';
+import { esc, friendly, manilaToday, daysAgo, monthStart, debounce } from './smFormat.js?v=20261031a';
+import { emptyBox } from './smUi.js?v=20261031a';
 
 /** cfg = { key, hint, fields:[{id,label,type:'search'|'text'|'select'|'date'|'number'|'check', options, ph, grow, more, show(ctx)}], sorts:[[v,l]], sort, pageSize, presets,
  *          fixed:{...always sent}, fetch(filters, sort, limit, offset), summaryHtml(res, s), tableHtml(rows, ctx, s, res), wireRows(body, rows, ctx, s, reload), emptyText(hasFilters), chipText(id, v, ctx), onLoaded(res, s) } */

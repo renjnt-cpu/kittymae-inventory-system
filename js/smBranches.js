@@ -1,7 +1,7 @@
 // Scrap Monitoring page -- "By Branch" (one card per branch: what it holds, how old it is, what it sold) and "By Metal / Purity" (the same scrap grouped by what it is made of).
 // The business keeps scrap by weight and purity, not by item code, so "metal + purity" is what the spec calls the item / SKU view.
-import { esc, grams, num, money, fmtDate, ageBadge, friendly, manilaToday, daysAgo, monthStart, plural } from './smFormat.js?v=20261030b';
-import { emptyBox } from './smUi.js?v=20261030b';
+import { esc, grams, num, money, fmtDate, ageBadge, friendly, manilaToday, daysAgo, monthStart, plural } from './smFormat.js?v=20261031a';
+import { emptyBox } from './smUi.js?v=20261031a';
 
 function rangeBar(ctx, st, idPrefix, withBranch) {
   return '<div class="card sm-toolbar"><div class="sm-toolrow"><div class="field"><label for="' + idPrefix + '-from">From</label><input id="' + idPrefix + '-from" type="date" value="' + esc(st.from) + '"></div>' +

@@ -1,9 +1,9 @@
 // Item Monitoring > Physical Counts -- unchanged in what it does: a count records what was found and how it compares with the system, and NEVER changes stock (a real variance is investigated first
 // and then corrected with an Adjustment in Record Movement). What is new is the help while counting: pick a SKU and branch and the system quantity, the reserved pieces, the last count and the
 // next due date are shown before a number is typed; and the lists can be filtered (branch, variance only, investigated or not, counts that are due).
-import { esc, num, weight, fmtDate, plural } from './imFormat.js?v=20261030b';
-import { branchBadge, branchOptionStyle } from './branchColors.js?v=20261030b';
-import { emptyBox } from './imUi.js?v=20261030b';
+import { esc, num, weight, fmtDate, plural } from './imFormat.js?v=20261031a';
+import { branchBadge, branchOptionStyle } from './branchColors.js?v=20261031a';
+import { emptyBox } from './imUi.js?v=20261031a';
 
 export function renderCounts(ctx, panel, opts) {
   const { api } = ctx; const st = ctx.ui.counts; const me = ctx.employee;

@@ -1,7 +1,7 @@
 // Item Monitoring > Product Changes -- every Add / Edit / Discontinue / Reactivate made in the SKU Catalog, with who and when. Read-only: written by a database trigger from whichever page
 // changed the catalog; nothing on this page can edit it.
-import { esc, fmtDateTime } from './imFormat.js?v=20261030b';
-import { emptyBox } from './imUi.js?v=20261030b';
+import { esc, fmtDateTime } from './imFormat.js?v=20261031a';
+import { emptyBox } from './imUi.js?v=20261031a';
 
 const BADGE = { Added: 'ok', Edited: 'transit', Discontinued: 'low', Reactivated: 'ok' };
 

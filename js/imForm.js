@@ -1,9 +1,9 @@
 // Item Monitoring > Factory Purchase -- where a delivery is entered. Nothing entered here becomes stock: it becomes a REQUEST that waits for the Final Approver (migrations 264-268). Staff save a
 // draft, attach proof, review it and submit it; the owner (who holds the final-approval key) can submit and approve in one step. The fields, the live arithmetic and the "add another item" list
 // are the old form's; the items are cards now, one per SKU, so they read on a phone.
-import { esc, money, weight, num, plural, calcLine, lineWarnings, todayManila, fmtDateTime, FILE_TYPES, fileTypeLabel, friendly, reqBadge } from './imFormat.js?v=20261030b';
-import { branchBadge, branchOptionStyle } from './branchColors.js?v=20261030b';
-import { banner, filesHtml, wireFiles, showModal } from './imUi.js?v=20261030b';
+import { esc, money, weight, num, plural, calcLine, lineWarnings, todayManila, fmtDateTime, FILE_TYPES, fileTypeLabel, friendly, reqBadge } from './imFormat.js?v=20261031a';
+import { branchBadge, branchOptionStyle } from './branchColors.js?v=20261031a';
+import { banner, filesHtml, wireFiles, showModal } from './imUi.js?v=20261031a';
 
 const uuid = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
 const safeName = (n) => String(n || 'file').replace(/[^\w.\-]+/g, '_').slice(-80);

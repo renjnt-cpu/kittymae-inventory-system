@@ -2,9 +2,9 @@
 // day + immediate supervisor, and the policy numbers. HR writes these tables directly (row
 // level security limits that to leave.hr) and every change is recorded in the audit log by a
 // database trigger, not by this file.
-import { esc, fmtDate, num, WEEKDAYS, kv, personLabel, personCell, byTenure } from './leaveUi.js?v=20261030b';
-import { openSide, closeSide, sideBody } from './leaveSide.js?v=20261030b';
-import { accrualHtml, wireAccrual } from './leaveAccrual.js?v=20261030b';
+import { esc, fmtDate, num, WEEKDAYS, kv, personLabel, personCell, byTenure } from './leaveUi.js?v=20261031a';
+import { openSide, closeSide, sideBody } from './leaveSide.js?v=20261031a';
+import { accrualHtml, wireAccrual } from './leaveAccrual.js?v=20261031a';
 
 const $ = (id) => document.getElementById(id);
 const openSections = new Set(['schedules']);

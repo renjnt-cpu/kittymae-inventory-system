@@ -1,7 +1,7 @@
 // Scrap Monitoring -- every Supabase call the module makes lives here, so the screens never touch `supabase` directly (and can be exercised against a stand-in object in
 // tests). Nothing reads the scrap_* tables: each screen asks a scrap_* database function, which checks who is calling (the scrap_monitor.* keys), which branches they may see
 // and whether they may see money and files, and refuses (with a plain sentence) anything that is not allowed or not valid.
-import { supabase } from './supabaseClient.js?v=20261030b';
+import { supabase } from './supabaseClient.js?v=20261031a';
 
 export const SALE_BUCKET = 'scrap-sale-files';
 export const ENTRY_BUCKET = 'scrap-attachments';
@@ -72,6 +72,8 @@ export const saleApprove = (id, note) => rpc('scrap_sale_approve', { p_sale_id: 
 export const saleReject = (id, reason) => rpc('scrap_sale_reject', { p_sale_id: id, p_reason: reason || null });
 export const saleReverse = (id, reason) => rpc('scrap_sale_reverse', { p_sale_id: id, p_reason: reason });
 export const saleCorrect = (id, patch, reason) => rpc('scrap_sale_correct', { p_sale_id: id, p_patch: patch, p_reason: reason });
+/** What the supplier / buyer ACCEPTED each lot as -- items: [{item_id, accepted_metal_type, accepted_karat}]; the recorded values put a lot back to "as recorded". Grams, price and the POS entry never change. */
+export const saleSetAccepted = (id, items, note) => rpc('scrap_sale_set_accepted', { p_sale_id: id, p_items: items, p_note: note || null });
 /** p: {requestId, saleId, amount, method, reference, paidAt, receivedBy, receivedByName, notes} */
 export const paymentAdd = (p) => rpc('scrap_payment_add', {
   p_request_id: p.requestId, p_sale_id: p.saleId, p_amount: p.amount, p_method: p.method, p_reference: p.reference || null, p_paid_at: p.paidAt || null,
@@ -96,9 +98,10 @@ export const groupAddLots = (groupId, items) => rpc('scrap_group_add_lots', { p_
 export const groupRemoveLots = (groupId, lineIds) => rpc('scrap_group_remove_lots', { p_group_id: groupId, p_line_ids: lineIds });
 export const groupUpdate = (g) => rpc('scrap_group_update', { p_group_id: g.id, p_title: g.title, p_buyer_id: g.buyerId || null, p_sent_date: g.sentDate || null, p_notes: g.notes || null });
 export const groupCancel = (id, reason) => rpc('scrap_group_cancel', { p_group_id: id, p_reason: reason });
-/** c: {requestId, groupId, buyerId, date, method ('PER_PURITY'|'FLAT'), weighings:[{metal_type, karat, received_g, rate}], flatTotal, receivedGrams, reference, representative, releasedBy, notes} */
+/** c: {requestId, groupId, buyerId, date, method ('PER_PURITY'|'FLAT'), weighings:[{metal_type, karat (the purity that was SENT), received_g, rate, accepted_metal_type, accepted_karat}], flatTotal, receivedGrams, reference, representative, releasedBy, notes}
+ *  In FLAT the rows only say what each purity was accepted as (no grams or rate). */
 export const groupConfirm = (c) => rpc('scrap_group_confirm', {
-  p_request_id: c.requestId, p_group_id: c.groupId, p_buyer_id: c.buyerId || null, p_sale_date: c.date, p_method: c.method, p_weighings: c.method === 'PER_PURITY' ? c.weighings : null,
+  p_request_id: c.requestId, p_group_id: c.groupId, p_buyer_id: c.buyerId || null, p_sale_date: c.date, p_method: c.method, p_weighings: c.weighings || null,
   p_flat_total: c.method === 'FLAT' ? c.flatTotal : null, p_received_grams: c.method === 'FLAT' ? (c.receivedGrams || null) : null,
   p_reference: c.reference || null, p_representative: c.representative || null, p_released_by: c.releasedBy || null, p_notes: c.notes || null,
 });

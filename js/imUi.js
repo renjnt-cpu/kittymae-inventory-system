@@ -1,6 +1,6 @@
 // Item Monitoring -- the pieces every tab shares: the toast, the right-hand drawer, the centred dialog, the inline confirm / reason panel (the app never uses confirm() / prompt()),
 // the small cards and the file list. Display code only: no database calls here.
-import { esc, friendly, fmtDateTime, fileTypeLabel } from './imFormat.js?v=20261030b';
+import { esc, friendly, fmtDateTime, fileTypeLabel } from './imFormat.js?v=20261031a';
 
 const $ = (id) => document.getElementById(id);
 export { esc, friendly };

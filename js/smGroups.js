@@ -3,9 +3,10 @@
 // flat amount): the database then makes the sales -- one for each branch, linked together -- so one payment, approval, file or reversal covers the whole group.
 // What each person sees and may do is decided by the database (the scrap_monitor.* keys, and a group is shown only to someone who can see EVERY branch it touches); the buttons only hide
 // what a person could not use.
-import { esc, grams as fmtG, money, num, fmtDate, fmtShortDateTime, groupStatusBadge, GROUP_STATUS, saleStatusBadge, manilaToday, friendly, plural, scrapId } from './smFormat.js?v=20261030b';
-import { openDrawer, closeDrawer, drawerBody, drawerFooter, kv, actionPanel } from './smUi.js?v=20261030b';
-import { renderList } from './smList.js?v=20261030b';
+import { esc, grams as fmtG, money, num, fmtDate, fmtShortDateTime, groupStatusBadge, GROUP_STATUS, saleStatusBadge, manilaToday, friendly, plural, scrapId } from './smFormat.js?v=20261031a';
+import { openDrawer, closeDrawer, drawerBody, drawerFooter, kv, actionPanel } from './smUi.js?v=20261031a';
+import { renderList } from './smList.js?v=20261031a';
+import { acceptedControls, wireAccepted, sameAs, acceptedNote, metalPurity } from './smAccepted.js?v=20261031a';
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
 const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -122,8 +123,9 @@ export async function openGroup(ctx, id) {
   if (confirmed && Array.isArray(g.weighings) && g.weighings.length) {
     body += section('The supplier\'s weighing', '<div class="table-scroll table-2col"><table class="sm-table"><thead><tr><th>Purity</th><th class="sm-num">Sent</th><th class="sm-num">Supplier weighed</th><th class="sm-num">Difference</th>' + (v ? '<th class="sm-num">Rate / g</th><th class="sm-num">Amount</th>' : '') + '</tr></thead><tbody>' +
       g.weighings.map((w) => { const d = r3(Number(w.received_g) - Number(w.sent_g));
-        return '<tr><td data-label="Purity">' + esc(purityLabel(w)) + '<div class="muted sm-small">' + esc(plural(w.lots, 'lot')) + '</div></td><td data-label="Sent" class="sm-num">' + esc(num(w.sent_g)) + ' g</td><td data-label="Supplier weighed" class="sm-num"><b>' + esc(num(w.received_g)) + ' g</b></td>' +
-          '<td data-label="Difference" class="sm-num">' + (d ? (d > 0 ? '+' : '') + esc(num(d)) + ' g' : 'same') + '</td>' + (v ? '<td data-label="Rate / g" class="sm-num">' + esc(money(w.rate)) + '</td><td data-label="Amount" class="sm-num">' + esc(money(w.amount)) + '</td>' : '') + '</tr>'; }).join('') + '</tbody></table></div>');
+        return '<tr><td data-label="Purity">' + esc(purityLabel(w)) + acceptedNote(w) + '<div class="muted sm-small">' + esc(plural(w.lots, 'lot')) + '</div></td><td data-label="Sent" class="sm-num">' + esc(num(w.sent_g)) + ' g</td><td data-label="Supplier weighed" class="sm-num"><b>' + esc(num(w.received_g)) + ' g</b></td>' +
+          '<td data-label="Difference" class="sm-num">' + (d ? (d > 0 ? '+' : '') + esc(num(d)) + ' g' : 'same') + '</td>' + (v ? '<td data-label="Rate / g" class="sm-num">' + esc(money(w.rate)) + '</td><td data-label="Amount" class="sm-num">' + esc(money(w.amount)) + '</td>' : '') + '</tr>'; }).join('') + '</tbody></table></div>' +
+      '<p class="muted sm-small">“Accepted as” is what was entered when the group was confirmed. To change it later, open a branch\'s sale below and use “Change the accepted metal / purity”.</p>');
   } else if (pur.length) {
     body += section('By purity (what was sent)', '<div class="table-scroll table-2col"><table class="sm-table"><thead><tr><th>Purity</th><th class="sm-num">Lots</th><th class="sm-num">Grams sent</th></tr></thead><tbody>' +
       pur.map((p) => '<tr><td data-label="Purity">' + esc(purityLabel(p)) + '</td><td data-label="Lots" class="sm-num">' + esc(p.lots) + '</td><td data-label="Grams sent" class="sm-num"><b>' + esc(num(p.grams)) + ' g</b></td></tr>').join('') + '</tbody></table></div>');
@@ -187,7 +189,7 @@ export async function openGroup(ctx, id) {
 function openConfirm(ctx, res, opt, onDone) {
   const g = res.group, items = res.items || [], pur = res.by_purity || [], v = ctx.value, approver = ctx.can.approve_sale, rates = loadRates();
   const st = { requestId: uuid(), buyerId: g.buyer_id || '', date: manilaToday(), method: 'PER_PURITY', flat: '', flatG: '', reference: '', rep: '', releasedBy: ctx.access.me.id, notes: '', busy: false, done: false,
-    w: new Map(pur.map((p) => [purityKey(p), { received: String(p.grams), rate: '' }])) };
+    w: new Map(pur.map((p) => [purityKey(p), { received: String(p.grams), rate: '', acc: { metal_type: p.metal_type, karat: p.karat || '' }, accBad: '' }])) };
   const $ = (id) => document.getElementById(id);
   const okLabel = () => (approver ? 'CONFIRM THE GROUP' : 'SUBMIT FOR APPROVAL');
   const weighOf = (p) => st.w.get(purityKey(p));
@@ -197,6 +199,7 @@ function openConfirm(ctx, res, opt, onDone) {
     const p = [];
     if (!st.buyerId) p.push('Choose the supplier or buyer.');
     if (!st.date) p.push('Choose the date.'); else if (st.date > manilaToday()) p.push('The date cannot be in the future.');
+    pur.forEach((x) => { const w = weighOf(x); if (w.accBad) p.push(purityLabel(x) + ': ' + w.accBad); });
     if (st.method === 'FLAT') { if (!(Number(st.flat) > 0)) p.push('Enter the total amount the supplier pays.'); }
     else pur.forEach((x) => { const w = weighOf(x); if (!(Number(w.received) > 0)) p.push(purityLabel(x) + ': enter the grams the supplier weighed.'); if (!(Number(w.rate) > 0)) p.push(purityLabel(x) + ': enter the rate per gram.'); });
     return p;
@@ -217,13 +220,15 @@ function openConfirm(ctx, res, opt, onDone) {
     const flat = st.method === 'FLAT';
     return '<div class="sm-form-sec"><h4>' + (flat ? 'What was sent' : 'The supplier\'s weighing') + '</h4>' +
       (flat ? '<p class="muted sm-small">One total for the whole group. The amount is shared over the lots by their grams, so each branch\'s sale gets its part.</p>' : '<p class="muted sm-small">For each purity: the grams the supplier weighed and the rate per gram they pay. The grams that left the branches stay as they were sent; the difference is kept on the group.</p>') +
-      '<div class="table-scroll table-2col"><table class="sm-table sm-weigh"><thead><tr><th>Purity</th><th class="sm-num">Sent (g)</th>' + (flat ? '' : '<th class="sm-num">Supplier weighed (g)</th><th class="sm-num">Rate / g (₱)</th>' + (v ? '<th class="sm-num">Amount</th>' : '') + '<th class="sm-num">Difference</th>') + '</tr></thead><tbody>' +
+      '<p class="muted sm-small">If the supplier took a purity as something else, change <b>Accepted as</b>. What the branch recorded stays as it was.</p>' +
+      '<div class="table-scroll table-2col"><table class="sm-table sm-weigh"><thead><tr><th>Purity sent</th><th>Accepted as</th><th class="sm-num">Sent (g)</th>' + (flat ? '' : '<th class="sm-num">Supplier weighed (g)</th><th class="sm-num">Rate / g (₱)</th>' + (v ? '<th class="sm-num">Amount</th>' : '') + '<th class="sm-num">Difference</th>') + '</tr></thead><tbody>' +
       pur.map((p, i) => { const w = weighOf(p), hint = rates[String(p.karat || '').trim().toUpperCase()];
-        return '<tr><td data-label="Purity">' + esc(purityLabel(p)) + '<div class="muted sm-small">' + esc(plural(p.lots, 'lot')) + '</div></td><td data-label="Sent (g)" class="sm-num">' + esc(num(p.grams)) + '</td>' +
+        return '<tr><td data-label="Purity sent">' + esc(purityLabel(p)) + '<div class="muted sm-small">' + esc(plural(p.lots, 'lot')) + '</div></td>' +
+          '<td data-label="Accepted as">' + acceptedControls('gc-acc-' + i, w.acc, purityLabel(p)) + '<div class="sm-small sm-accepted" data-acc-note="' + i + '"></div></td><td data-label="Sent (g)" class="sm-num">' + esc(num(p.grams)) + '</td>' +
           (flat ? '' : '<td data-label="Supplier weighed (g)" class="sm-num"><input type="number" min="0" step="0.001" data-w-recv="' + i + '" value="' + esc(w.received) + '" aria-label="Grams the supplier weighed for ' + esc(purityLabel(p)) + '"></td>' +
             '<td data-label="Rate / g (₱)" class="sm-num"><input type="number" min="0" step="0.01" data-w-rate="' + i + '" value="' + esc(w.rate) + '" placeholder="' + esc(hint ? 'last ' + hint : '₱') + '" aria-label="Rate per gram for ' + esc(purityLabel(p)) + '"></td>' +
             (v ? '<td data-label="Amount" class="sm-num" data-w-amt="' + i + '">—</td>' : '') + '<td data-label="Difference" class="sm-num" data-w-diff="' + i + '">—</td>') + '</tr>'; }).join('') + '</tbody>' +
-      '<tfoot><tr><td>Together</td><td class="sm-num">' + esc(num(sentTotal())) + '</td>' + (flat ? '' : '<td class="sm-num" id="gc-tot-recv">—</td><td></td>' + (v ? '<td class="sm-num" id="gc-tot-amt">—</td>' : '') + '<td class="sm-num" id="gc-tot-diff">—</td>') + '</tr></tfoot></table></div>' +
+      '<tfoot><tr><td>Together</td><td></td><td class="sm-num">' + esc(num(sentTotal())) + '</td>' + (flat ? '' : '<td class="sm-num" id="gc-tot-recv">—</td><td></td>' + (v ? '<td class="sm-num" id="gc-tot-amt">—</td>' : '') + '<td class="sm-num" id="gc-tot-diff">—</td>') + '</tr></tfoot></table></div>' +
       (flat ? '<div class="sm-grid" style="margin-top:8px;"><div class="field"><label for="gc-flat">Total amount (₱) *</label><input id="gc-flat" type="number" min="0" step="0.01" value="' + esc(st.flat) + '"></div>' +
         '<div class="field"><label for="gc-flatg">Grams the supplier weighed (optional)</label><input id="gc-flatg" type="number" min="0" step="0.001" value="' + esc(st.flatG) + '"></div></div>' : '') + '</div>';
   }
@@ -234,6 +239,7 @@ function openConfirm(ctx, res, opt, onDone) {
     pur.forEach((p, i) => {
       const w = weighOf(p), recv = Number(w.received) || 0, rate = Number(w.rate) || 0, sent = Number(p.grams), amt = !flat && recv > 0 && rate > 0 ? r2(recv * rate) : 0, d = r3(recv - sent);
       weigh.set(purityKey(p), { received: recv, rate }); tr += recv; ta += amt;
+      const an = document.querySelector('[data-acc-note="' + i + '"]'); if (an) an.textContent = sameAs(w.acc, p) ? '' : 'sent as ' + purityLabel(p);
       const a = document.querySelector('[data-w-amt="' + i + '"]'); if (a) a.textContent = amt ? money(amt) : '—';
       const df = document.querySelector('[data-w-diff="' + i + '"]');
       if (df) { const big = sent > 0 && Math.abs(d) / sent > 0.05; df.innerHTML = recv > 0 ? (d ? (d > 0 ? '+' : '') + esc(num(d)) + ' g' : 'same') + (big ? '<div class="sm-small" style="color:#c62828;">' + Math.round(Math.abs(d) / sent * 100) + '% off — check the slip</div>' : '') : '—'; }
@@ -244,12 +250,13 @@ function openConfirm(ctx, res, opt, onDone) {
       const td = $('gc-tot-diff'); if (td) { const d = r3(tr - sentTotal()); td.textContent = tr > 0 ? (d ? (d > 0 ? '+' : '') + num(d) + ' g' : 'same') : '—'; }
     }
     // what each branch's sale will be
-    const per = shareByBranch(items, weigh, st.method, Number(st.flat) || 0), probs = problems();
+    const per = shareByBranch(items, weigh, st.method, Number(st.flat) || 0), probs = problems(), diffs = pur.filter((p) => !sameAs(weighOf(p).acc, p));
     const host = $('gc-preview');
     host.innerHTML = '<h4>Before you confirm</h4><div class="table-scroll table-2col"><table class="sm-table"><thead><tr><th>Branch</th><th class="sm-num">Lots</th><th class="sm-num">Sent</th>' + (v ? '<th class="sm-num">Amount</th>' : '') + '</tr></thead><tbody>' +
       [...per.entries()].map(([id, o]) => '<tr><td data-label="Branch">' + esc(o.name) + '</td><td data-label="Lots" class="sm-num">' + esc(o.n) + '</td><td data-label="Sent" class="sm-num">' + esc(num(r3(o.g))) + ' g</td>' + (v ? '<td data-label="Amount" class="sm-num">' + esc(o.amt ? money(r2(o.amt)) : '—') + '</td>' : '') + '</tr>').join('') + '</tbody></table></div>' +
       '<div class="sm-bg-split"><b>' + esc(plural(per.size, 'sale')) + ' will be made</b> — one for each branch, because each branch\'s scrap is recorded in its own branch books. ' + (approver ? 'They are confirmed at once and the scrap leaves the branches.' : 'They wait for an approver; the grams stay held back until then.') +
       ' One payment, approval, file or reversal can then cover them all.</div>' +
+      (diffs.length ? '<div class="sm-small" style="margin-top:8px;"><b>Accepted as something else:</b> ' + diffs.map((p) => esc(purityLabel(p)) + ' → <b>' + esc(metalPurity(weighOf(p).acc.metal_type, weighOf(p).acc.karat)) + '</b>').join(' · ') + '. What the branches recorded stays as it was.</div>' : '') +
       (probs.length ? '<ul class="sm-small" style="margin:8px 0 0 18px;color:#a14400;">' + probs.slice(0, 6).map((x) => '<li>' + esc(x) + '</li>').join('') + (probs.length > 6 ? '<li>…and ' + (probs.length - 6) + ' more</li>' : '') + '</ul>' : '');
     const ok = $('sm-sf-ok'); if (ok) ok.disabled = st.busy || probs.length > 0;
   }
@@ -277,6 +284,7 @@ function openConfirm(ctx, res, opt, onDone) {
   function wireWeigh() {
     document.querySelectorAll('[data-w-recv]').forEach((el) => el.addEventListener('input', () => { weighOf(pur[Number(el.dataset.wRecv)]).received = el.value; refresh(); }));
     document.querySelectorAll('[data-w-rate]').forEach((el) => el.addEventListener('input', () => { weighOf(pur[Number(el.dataset.wRate)]).rate = el.value; refresh(); }));
+    pur.forEach((p, i) => wireAccepted(document, 'gc-acc-' + i, (val) => { const w = weighOf(p); w.acc = { metal_type: val.metal_type, karat: val.karat }; w.accBad = val.bad; refresh(); }));
     const f = $('gc-flat'); if (f) f.addEventListener('input', () => { st.flat = f.value; refresh(); });
     const fg = $('gc-flatg'); if (fg) fg.addEventListener('input', () => { st.flatG = fg.value; });
   }
@@ -305,7 +313,9 @@ function openConfirm(ctx, res, opt, onDone) {
     const probs = problems(); if (probs.length) { ctx.toast(probs[0], true); return; }
     st.busy = true; const ok = $('sm-sf-ok'); ok.disabled = true; ok.textContent = 'Saving…';
     try {
-      const weighings = pur.map((p) => { const w = weighOf(p); return { metal_type: p.metal_type, karat: p.karat, received_g: Number(w.received), rate: Number(w.rate) }; });
+      // metal_type / karat name the purity that was SENT; accepted_* say what the supplier took it for (the database stores that only when it differs)
+      const weighings = pur.map((p) => { const w = weighOf(p), a = w.acc, acc = { accepted_metal_type: a.metal_type, accepted_karat: a.karat };
+        return st.method === 'FLAT' ? { metal_type: p.metal_type, karat: p.karat, ...acc } : { metal_type: p.metal_type, karat: p.karat, received_g: Number(w.received), rate: Number(w.rate), ...acc }; });
       const r = await ctx.api.groupConfirm({ requestId: st.requestId, groupId: g.id, buyerId: st.buyerId, date: st.date, method: st.method, weighings, flatTotal: Number(st.flat) || null, receivedGrams: Number(st.flatG) || null,
         reference: st.reference.trim(), representative: st.rep.trim(), releasedBy: st.releasedBy || null, notes: st.notes.trim() });
       if (r && r.ok === false) throw new Error(r.message);

@@ -3,17 +3,17 @@
 // Supabase functions in production and against a stand-in object in tests.
 // createLeaveContext / drawersHtml / bindDrawerEvents are also what the HR 201-File page uses to
 // show a Leave tab for one employee, so both places share one set of drawers and one rulebook.
-import { esc, OPEN_STATUSES, DECISION_STATUSES, PENDING_HR } from './leaveUi.js?v=20261030b';
-import { openDetail, closeDetail } from './leaveDetail.js?v=20261030b';
-import { openForm, requestCloseForm } from './leaveForm.js?v=20261030b';
-import { renderMine } from './leaveMine.js?v=20261030b';
-import { renderCalendar } from './leaveCalendar.js?v=20261030b';
-import { renderHr, renderFinal, setHrEmployeeFilter } from './leaveReview.js?v=20261030b';
-import { renderCredits } from './leaveCredits.js?v=20261030b';
-import { renderReports } from './leaveReports.js?v=20261030b';
-import { renderSettings } from './leaveSettings.js?v=20261030b';
-import { renderAudit } from './leaveAudit.js?v=20261030b';
-import { closeSide } from './leaveSide.js?v=20261030b';
+import { esc, OPEN_STATUSES, DECISION_STATUSES, PENDING_HR } from './leaveUi.js?v=20261031a';
+import { openDetail, closeDetail } from './leaveDetail.js?v=20261031a';
+import { openForm, requestCloseForm } from './leaveForm.js?v=20261031a';
+import { renderMine } from './leaveMine.js?v=20261031a';
+import { renderCalendar } from './leaveCalendar.js?v=20261031a';
+import { renderHr, renderFinal, setHrEmployeeFilter } from './leaveReview.js?v=20261031a';
+import { renderCredits } from './leaveCredits.js?v=20261031a';
+import { renderReports } from './leaveReports.js?v=20261031a';
+import { renderSettings } from './leaveSettings.js?v=20261031a';
+import { renderAudit } from './leaveAudit.js?v=20261031a';
+import { closeSide } from './leaveSide.js?v=20261031a';
 
 function drawer(name, title) {
   return '<div class="drawer-backdrop" id="lv-' + name + '-backdrop"></div>' +

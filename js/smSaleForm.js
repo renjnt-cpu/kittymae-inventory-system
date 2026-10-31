@@ -3,8 +3,8 @@
 // button hands back the same sale instead of making another (the request id stays the same until the form is closed).
 // A SALE or a DISPOSAL can take lots from several branches at once ("All branches": one section per branch, click a branch to open it). Each branch's scrap is recorded in that branch's own
 // books, so the database makes one sale (or disposal) per branch, all in one step and linked together (a "batch").
-import { esc, grams as fmtG, num, money, fmtDate, ageBadge, scrapId, manilaToday, friendly, plural, DISPOSAL_REASONS, DISPOSAL_METHODS, PAY_METHODS } from './smFormat.js?v=20261030b';
-import { openDrawer, closeDrawer, drawerBody, drawerFooter } from './smUi.js?v=20261030b';
+import { esc, grams as fmtG, num, money, fmtDate, ageBadge, scrapId, manilaToday, friendly, plural, DISPOSAL_REASONS, DISPOSAL_METHODS, PAY_METHODS } from './smFormat.js?v=20261031a';
+import { openDrawer, closeDrawer, drawerBody, drawerFooter } from './smUi.js?v=20261031a';
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
 const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -36,7 +36,7 @@ export async function openSaleForm(ctx, opts) {
   // "All branches" is for a person who can see more than one branch (opened from a branch's own record, the branch stays fixed)
   const st = { mode, requestId: uuid(), branchId: opts.branchId || (ctx.branches.length === 1 ? ctx.branches[0].id : (ctx.branches.length > 1 ? 'all' : null)), lockBranch: !!opts.branchId && opts.branchId !== 'all',
     buyerId: '', date: manilaToday(), method: 'PER_GRAM', flat: '', reference: '', rep: '', releasedBy: ctx.access.me.id, notes: '', reason: DISPOSAL_REASONS[0], dmethod: DISPOSAL_METHODS[0], title: '',
-    lots: [], picks: new Map(), rate: {}, lotRate: {}, busy: false, done: false, filter: '', purity: '', openBr: new Set() };
+    lots: [], picks: new Map(), rate: {}, lotRate: {}, busy: false, done: false, filter: '', purity: '', from: '', to: '', openBr: new Set() };
   const title = sale ? 'New scrap sale' : disposal ? 'Dispose of scrap' : addTo ? 'Add scrap to ' + (opts.groupNumber || 'the group') : 'New group';
   const rates = loadRates();
   const lastRate = (karat) => (rates[karat] ? 'last ' + rates[karat] : '');
@@ -118,7 +118,10 @@ export async function openSaleForm(ctx, opts) {
       '<td class="sm-num"><input type="number" min="0" step="0.001" max="' + esc(l.available_g) + '" data-lot-grams="' + esc(l.line_id) + '" value="' + (on ? esc(pk.grams) : '') + '"' + (on ? '' : ' disabled') + ' aria-label="Grams to take"></td>' +
       (sale && st.method === 'PER_GRAM' ? '<td class="sm-num"><input type="number" min="0" step="0.01" data-lot-rate="' + esc(l.line_id) + '" value="' + esc(st.lotRate[l.line_id]) + '" placeholder="' + esc(lastRate((l.karat || '').toUpperCase())) + '" aria-label="Rate per gram"></td>' : '') + '</tr>';
   }
-  const visibleLots = () => st.lots.filter((l) => (!st.purity || (l.karat || '').toUpperCase() === st.purity) && (!st.filter || (scrapId(l.entry_id) + ' ' + (l.customer_name || '') + ' ' + l.metal_type + ' ' + (l.karat || '') + ' ' + (l.branch_name || '')).toLowerCase().includes(st.filter.toLowerCase())));
+  /** the date range is about when the scrap was BOUGHT (the date shown under each Scrap ID); either end may be left empty */
+  const inRange = (l) => { const d = String(l.entry_date || '').slice(0, 10); return (!st.from || d >= st.from) && (!st.to || d <= st.to); };
+  const dated = () => !!(st.from || st.to);
+  const visibleLots = () => st.lots.filter((l) => inRange(l) && (!st.purity || (l.karat || '').toUpperCase() === st.purity) && (!st.filter || (scrapId(l.entry_id) + ' ' + (l.customer_name || '') + ' ' + l.metal_type + ' ' + (l.karat || '') + ' ' + (l.branch_name || '')).toLowerCase().includes(st.filter.toLowerCase())));
   const purities = () => [...new Set(st.lots.map((l) => (l.karat || '').toUpperCase()))].filter(Boolean).sort();
 
   /** the table of lots: gid is '' for one branch, or the branch id inside an "All branches" section (the header tick-box then takes just that branch) */
@@ -138,15 +141,19 @@ export async function openSaleForm(ctx, opts) {
     if (!st.lots.length) { host.innerHTML = '<div class="sm-banner sm-banner-warn">' + (isAll() ? 'No branch has any available scrap to ' : 'This branch has no available scrap to ') + (sale ? 'sell' : disposal ? 'dispose of' : 'put in a group') + '.</div>'; return; }
     const lots = visibleLots();
     const tools = '<div class="sm-grid"><div class="field"><label for="sm-lotq">Find a lot</label><input id="sm-lotq" type="search" value="' + esc(st.filter) + '" placeholder="Scrap #, customer' + (isAll() ? ', branch' : '') + '…"></div>' +
-      '<div class="field"><label for="sm-lotp">Purity</label><select id="sm-lotp"><option value="">All</option>' + purities().map((p) => '<option' + (st.purity === p ? ' selected' : '') + '>' + esc(p) + '</option>').join('') + '</select></div></div>' +
+      '<div class="field"><label for="sm-lotp">Purity</label><select id="sm-lotp"><option value="">All</option>' + purities().map((p) => '<option' + (st.purity === p ? ' selected' : '') + '>' + esc(p) + '</option>').join('') + '</select></div>' +
+      '<div class="field"><label for="sm-lotf">Bought from</label><input id="sm-lotf" type="date" value="' + esc(st.from) + '"' + (st.to ? ' max="' + esc(st.to) + '"' : '') + '></div>' +
+      '<div class="field"><label for="sm-lott">Bought to</label><input id="sm-lott" type="date" value="' + esc(st.to) + '"' + (st.from ? ' min="' + esc(st.from) + '"' : '') + '></div></div>' +
+      (dated() ? '<p class="muted sm-small sm-datenote">Showing scrap bought ' + (st.from ? 'from <b>' + esc(fmtDate(st.from)) + '</b> ' : '') + (st.to ? 'to <b>' + esc(fmtDate(st.to)) + '</b> ' : '') + '— <button type="button" class="act-link" id="sm-date-clear">Clear the dates</button></p>' : '') +
       '<div class="sm-ratebar"><div class="field"><label for="sm-qp-p">Take the oldest</label><select id="sm-qp-p">' + purities().map((p) => '<option>' + esc(p) + '</option>').join('') + '</select></div>' +
-      '<div class="field"><label for="sm-qp-g">grams of that purity' + (isAll() ? ' (from any branch)' : '') + '</label><input id="sm-qp-g" type="number" min="0" step="0.001" placeholder="e.g. 100"></div><button type="button" class="btn small secondary" id="sm-qp-go">Pick oldest first</button>' +
+      '<div class="field"><label for="sm-qp-g">grams of that purity' + (isAll() ? ' (from any branch)' : '') + (dated() ? ', bought in these dates' : '') + '</label><input id="sm-qp-g" type="number" min="0" step="0.001" placeholder="e.g. 100"></div><button type="button" class="btn small secondary" id="sm-qp-go">Pick oldest first</button>' +
       (sale && st.method === 'PER_GRAM' ? purities().map((p) => '<div class="field"><label for="sm-pr-' + esc(p) + '">Rate / g for ' + esc(p) + '</label><input id="sm-pr-' + esc(p) + '" type="number" min="0" step="0.01" data-purity-rate="' + esc(p) + '" value="' + esc(st.rate[p] !== undefined ? st.rate[p] : '') + '" placeholder="' + esc(lastRate(p) || '₱') + '"></div>').join('') : '') + '</div>';
-    const hidden = lots.length < st.lots.length ? '<p class="muted sm-small">' + (st.lots.length - lots.length) + ' more lots are hidden by the filter.</p>' : '';
-    if (!isAll()) { host.innerHTML = tools + lotsTable(lots, '') + hidden; wireLots(); refreshHeads(); return; }
+    const hidden = (st.from && st.to && st.from > st.to ? '<div class="sm-banner sm-banner-warn">“Bought from” is after “Bought to”, so no lot can match. Change one of the dates.</div>' : '') +
+      (lots.length < st.lots.length ? '<p class="muted sm-small">' + (st.lots.length - lots.length) + ' more lots are hidden by the filter.</p>' : '');
+    if (!isAll()) { host.innerHTML = tools + (lots.length ? lotsTable(lots, '') : '<p class="muted">No lot matches this filter.</p>') + hidden; wireLots(); refreshHeads(); return; }
     // All branches: one section per branch, in the person's own branch order; a section opens with a click (and stays open while a search or a purity is active)
     const byBranch = (list) => { const m = new Map(); list.forEach((l) => { if (!m.has(l.branch_id)) m.set(l.branch_id, []); m.get(l.branch_id).push(l); }); return m; };
-    const shown = byBranch(lots), every = byBranch(st.lots), searching = !!(st.filter || st.purity);
+    const shown = byBranch(lots), every = byBranch(st.lots), searching = !!(st.filter || st.purity || dated());
     const order = ctx.branches.map((b) => b.id).filter((id) => every.has(id));
     host.innerHTML = tools + '<div class="sm-bg-tools"><span class="muted sm-small">Click a branch to see its scrap, or tick the box on a branch to take all of it.</span> <button type="button" class="act-link" data-bg-open="all">Open all</button> · <button type="button" class="act-link" data-bg-open="none">Close all</button></div>' +
       (order.filter((id) => shown.has(id)).map((id) => '<details class="sm-bgroup" data-bg="' + esc(id) + '"' + (st.openBr.has(id) || searching ? ' open' : '') + '>' + branchHead(id, every.get(id)) + lotsTable(shown.get(id), String(id)) + '</details>').join('') || '<p class="muted">No lot matches this filter.</p>') + hidden;
@@ -195,11 +202,16 @@ export async function openSaleForm(ctx, opts) {
     host.querySelectorAll('[data-bg-open]').forEach((b) => b.addEventListener('click', () => host.querySelectorAll('details.sm-bgroup').forEach((d) => { d.open = b.dataset.bgOpen === 'all'; })));
     const q = $('sm-lotq'); if (q) q.addEventListener('input', () => { st.filter = q.value; const pos = q.selectionStart; drawLots(); const nq = $('sm-lotq'); nq.focus(); nq.setSelectionRange(pos, pos); preview(); });
     const p = $('sm-lotp'); if (p) p.addEventListener('change', () => { st.purity = p.value; drawLots(); preview(); });
+    const df = $('sm-lotf'), dt = $('sm-lott'), dc = $('sm-date-clear');
+    if (df) df.addEventListener('change', () => { st.from = df.value; drawLots(); preview(); });
+    if (dt) dt.addEventListener('change', () => { st.to = dt.value; drawLots(); preview(); });
+    if (dc) dc.addEventListener('click', () => { st.from = ''; st.to = ''; drawLots(); preview(); });
     const go = $('sm-qp-go'); if (go) go.addEventListener('click', () => {
       const purity = $('sm-qp-p').value, want = Number($('sm-qp-g').value);
       if (!(want > 0)) { ctx.toast('Enter how many grams to take.', true); return; }
       let left = want;
-      st.lots.filter((l) => (l.karat || '').toUpperCase() === purity).forEach((l) => {
+      // only the lots bought inside the date range (when there is one) are looked at; the rest are left exactly as they are
+      st.lots.filter((l) => (l.karat || '').toUpperCase() === purity && inRange(l)).forEach((l) => {
         if (left <= 0.0005) { if (st.picks.has(l.line_id)) setPick(l.line_id, false); return; }
         const take = Math.min(left, Number(l.available_g)); setPick(l.line_id, true); st.picks.get(l.line_id).grams = r3(take); const g = document.querySelector('[data-lot-grams="' + l.line_id + '"]'); if (g) g.value = r3(take); left = r3(left - take);
       });

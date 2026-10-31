@@ -1,9 +1,10 @@
 // Scrap Monitoring page -- "Scrap Sales": every scrap sale and disposal, and the drawer for one of them (its lots, what the buyer paid, the files, the history, and the actions: approve,
 // reject, correct, reverse, record a payment, attach a file). What each person sees and may do is decided by the database (the scrap_monitor.* keys); the buttons only hide what a person could not use.
 import { esc, grams, money, num, fmtDate, fmtDateTime, fmtShortDateTime, saleStatusBadge, payBadge, SALE_STATUS, PAY_STATUS, PAY_METHODS, NEEDS_REFERENCE, FILE_TYPES, fileTypeLabel, manilaToday, friendly,
-  kindOfSale, scrapId, posEntryUrl, plural, DISPOSAL_REASONS, DISPOSAL_METHODS } from './smFormat.js?v=20261030b';
-import { openDrawer, closeDrawer, drawerFooter, kv, actionPanel, fileThumb, wireFiles, emptyBox } from './smUi.js?v=20261030b';
-import { renderList } from './smList.js?v=20261030b';
+  kindOfSale, scrapId, posEntryUrl, plural, DISPOSAL_REASONS, DISPOSAL_METHODS } from './smFormat.js?v=20261031a';
+import { openDrawer, closeDrawer, drawerFooter, kv, actionPanel, fileThumb, wireFiles, emptyBox } from './smUi.js?v=20261031a';
+import { renderList } from './smList.js?v=20261031a';
+import { acceptedControls, readAccepted, wireAccepted, sameAs, acceptedNote, acceptedOf, metalPurity } from './smAccepted.js?v=20261031a';
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
 
@@ -64,6 +65,7 @@ export async function openSale(ctx, id) {
   let opts = { buyers: [], people: [] };
   try { opts = await ctx.loadOptions(); } catch (e) { /* the forms still open; the lists are just empty */ }
   const activePays = pays.filter((p) => !p.voided_at);
+  const canAccept = isSale && (s.status === 'CONFIRMED' || s.status === 'PENDING_APPROVAL') && (ctx.can.sell || ctx.can.approve_sale) && items.length > 0;
   // the sales made in the same step for the other branches (a "batch"): they are separate sales, but a payment, an approval or a file can cover them all
   const bt = res.batch && res.batch.count > 1 ? res.batch : null, legs = bt ? (bt.sales || []) : [];
   const live = legs.filter((x) => x.status === 'CONFIRMED' || x.status === 'PENDING_APPROVAL'), pendingLegs = legs.filter((x) => x.status === 'PENDING_APPROVAL'), confirmedLegs = legs.filter((x) => x.status === 'CONFIRMED');
@@ -98,10 +100,12 @@ export async function openSale(ctx, id) {
 
   body += section('Scrap taken (' + plural(items.length, 'lot') + ')', '<div class="table-scroll table-2col"><table class="sm-table"><thead><tr><th>Scrap ID</th><th>Bought</th><th>Metal / purity</th><th class="sm-num">Grams</th>' + (v && isSale ? '<th class="sm-num">Rate / g</th><th class="sm-num">Amount</th>' : '') + '<th class="sm-num">Still held</th></tr></thead><tbody>' +
     items.map((i) => '<tr><td data-label="Scrap ID">' + (i.entry_id ? '<button type="button" class="sm-link" data-open-entry="' + esc(i.entry_id) + '"><b>' + esc(scrapId(i.entry_id)) + '</b></button>' : '—') + '</td><td data-label="Bought">' + esc(i.entry_date ? fmtDate(i.entry_date) : '—') + (i.branch_name ? '<div class="muted sm-small">' + esc(i.branch_name) + '</div>' : '') + '</td>' +
-      '<td data-label="Metal / purity">' + esc([i.metal_type, i.karat].filter(Boolean).join(' ')) + '</td><td data-label="Grams" class="sm-num"><b>' + esc(num(i.grams)) + ' g</b></td>' +
+      '<td data-label="Metal / purity">' + esc([i.metal_type, i.karat].filter(Boolean).join(' ')) + acceptedNote(i) + '</td><td data-label="Grams" class="sm-num"><b>' + esc(num(i.grams)) + ' g</b></td>' +
       (v && isSale ? '<td data-label="Rate / g" class="sm-num">' + esc(i.rate_per_gram === null || i.rate_per_gram === undefined ? '—' : money(i.rate_per_gram)) + '</td><td data-label="Amount" class="sm-num">' + esc(i.amount === null || i.amount === undefined ? '—' : money(i.amount)) + '</td>' : '') +
       '<td data-label="Still held" class="sm-num">' + esc(i.available_now_g === null || i.available_now_g === undefined ? (i.original_g === null || i.original_g === undefined ? 'record removed' : '0 g') : num(i.available_now_g) + ' g') + '</td></tr>').join('') + '</tbody>' +
-    '<tfoot><tr><td colspan="3">Total</td><td class="sm-num">' + esc(num(s.total_grams)) + ' g</td>' + (v && isSale ? '<td></td><td class="sm-num">' + esc(money(s.total_amount)) + '</td>' : '') + '<td></td></tr></tfoot></table></div>');
+    '<tfoot><tr><td colspan="3">Total</td><td class="sm-num">' + esc(num(s.total_grams)) + ' g</td>' + (v && isSale ? '<td></td><td class="sm-num">' + esc(money(s.total_amount)) + '</td>' : '') + '<td></td></tr></tfoot></table></div>' +
+    (canAccept ? '<div class="sm-form-sec" style="margin-top:10px;"><button type="button" class="btn small secondary" id="acc-edit">Change the accepted metal / purity</button>' +
+      '<p class="muted sm-small" style="margin:6px 0 0;">The buyer may take a purity for something else than the branch recorded. This only changes what is shown as <b>accepted as</b>: the scrap record, the grams, the price and the branch balance stay as they were.</p></div>' : ''));
 
   if (v && isSale && (conf || pays.length)) {
     body += section('Payments from the buyer', kv('Sale total', '<b>' + esc(money(s.total_amount)) + '</b>') + kv('Paid', esc(money(s.paid))) + kv('Remaining', s.balance > 0 ? '<b style="color:#c62828;">' + esc(money(s.balance)) + '</b>' : '<span style="color:#2e7d32;">nothing owed</span>') +
@@ -176,6 +180,32 @@ export async function openSale(ctx, id) {
     title: 'Void this payment?', message: 'The payment stays in the history (marked voided) and no longer counts toward what the buyer paid. Say why.', fields: '<textarea id="act-reason" rows="2" placeholder="Reason (required)"></textarea>', okLabel: 'Void payment', danger: true,
     onOk: async () => { const reason = document.getElementById('act-reason').value.trim(); if (reason.length < 5) throw new Error('Give the reason (at least a few words).'); const r = await ctx.api.paymentVoid(Number(b.dataset.voidPayment), reason); if (r && r.ok === false) throw new Error(r.message); ctx.toast('Payment voided.'); await reopen(); },
   })));
+  // ---- what the buyer accepted each purity as (one row per purity the sale took; the lots of that purity follow it)
+  const accBtn = bodyEl.querySelector('#acc-edit');
+  if (accBtn) accBtn.addEventListener('click', () => {
+    const groups = new Map();
+    items.forEach((i) => { const k = (i.metal_type || '') + '|' + String(i.karat || '').trim().toUpperCase(); if (!groups.has(k)) groups.set(k, { idx: groups.size, first: i, items: [], g: 0 }); const o = groups.get(k); o.items.push(i); o.g += Number(i.grams); });
+    const rows = [...groups.values()];
+    actionPanel('detail', {
+      title: 'What did the buyer accept these as?', message: 'Change a row only if the buyer took that purity for something else. Saving keeps the old value in the history.',
+      fields: '<div class="sm-acc-list">' + rows.map((o) => '<div class="sm-acc-row"><div><b>' + esc(metalPurity(o.first.metal_type, o.first.karat)) + '</b><div class="muted sm-small">recorded · ' + esc(plural(o.items.length, 'lot')) + ' · ' + esc(num(o.g)) + ' g</div></div>' +
+        acceptedControls('acc-' + o.idx, acceptedOf(o.first), metalPurity(o.first.metal_type, o.first.karat)) + '</div>').join('') + '</div>' +
+        '<div class="field" style="margin-top:8px;"><label for="acc-note">Note (optional)</label><input id="acc-note" type="text" maxlength="200" placeholder="e.g. the supplier\'s slip says 14K"></div>',
+      okLabel: 'Save', onOk: async () => {
+        const changes = [];
+        for (const o of rows) {
+          const cur = readAccepted(document, 'acc-' + o.idx);
+          if (cur.bad) throw new Error(metalPurity(o.first.metal_type, o.first.karat) + ': ' + cur.bad);
+          o.items.forEach((i) => { if (!sameAs(cur, acceptedOf(i))) changes.push({ item_id: i.id, accepted_metal_type: cur.metal_type, accepted_karat: cur.karat }); });
+        }
+        if (!changes.length) throw new Error('Nothing was changed.');
+        const r = await ctx.api.saleSetAccepted(s.id, changes, document.getElementById('acc-note').value.trim());
+        if (r && r.ok === false) throw new Error(r.message);
+        ctx.toast('Accepted metal / purity saved for ' + plural(r.changed, 'lot') + '.'); await reopen();
+      },
+    });
+    rows.forEach((o) => wireAccepted(document, 'acc-' + o.idx, null));
+  });
   // ---- attach a file
   const fileBtn = bodyEl.querySelector('#file-save');
   if (fileBtn) fileBtn.addEventListener('click', async () => {

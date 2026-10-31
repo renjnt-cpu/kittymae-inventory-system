@@ -3,18 +3,18 @@
 //
 // One rule holds everywhere: the screen only hides buttons a person could not use. Who may record a purchase, who may count which branch, and above all who may APPROVE a purchase or a reversal
 // is decided -- and enforced -- by the database (migrations 264-269); a purchase never becomes stock until the Final Approver approves it.
-import { esc, num, friendly, ago, fmtDateTime } from './imFormat.js?v=20261030b';
-import { decorateStock, whoAmI } from './imData.js?v=20261030b';
-import { shellHtml, makeToast, wireDrawerClose, closeDrawer, isDrawerOpen, modalOpen, closeModal } from './imUi.js?v=20261030b';
-import { renderOverview } from './imOverview.js?v=20261030b';
-import { renderForm } from './imForm.js?v=20261030b';
-import { renderApprovals } from './imApprovals.js?v=20261030b';
-import { renderStock } from './imStock.js?v=20261030b';
-import { renderTrace } from './imTrace.js?v=20261030b';
-import { renderCounts } from './imCounts.js?v=20261030b';
-import { renderHistory } from './imHistory.js?v=20261030b';
-import { renderChanges } from './imChanges.js?v=20261030b';
-import { openRequestReview, openDeleteReview } from './imReview.js?v=20261030b';
+import { esc, num, friendly, ago, fmtDateTime } from './imFormat.js?v=20261031a';
+import { decorateStock, whoAmI } from './imData.js?v=20261031a';
+import { shellHtml, makeToast, wireDrawerClose, closeDrawer, isDrawerOpen, modalOpen, closeModal } from './imUi.js?v=20261031a';
+import { renderOverview } from './imOverview.js?v=20261031a';
+import { renderForm } from './imForm.js?v=20261031a';
+import { renderApprovals } from './imApprovals.js?v=20261031a';
+import { renderStock } from './imStock.js?v=20261031a';
+import { renderTrace } from './imTrace.js?v=20261031a';
+import { renderCounts } from './imCounts.js?v=20261031a';
+import { renderHistory } from './imHistory.js?v=20261031a';
+import { renderChanges } from './imChanges.js?v=20261031a';
+import { openRequestReview, openDeleteReview } from './imReview.js?v=20261031a';
 
 const $ = (id) => document.getElementById(id);
 const newForm = () => ({ clientId: '', requestId: null, requestNumber: '', status: '', returnedReason: '', pendingFiles: [], serverFiles: [], saved: null, done: null });
