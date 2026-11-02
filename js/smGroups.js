@@ -3,10 +3,10 @@
 // flat amount): the database then makes the sales -- one for each branch, linked together -- so one payment, approval, file or reversal covers the whole group.
 // What each person sees and may do is decided by the database (the scrap_monitor.* keys, and a group is shown only to someone who can see EVERY branch it touches); the buttons only hide
 // what a person could not use.
-import { esc, grams as fmtG, money, num, fmtDate, fmtShortDateTime, groupStatusBadge, GROUP_STATUS, saleStatusBadge, manilaToday, friendly, plural, scrapId } from './smFormat.js?v=20261031a';
-import { openDrawer, closeDrawer, drawerBody, drawerFooter, kv, actionPanel } from './smUi.js?v=20261031a';
-import { renderList } from './smList.js?v=20261031a';
-import { acceptedControls, wireAccepted, sameAs, acceptedNote, metalPurity } from './smAccepted.js?v=20261031a';
+import { esc, grams as fmtG, money, num, fmtDate, fmtShortDateTime, groupStatusBadge, GROUP_STATUS, saleStatusBadge, manilaToday, friendly, plural, scrapId } from './smFormat.js?v=20261102a';
+import { openDrawer, closeDrawer, drawerBody, drawerFooter, kv, actionPanel } from './smUi.js?v=20261102a';
+import { renderList } from './smList.js?v=20261102a';
+import { acceptedControls, wireAccepted, sameAs, acceptedNote, metalPurity } from './smAccepted.js?v=20261102a';
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
 const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -125,7 +125,7 @@ export async function openGroup(ctx, id) {
       g.weighings.map((w) => { const d = r3(Number(w.received_g) - Number(w.sent_g));
         return '<tr><td data-label="Purity">' + esc(purityLabel(w)) + acceptedNote(w) + '<div class="muted sm-small">' + esc(plural(w.lots, 'lot')) + '</div></td><td data-label="Sent" class="sm-num">' + esc(num(w.sent_g)) + ' g</td><td data-label="Supplier weighed" class="sm-num"><b>' + esc(num(w.received_g)) + ' g</b></td>' +
           '<td data-label="Difference" class="sm-num">' + (d ? (d > 0 ? '+' : '') + esc(num(d)) + ' g' : 'same') + '</td>' + (v ? '<td data-label="Rate / g" class="sm-num">' + esc(money(w.rate)) + '</td><td data-label="Amount" class="sm-num">' + esc(money(w.amount)) + '</td>' : '') + '</tr>'; }).join('') + '</tbody></table></div>' +
-      '<p class="muted sm-small">“Accepted as” is what was entered when the group was confirmed. To change it later, open a branch\'s sale below and use “Change the accepted metal / purity”.</p>');
+      '<p class="muted sm-small">“Accepted as” is what was entered when the group was confirmed. To change it later, open a branch\'s sale below and use “Change the accepted metal / purity” — it can be set for a whole purity or for single lots.</p>');
   } else if (pur.length) {
     body += section('By purity (what was sent)', '<div class="table-scroll table-2col"><table class="sm-table"><thead><tr><th>Purity</th><th class="sm-num">Lots</th><th class="sm-num">Grams sent</th></tr></thead><tbody>' +
       pur.map((p) => '<tr><td data-label="Purity">' + esc(purityLabel(p)) + '</td><td data-label="Lots" class="sm-num">' + esc(p.lots) + '</td><td data-label="Grams sent" class="sm-num"><b>' + esc(num(p.grams)) + ' g</b></td></tr>').join('') + '</tbody></table></div>');
@@ -220,7 +220,7 @@ function openConfirm(ctx, res, opt, onDone) {
     const flat = st.method === 'FLAT';
     return '<div class="sm-form-sec"><h4>' + (flat ? 'What was sent' : 'The supplier\'s weighing') + '</h4>' +
       (flat ? '<p class="muted sm-small">One total for the whole group. The amount is shared over the lots by their grams, so each branch\'s sale gets its part.</p>' : '<p class="muted sm-small">For each purity: the grams the supplier weighed and the rate per gram they pay. The grams that left the branches stay as they were sent; the difference is kept on the group.</p>') +
-      '<p class="muted sm-small">If the supplier took a purity as something else, change <b>Accepted as</b>. What the branch recorded stays as it was.</p>' +
+      '<p class="muted sm-small">If the supplier took a purity as something else, change <b>Accepted as</b>; it applies to every lot of that purity and the branch\'s own record stays as it was. If the supplier changed only some of the lots, confirm first, then change just those lots on each branch\'s sale.</p>' +
       '<div class="table-scroll table-2col"><table class="sm-table sm-weigh"><thead><tr><th>Purity sent</th><th>Accepted as</th><th class="sm-num">Sent (g)</th>' + (flat ? '' : '<th class="sm-num">Supplier weighed (g)</th><th class="sm-num">Rate / g (₱)</th>' + (v ? '<th class="sm-num">Amount</th>' : '') + '<th class="sm-num">Difference</th>') + '</tr></thead><tbody>' +
       pur.map((p, i) => { const w = weighOf(p), hint = rates[String(p.karat || '').trim().toUpperCase()];
         return '<tr><td data-label="Purity sent">' + esc(purityLabel(p)) + '<div class="muted sm-small">' + esc(plural(p.lots, 'lot')) + '</div></td>' +

@@ -1,10 +1,10 @@
 // Scrap Monitoring page -- "Scrap Sales": every scrap sale and disposal, and the drawer for one of them (its lots, what the buyer paid, the files, the history, and the actions: approve,
 // reject, correct, reverse, record a payment, attach a file). What each person sees and may do is decided by the database (the scrap_monitor.* keys); the buttons only hide what a person could not use.
 import { esc, grams, money, num, fmtDate, fmtDateTime, fmtShortDateTime, saleStatusBadge, payBadge, SALE_STATUS, PAY_STATUS, PAY_METHODS, NEEDS_REFERENCE, FILE_TYPES, fileTypeLabel, manilaToday, friendly,
-  kindOfSale, scrapId, posEntryUrl, plural, DISPOSAL_REASONS, DISPOSAL_METHODS } from './smFormat.js?v=20261031a';
-import { openDrawer, closeDrawer, drawerFooter, kv, actionPanel, fileThumb, wireFiles, emptyBox } from './smUi.js?v=20261031a';
-import { renderList } from './smList.js?v=20261031a';
-import { acceptedControls, readAccepted, wireAccepted, sameAs, acceptedNote, acceptedOf, metalPurity } from './smAccepted.js?v=20261031a';
+  kindOfSale, scrapId, posEntryUrl, plural, DISPOSAL_REASONS, DISPOSAL_METHODS } from './smFormat.js?v=20261102a';
+import { openDrawer, closeDrawer, drawerFooter, kv, actionPanel, fileThumb, wireFiles, emptyBox } from './smUi.js?v=20261102a';
+import { renderList } from './smList.js?v=20261102a';
+import { acceptedControls, readAccepted, wireAccepted, setAccepted, sameAs, acceptedNote, acceptedOf, metalPurity } from './smAccepted.js?v=20261102a';
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
 
@@ -186,17 +186,26 @@ export async function openSale(ctx, id) {
     const groups = new Map();
     items.forEach((i) => { const k = (i.metal_type || '') + '|' + String(i.karat || '').trim().toUpperCase(); if (!groups.has(k)) groups.set(k, { idx: groups.size, first: i, items: [], g: 0 }); const o = groups.get(k); o.items.push(i); o.g += Number(i.grams); });
     const rows = [...groups.values()];
+    const lotLabel = (i) => (i.entry_id ? scrapId(i.entry_id) : 'Lot') + ' ' + metalPurity(i.metal_type, i.karat);
+    // a row sets every lot of that recorded purity at once; "Set lot by lot" (only when there are several lots) changes single lots, e.g. when the supplier moved only some of them
+    const lotRows = (o) => o.items.length < 2 ? '' : '<details class="sm-acc-lots"><summary>Set lot by lot (' + esc(plural(o.items.length, 'lot')) + ')</summary>' +
+      o.items.map((i) => '<div class="sm-acc-row sm-acc-lot"><div><b>' + esc(i.entry_id ? scrapId(i.entry_id) : 'Lot') + '</b><div class="muted sm-small">' + esc(num(i.grams)) + ' g' + (i.branch_name ? ' · ' + esc(i.branch_name) : '') + '</div></div>' +
+        acceptedControls('acc-l' + i.id, acceptedOf(i), lotLabel(i)) + '</div>').join('') + '</details>';
     actionPanel('detail', {
-      title: 'What did the buyer accept these as?', message: 'Change a row only if the buyer took that purity for something else. Saving keeps the old value in the history.',
-      fields: '<div class="sm-acc-list">' + rows.map((o) => '<div class="sm-acc-row"><div><b>' + esc(metalPurity(o.first.metal_type, o.first.karat)) + '</b><div class="muted sm-small">recorded · ' + esc(plural(o.items.length, 'lot')) + ' · ' + esc(num(o.g)) + ' g</div></div>' +
-        acceptedControls('acc-' + o.idx, acceptedOf(o.first), metalPurity(o.first.metal_type, o.first.karat)) + '</div>').join('') + '</div>' +
+      title: 'What did the buyer accept these as?', message: 'Change a row only if the buyer took that purity for something else; it applies to every lot of that purity. To change only some of them, open “Set lot by lot”. Saving keeps the old value in the history.',
+      fields: '<div class="sm-acc-list">' + rows.map((o) => '<div class="sm-acc-group"><div class="sm-acc-row"><div><b>' + esc(metalPurity(o.first.metal_type, o.first.karat)) + '</b><div class="muted sm-small">recorded · ' + esc(plural(o.items.length, 'lot')) + ' · ' + esc(num(o.g)) + ' g</div></div>' +
+        acceptedControls('acc-' + o.idx, acceptedOf(o.first), metalPurity(o.first.metal_type, o.first.karat)) + '</div>' + lotRows(o) + '</div>').join('') + '</div>' +
         '<div class="field" style="margin-top:8px;"><label for="acc-note">Note (optional)</label><input id="acc-note" type="text" maxlength="200" placeholder="e.g. the supplier\'s slip says 14K"></div>',
       okLabel: 'Save', onOk: async () => {
         const changes = [];
         for (const o of rows) {
-          const cur = readAccepted(document, 'acc-' + o.idx);
-          if (cur.bad) throw new Error(metalPurity(o.first.metal_type, o.first.karat) + ': ' + cur.bad);
-          o.items.forEach((i) => { if (!sameAs(cur, acceptedOf(i))) changes.push({ item_id: i.id, accepted_metal_type: cur.metal_type, accepted_karat: cur.karat }); });
+          const rowVal = readAccepted(document, 'acc-' + o.idx);
+          if (rowVal.bad) throw new Error(metalPurity(o.first.metal_type, o.first.karat) + ': ' + rowVal.bad);
+          for (const i of o.items) {
+            const cur = o.items.length > 1 ? readAccepted(document, 'acc-l' + i.id) : rowVal;   // the lot's own box when there are several (it follows the row until it is touched)
+            if (cur.bad) throw new Error(lotLabel(i) + ': ' + cur.bad);
+            if (!sameAs(cur, acceptedOf(i))) changes.push({ item_id: i.id, accepted_metal_type: cur.metal_type, accepted_karat: cur.karat });
+          }
         }
         if (!changes.length) throw new Error('Nothing was changed.');
         const r = await ctx.api.saleSetAccepted(s.id, changes, document.getElementById('acc-note').value.trim());
@@ -204,7 +213,12 @@ export async function openSale(ctx, id) {
         ctx.toast('Accepted metal / purity saved for ' + plural(r.changed, 'lot') + '.'); await reopen();
       },
     });
-    rows.forEach((o) => wireAccepted(document, 'acc-' + o.idx, null));
+    rows.forEach((o) => {
+      // the row follows its own lots: choosing something on the row fills the lots that were not set by hand
+      const touched = new Set();
+      if (o.items.length > 1) o.items.forEach((i) => wireAccepted(document, 'acc-l' + i.id, () => touched.add(i.id)));
+      wireAccepted(document, 'acc-' + o.idx, o.items.length > 1 ? (val) => { if (val && !val.bad) o.items.forEach((i) => { if (!touched.has(i.id)) setAccepted(document, 'acc-l' + i.id, val); }); } : null);
+    });
   });
   // ---- attach a file
   const fileBtn = bodyEl.querySelector('#file-save');

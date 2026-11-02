@@ -1,8 +1,9 @@
 // Scrap Monitoring page -- "All Scrap": every scrap record of every branch the person may see, read live from the branches' own records, and the drawer that shows one record in full.
 // Nothing here is typed in again: the list and the drawer only show what the POS (Branches > Scrap) already stores; "Open original record" goes back to it.
-import { esc, grams, money, num, fmtDate, fmtTime, fmtDateTime, fmtShortDateTime, kindBadge, statusBadge, markBadge, ageBadge, KINDS, STATUS, SORT_ENTRIES, SOURCE_TYPES, METALS, posEntryUrl, scrapId, friendly, saleStatusBadge, groupStatusBadge, kindOfSale, plural } from './smFormat.js?v=20261031a';
-import { openDrawer, closeDrawer, drawerFooter, kv, emptyBox, fileThumb, wireFiles } from './smUi.js?v=20261031a';
-import { renderList } from './smList.js?v=20261031a';
+import { esc, grams, money, num, fmtDate, fmtTime, fmtDateTime, fmtShortDateTime, kindBadge, statusBadge, markBadge, ageBadge, KINDS, STATUS, SORT_ENTRIES, SOURCE_TYPES, METALS, posEntryUrl, scrapId, friendly, saleStatusBadge, groupStatusBadge, kindOfSale, plural } from './smFormat.js?v=20261102a';
+import { openDrawer, closeDrawer, drawerFooter, kv, emptyBox, fileThumb, wireFiles } from './smUi.js?v=20261102a';
+import { renderList } from './smList.js?v=20261102a';
+import { openLotEdit, canEditLots, lotIsHeld } from './smLotEdit.js?v=20261102a';
 
 export function entriesCfg(ctx) {
   const v = ctx.value;
@@ -98,7 +99,8 @@ export async function openEntry(ctx, id) {
   body += section('Metal & weight', '<div class="table-scroll table-2col"><table class="sm-table"><thead><tr><th>#</th><th>Metal</th><th>Purity</th><th class="sm-num">Grams</th>' + (v ? '<th class="sm-num">Price / g</th><th class="sm-num">Amount</th>' : '') +
     (isIn ? '<th class="sm-num">Held now</th><th class="sm-num">Sold / released</th><th>Mark</th>' : '') + '<th>Photo</th></tr></thead><tbody>' +
     lines.map((l) => { if (l.photo) paths.push(l.photo);
-      return '<tr><td data-label="#">' + esc(l.line_no) + '</td><td data-label="Metal">' + esc(l.metal_type) + '</td><td data-label="Purity">' + esc(l.karat || '—') + '</td><td data-label="Grams" class="sm-num">' + esc(num(l.grams)) + '</td>' +
+      return '<tr><td data-label="#">' + esc(l.line_no) + '</td><td data-label="Metal">' + esc(l.metal_type) + '</td><td data-label="Purity">' + esc(l.karat || '—') +
+        (isIn && e.kind !== 'Transferred In' && canEditLots(ctx) && lotIsHeld(l.original_g, l.available_g) ? ' <button type="button" class="sm-link" data-edit-line="' + esc(l.line_id) + '" title="The supplier tested it as something else? Correct the metal / purity of this lot">Edit</button>' : '') + '</td><td data-label="Grams" class="sm-num">' + esc(num(l.grams)) + '</td>' +
         (v ? '<td data-label="Price / g" class="sm-num">' + esc(l.price_per_gram === null || l.price_per_gram === undefined ? '—' : money(l.price_per_gram)) + '</td><td data-label="Amount" class="sm-num">' + esc(l.amount === null || l.amount === undefined ? '—' : money(l.amount)) + '</td>' : '') +
         (isIn ? '<td data-label="Held now" class="sm-num">' + esc(l.available_g === null || l.available_g === undefined ? '—' : num(l.available_g)) + (l.reserved_g > 0 ? '<div class="muted sm-small">' + esc(num(l.reserved_g)) + ' reserved</div>' : '') + '</td>' +
           '<td data-label="Sold / released" class="sm-num">' + esc(num((l.released_g || 0) + (l.disposed_g || 0) + (l.transferred_g || 0))) + '</td><td data-label="Mark">' + (markBadge(l.mark, l.mark_buyer) || '<span class="muted">—</span>') + (l.mark_note ? '<div class="muted sm-small">' + esc(l.mark_note) + '</div>' : '') + '</td>' : '') +
@@ -155,6 +157,10 @@ export async function openEntry(ctx, id) {
   const bodyEl = document.getElementById('sm-detail-body'), footEl = drawerFooter('detail');
   wireFiles(ctx, bodyEl);
   bodyEl.querySelectorAll('[data-open-sale]').forEach((b) => b.addEventListener('click', () => ctx.openSale(Number(b.dataset.openSale))));
+  bodyEl.querySelectorAll('[data-edit-line]').forEach((b) => b.addEventListener('click', () => {
+    const l = lines.find((x) => String(x.line_id) === b.dataset.editLine);
+    if (l) openLotEdit(ctx, { lineId: l.line_id, entryId: e.id, lineNo: l.line_no, metal: l.metal_type, karat: l.karat, grams: l.grams, branch: e.branch_name }, { drawer: 'detail', done: () => { ctx.afterChange(); return openEntry(ctx, e.id); } });
+  }));
   bodyEl.querySelectorAll('[data-open-group]').forEach((b) => b.addEventListener('click', () => ctx.openGroup(b.dataset.openGroup)));
   footEl.querySelector('[data-close]').addEventListener('click', () => closeDrawer('detail'));
   const grp = footEl.querySelector('[data-group]'); if (grp) grp.addEventListener('click', () => { closeDrawer('detail'); ctx.openSaleForm({ mode: 'GROUP', branchId: e.branch_id, entryId: e.id }); });

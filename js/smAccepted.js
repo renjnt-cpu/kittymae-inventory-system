@@ -1,13 +1,20 @@
 // Scrap Monitoring -- "accepted as": the metal / purity the supplier or buyer took a lot for can differ from the one the branch recorded (the lot itself, and what left the branch's shelf,
 // always stay as recorded). A small metal + purity picker used by the group confirmation and by the sale page, and the words that say what a lot was accepted as.
-// The purities are the ones the POS offers (GOLD 10K..24K, SILVER 999 / 925 / 800); anything else is typed under "Custom…", so a purity like 20K is never lost.
-import { esc, METALS } from './smFormat.js?v=20261031a';
+// The purities are the ones the POS offers (GOLD 10K..24K, SILVER 999 / 925 / 800) plus every purity the branches have actually recorded (setKnownPurities); anything else is typed under
+// "Custom…", so a purity is never lost. The same picker is used to correct a lot itself (smLotEdit.js).
+import { esc, METALS } from './smFormat.js?v=20261102a';
 
-export const GOLD_PURITIES = ['10K', '14K', '16K', '18K', '21K', '22K', '24K'];
+export const GOLD_PURITIES = ['10K', '14K', '16K', '18K', '20K', '21K', '22K', '24K'];
 export const SILVER_PURITIES = ['999', '925', '800'];
 const CUSTOM = '__custom';
-const purityList = (metal) => (metal === 'Gold' ? GOLD_PURITIES : metal === 'Silver' ? SILVER_PURITIES : []);
 const norm = (k) => String(k == null ? '' : k).trim().toUpperCase();
+const learned = { Gold: new Set(), Silver: new Set() };
+const byNumber = (dir) => (a, b) => dir * ((parseFloat(a) || 0) - (parseFloat(b) || 0)) || String(a).localeCompare(String(b));
+/** Teach the picker the purities that exist in the data (['18K', '925', …]): a number followed by K is gold, three digits is silver. Anything else stays under "Custom…". */
+export function setKnownPurities(list) {
+  (list || []).forEach((raw) => { const k = norm(raw); if (!k || k.length > 12) return; if (/^\d+(\.\d+)?K$/.test(k)) learned.Gold.add(k); else if (/^\d{3}$/.test(k)) learned.Silver.add(k); });
+}
+const purityList = (metal) => (metal === 'Gold' ? [...new Set([...GOLD_PURITIES, ...learned.Gold])].sort(byNumber(1)) : metal === 'Silver' ? [...new Set([...SILVER_PURITIES, ...learned.Silver])].sort(byNumber(-1)) : []);
 
 /** what the lot was accepted as: { metal_type, karat, changed } -- an item (or a weighing row) carries accepted_metal_type / accepted_karat only when they differ from the recorded ones */
 export const acceptedOf = (i) => (i && i.accepted_metal_type ? { metal_type: i.accepted_metal_type, karat: i.accepted_karat || '', changed: true } : { metal_type: (i && i.metal_type) || '', karat: (i && i.karat) || '', changed: false });
@@ -55,6 +62,17 @@ export function wireAccepted(root, pre, onChange) {
   m.addEventListener('change', () => { p.innerHTML = purityOptions(m.value, ''); c.hidden = true; c.value = ''; fire(); });
   p.addEventListener('change', () => { c.hidden = p.value !== CUSTOM; if (!c.hidden) c.focus(); fire(); });
   c.addEventListener('input', fire);
+}
+
+/** Puts a value into a picker from outside (no change event is fired): { metal_type, karat } */
+export function setAccepted(root, pre, val) {
+  const g = (s) => root.querySelector('#' + pre + '-' + s);
+  const m = g('m'), p = g('p'), c = g('c');
+  if (!m || !p || !val) return;
+  const metal = METALS.includes(val.metal_type) ? val.metal_type : 'Other', k = norm(val.karat), custom = !!k && !purityList(metal).includes(k);
+  m.value = metal;
+  p.innerHTML = purityOptions(metal, k);
+  c.hidden = !custom; c.value = custom ? k : '';
 }
 
 /** true when two { metal_type, karat } mean the same thing (the database stores "accepted" only when they differ) */

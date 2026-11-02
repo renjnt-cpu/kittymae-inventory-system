@@ -1,8 +1,9 @@
 // Scrap Monitoring page -- "Available Scrap" (the lots still held, oldest first) and "For Sale / Disposal" (the lots management has marked, plus the sales and disposals waiting for approval).
 // A lot is one metal / purity line of a purchase. Select lots to sell or dispose of them, or to mark them for sale / disposal / reserve them for a buyer.
-import { esc, grams, num, fmtDate, markBadge, ageBadge, scrapId, kindBadge, money, friendly, saleStatusBadge, kindOfSale, METALS, plural } from './smFormat.js?v=20261031a';
-import { openDrawer, closeDrawer, kv, emptyBox, actionPanel } from './smUi.js?v=20261031a';
-import { renderList } from './smList.js?v=20261031a';
+import { esc, grams, num, fmtDate, markBadge, ageBadge, scrapId, kindBadge, money, friendly, saleStatusBadge, kindOfSale, METALS, plural } from './smFormat.js?v=20261102a';
+import { openDrawer, closeDrawer, kv, emptyBox, actionPanel } from './smUi.js?v=20261102a';
+import { renderList } from './smList.js?v=20261102a';
+import { openLotEdit, canEditLots, lotIsHeld } from './smLotEdit.js?v=20261102a';
 
 const MARK_OPTIONS = [['FOR_SALE', 'For sale'], ['RESERVED', 'Reserved for a buyer'], ['FOR_DISPOSAL', 'For disposal'], ['NONE', 'Not marked']];
 
@@ -53,7 +54,8 @@ export function availableCfg(ctx, mode) {
         '<td data-label="Available" class="sm-num"><b>' + esc(num(r.available_g)) + ' g</b>' + (r.original_g - r.available_g > 0.0005 ? '<div class="muted sm-small">' + esc(num(r.original_g - r.available_g)) + ' g already gone</div>' : '') + '</td>' +
         '<td data-label="Mark">' + (markBadge(r.mark, r.mark_buyer) || '<span class="muted">—</span>') + (r.mark_note ? '<div class="muted sm-small sm-wrap">' + esc(r.mark_note) + '</div>' : '') + '</td>' +
         '<td data-label="From" class="sm-wrap">' + (r.kind === 'Transferred In' ? 'Transfer in' : esc(r.customer_name || 'Walk-in')) + '</td><td data-label="Recorded by">' + esc(r.recorded_by || '—') + '</td>' +
-        '<td class="full-row"><button type="button" class="btn small secondary" data-open-entry="' + esc(r.entry_id) + '">Details</button></td></tr>').join('') + '</tbody></table></div><div id="sm-bulkhost"></div>',
+        '<td class="full-row"><button type="button" class="btn small secondary" data-open-entry="' + esc(r.entry_id) + '">Details</button>' +
+          (canEditLots(c) && r.kind !== 'Transferred In' && lotIsHeld(r.original_g, r.available_g) ? ' <button type="button" class="btn small secondary" data-edit-lot="' + esc(r.line_id) + '" title="The supplier tested it as something else? Correct the metal / purity of this lot">Edit metal / purity</button>' : '') + '</td></tr>').join('') + '</tbody></table></div><div id="sm-bulkhost"></div>',
     wireRows: (body, rows, c, s, reload) => wirePicking(c, body, rows, s, reload, key),
     emptyText: (hasFilters) => hasFilters ? 'No lots match these filters.' : marked ? 'Nothing is marked yet. Tick lots on the Available Scrap tab and mark them for sale or disposal.' : 'No scrap is available right now.',
   };
@@ -62,6 +64,10 @@ export function availableCfg(ctx, mode) {
 function wirePicking(ctx, body, rows, s, reload, key) {
   const byLine = new Map(rows.map((r) => [r.line_id, r]));
   body.querySelectorAll('[data-open-entry]').forEach((b) => b.addEventListener('click', () => ctx.openEntry(b.dataset.openEntry)));
+  body.querySelectorAll('[data-edit-lot]').forEach((b) => b.addEventListener('click', () => {
+    const r = byLine.get(Number(b.dataset.editLot));
+    if (r) openLotEdit(ctx, { lineId: r.line_id, entryId: r.entry_id, lineNo: r.line_no, metal: r.metal_type, karat: r.karat, grams: r.original_g, branch: r.branch_name }, { drawer: 'side', done: () => { s.picked.delete(r.line_id); ctx.afterChange(); reload(); ctx.refreshCounts(); } });
+  }));
   body.querySelectorAll('[data-grp-branch]').forEach((b) => b.addEventListener('click', () => {
     s.filters.branch_id = b.dataset.grpBranch; s.filters.karat = b.dataset.grpKarat; s.filters.metal = b.dataset.grpMetal; s.page = 1; ctx.showTab(key);
   }));

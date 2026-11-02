@@ -74,6 +74,8 @@ export const saleReverse = (id, reason) => rpc('scrap_sale_reverse', { p_sale_id
 export const saleCorrect = (id, patch, reason) => rpc('scrap_sale_correct', { p_sale_id: id, p_patch: patch, p_reason: reason });
 /** What the supplier / buyer ACCEPTED each lot as -- items: [{item_id, accepted_metal_type, accepted_karat}]; the recorded values put a lot back to "as recorded". Grams, price and the POS entry never change. */
 export const saleSetAccepted = (id, items, note) => rpc('scrap_sale_set_accepted', { p_sale_id: id, p_items: items, p_note: note || null });
+/** Corrects the metal / purity of ONE lot (a line of a scrap purchase) that is still fully held -- the database refuses it once any of it is sold, disposed, held in a sale or group, or matched by a POS out entry. A reason is required and logged. */
+export const lotSetPurity = (lineId, metal, karat, reason) => rpc('scrap_lot_set_purity', { p_line_id: lineId, p_metal: metal, p_karat: karat || null, p_reason: reason });
 /** p: {requestId, saleId, amount, method, reference, paidAt, receivedBy, receivedByName, notes} */
 export const paymentAdd = (p) => rpc('scrap_payment_add', {
   p_request_id: p.requestId, p_sale_id: p.saleId, p_amount: p.amount, p_method: p.method, p_reference: p.reference || null, p_paid_at: p.paidAt || null,

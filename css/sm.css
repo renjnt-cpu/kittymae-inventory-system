@@ -195,6 +195,9 @@ button.sm-aging-btn:hover { background:#fffbf0; }
 .sm-accepted { color:#8a5a00; }
 .sm-acc-list { margin:6px 0; }
 .sm-acc-row { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; padding:8px 0; border-bottom:1px dashed #e6dfc2; }
+.sm-acc-lots { margin:2px 0 6px 10px; padding-left:10px; border-left:3px solid var(--sm-accent-line); }
+.sm-acc-lots summary { cursor:pointer; font-size:13px; font-weight:600; padding:6px 0; }
+.sm-acc-lot { padding:6px 0; }
 .sm-preview { background:#fafafa; border:1px solid #eee; border-radius:10px; padding:10px 12px; }
 .sm-preview table { margin:0; }
 .sm-preview .sm-tot { font-size:15px; font-weight:700; }
