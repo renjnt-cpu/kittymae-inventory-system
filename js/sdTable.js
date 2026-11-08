@@ -1,6 +1,6 @@
 // Sales & Profit Dashboard -- the one table every tab uses: the database sends a page at a time (search, sort and totals are done there, so the browser
 // never holds every transaction), the person can choose which columns to see, open a row, and export everything the filters match (CSV, Excel, PDF, Print).
-import { api, esc, money, int, pct, fin, fmtDate, fmtDateTime, friendly } from './sdCore.js?v=20261031a';
+import { api, esc, money, int, pct, fin, fmtDate, fmtDateTime, friendly, todayIn } from './sdCore.js?v=20261031a';
 import { exportCsv, exportXlsx, exportPdf } from './leaveExport.js?v=20261031a';
 import { loadingBox, errorBox, emptyBox, badge, openDrawer, kvRow, toast } from './sdUi.js?v=20261031a';
 
@@ -194,7 +194,7 @@ function exportRows(rows, totals, cs) {
 export async function exportData(format, spec) {
   if (!spec.rows.length) { toast('There is nothing to export for these filters.', true); return; }
   const cs = spec.columns, ecols = cs.map((c) => ({ key: c.key, label: c.label, type: exportType(c) })), erows = exportRows(spec.rows, spec.totals, cs);
-  const name = spec.name + '-' + new Date().toISOString().slice(0, 10), sub = spec.subtitle || [];
+  const name = spec.name + '-' + todayIn('Asia/Manila'), sub = spec.subtitle || [];   // the Philippine date, not the UTC date (that one is "yesterday" until 8 AM)
   if (format === 'csv') exportCsv(name, ecols, erows);
   else if (format === 'xlsx') await exportXlsx(name, spec.title, ecols, erows, sub.map((l) => { const i = l.indexOf(':'); return i > 0 ? { k: l.slice(0, i), v: l.slice(i + 1).trim() } : { k: 'Note', v: l }; }));
   else if (format === 'pdf') await exportPdf(name, spec.title, sub, ecols, erows, spec.footer || 'Kittymae Jewels — Sales & Profit Dashboard');

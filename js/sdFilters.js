@@ -1,7 +1,7 @@
 // Sales & Profit Dashboard -- the filter bar: date range (presets or a custom range, always shown with the previous comparable period), branch, and the
 // "more filters" (channel, shop, product, SKU, category, collection, supplier, customer, salesperson, payment method, order status, payment status).
 // Every filter works together with every other, and every tab, chart, table and export reads the same state.
-import { esc, PRESETS, presetRange, previousPeriod, rangeText, fmtDate } from './sdCore.js?v=20261031a';
+import { esc, PRESETS, presetRange, previousPeriod, rangeText, fmtDate, fmtDayLong, createClock } from './sdCore.js?v=20261031a';
 
 const MORE = [
   { key: 'channel', label: 'Sales channel', opt: 'channels' }, { key: 'shop', label: 'Shop', opt: 'shops' },
@@ -14,14 +14,23 @@ const MORE = [
 
 export function createFilters({ root, meta, onChange }) {
   const settings = meta.settings || {};
-  const today = meta.today;
+  // "Today" is the Philippine date on the database's clock, read again whenever it is needed -- NOT the date the page happened to open on (a page left open past midnight must move on to the new day)
+  const clock = createClock(meta);
+  let day = meta.today || clock.today();
+  /** Moves `day` forward when the Philippine date has changed; true when it moved on this call. */
+  function syncDay() {
+    const d = clock.today();
+    if (d === day) return false;
+    day = d; paint();
+    return true;
+  }
   const defPreset = (PRESETS.some((p) => p.id === settings.default_date_range) ? settings.default_date_range : 'this_month');
   const allBranches = !!meta.all_branches;
   const defBranch = allBranches ? (settings.default_branch_id !== null && settings.default_branch_id !== undefined ? String(settings.default_branch_id) : '') : String((meta.me && meta.me.branch_id) || '');
   const state = { preset: defPreset, custom: null, branch: defBranch, more: {}, moreOpen: false, customOpen: false };
   const opt = (k) => (meta.options && meta.options[k]) || [];
 
-  function range() { return presetRange(state.preset, today, state.custom); }
+  function range() { syncDay(); return presetRange(state.preset, day, state.custom); }
   function prev() { const r = range(); return previousPeriod(r.from, r.to, state.preset); }
 
   function html() {
@@ -67,9 +76,13 @@ export function createFilters({ root, meta, onChange }) {
     const custom = state.preset === 'custom';
     root.querySelectorAll('.sd-custom').forEach((e) => { e.hidden = !custom; });
     if (custom) { $('sd-from').value = r.from; $('sd-to').value = r.to; }
-    $('sd-period-line').innerHTML = '<span><b>Selected period:</b> ' + esc(rangeText(r.from, r.to)) + '</span><span><b>Compared with:</b> ' + esc(rangeText(p.from, p.to)) + '</span>';
+    $('sd-period-line').innerHTML = '<span><b>Selected period:</b> ' + esc(rangeText(r.from, r.to)) + '</span><span><b>Compared with:</b> ' + esc(rangeText(p.from, p.to)) + '</span>' +
+      '<span><b>Today in the Philippines:</b> ' + esc(fmtDayLong(day)) + '</span><span class="muted" id="sd-loaded">' + esc(stampText) + '</span>';
     chips();
   }
+  /** "Figures read at 1:52 AM" (Philippine time) -- so a page that has been open for hours is easy to spot. */
+  let stampText = '';
+  function stamp() { stampText = 'Figures read at ' + clock.time(); const el = root.querySelector('#sd-loaded'); if (el) el.textContent = stampText; }
   function showErr(t) { $('sd-fb-err').textContent = t || ''; }
 
   $('sd-preset').addEventListener('change', (e) => {
@@ -104,6 +117,7 @@ export function createFilters({ root, meta, onChange }) {
     /** the filter object every database call takes */
     server() {
       const r = range(), p = prev();
+      stamp();
       const o = { from: r.from, to: r.to, prev_from: p.from, prev_to: p.to };
       if (state.branch) o.branch_id = Number(state.branch);
       Object.entries(state.more).forEach(([k, v]) => { if (v) o[k] = v; });
@@ -116,8 +130,12 @@ export function createFilters({ root, meta, onChange }) {
       const r = range(), p = prev(), br = (meta.branches || []).find((b) => String(b.id) === state.branch);
       return ['Period: ' + rangeText(r.from, r.to), 'Compared with: ' + rangeText(p.from, p.to), 'Branch: ' + (br ? br.name : 'All branches'),
         'Filters: ' + (Object.keys(state.more).length ? Object.entries(state.more).map(([k, v]) => (MORE.find((m) => m.key === k) || { label: k }).label + ' = ' + v).join('; ') : 'none'),
-        'Generated: ' + new Date().toLocaleString('en-US', { timeZone: meta.tz || 'Asia/Manila' })];
+        'Generated: ' + new Date(clock.now()).toLocaleString('en-US', { timeZone: meta.tz || 'Asia/Manila' })];
     },
+    /** The Philippine date "Today" stands for right now. */
+    today: () => { syncDay(); return day; },
+    /** Called by a timer and when a tab comes back to the front: moves "Today" on if the Philippine date changed. True = the figures of a date-relative range (Today, This Month ...) must be read again. */
+    checkDay() { return syncDay() && state.preset !== 'custom'; },
     setCustom(from, to) { state.preset = 'custom'; state.custom = { from, to }; paint(); onChange(); },
   };
 }

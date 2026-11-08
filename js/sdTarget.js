@@ -50,7 +50,7 @@ export function renderTarget(root, ctx) {
 
   // ---------------------------------------------------------------- what the records say
   async function fetchRecords() {
-    const today = todayIn(tz), thisMonth = startOfMonth(today);
+    const today = ctx.filters ? ctx.filters.today() : todayIn(tz), thisMonth = startOfMonth(today);   // the page's Philippine date (database clock)
     const trend = await A.trend({ from: startOfMonth(addMonths(today, -6)), to: today }, 'month');
     const pts = (trend.points || []).map((p) => ({ b: String(p.bucket).slice(0, 10), net: fin(p.net_sales) || 0, opex: fin(p.opex), gp: fin(p.gross_profit) }));
     const withCosts = pts.filter((p) => p.b < thisMonth && p.net > 0 && p.opex !== null && p.opex > 0);

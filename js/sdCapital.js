@@ -1,7 +1,7 @@
 // Sales & Profit Dashboard -- the Capital tab: owner capital (initial, additional, withdrawals), equipment, stock at cost, receivables and payables.
 // Capital is kept apart from sales and from stock. An entry is never deleted: a wrong one is voided with a reason, and every change is in the audit trail.
 // There is deliberately no cash balance and no "estimated owner equity" (which was built on it): the Finance > Transactions ledger does not see the real money -- Ren, 2026-10-07.
-import { api, esc, money, int, fmtDate, friendly, todayIn } from './sdCore.js?v=20261031a';
+import { api, esc, money, int, fmtDate, friendly } from './sdCore.js?v=20261031a';
 import { panel, lockedBox, loadingBox, errorBox, emptyBox, badge, openDrawer, closeDrawer, toast, drawerBody } from './sdUi.js?v=20261031a';
 import { createTable } from './sdTable.js?v=20261031a';
 import { COLS, ROW_TITLE } from './sdColumns.js?v=20261031a';
@@ -19,8 +19,7 @@ const TYPES = [
 const PAY_ACCOUNTS = ['Cash on hand', 'GCash', 'Maya', 'Bank transfer'];
 
 export function renderCapital(root, ctx) {
-  const { filters, can, meta } = ctx; let scope = 'all'; let table = null;
-  const tz = meta.tz;
+  const { filters, can } = ctx; let scope = 'all'; let table = null;
   function draw() {
     const f = filters.server();
     root.innerHTML = '<div id="sd-cp-sum"></div><div id="sd-cp-table"></div>';
@@ -63,7 +62,7 @@ export function renderCapital(root, ctx) {
     const key = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random();
     openDrawer({ title: row ? 'Edit capital entry' : 'Add capital entry', sub: row ? 'Entry #' + row.id : 'Owner capital is separate from sales and stock',
       body: '<div id="sd-cap-msg"></div><div class="sd-form">' +
-        '<div class="field"><label for="sd-cap-date">Date</label><input type="date" id="sd-cap-date" value="' + esc(row ? row.date : todayIn(tz)) + '" max="' + esc(todayIn(tz)) + '"></div>' +
+        '<div class="field"><label for="sd-cap-date">Date</label><input type="date" id="sd-cap-date" value="' + esc(row ? row.date : filters.today()) + '" max="' + esc(filters.today()) + '"></div>' +
         '<div class="field"><label for="sd-cap-type">Type</label><select id="sd-cap-type">' + typeOptions(row ? row.type : 'ADDITIONAL_CAPITAL') + '</select><span class="muted" id="sd-cap-hint"></span></div>' +
         '<div class="field"><label for="sd-cap-amount">Amount (₱)</label><input type="number" id="sd-cap-amount" min="0.01" step="0.01" inputmode="decimal" value="' + esc(row ? row.amount : '') + '"></div>' +
         '<div class="field"><label for="sd-cap-account">Payment account</label><input type="text" id="sd-cap-account" list="sd-cap-accts" maxlength="80" value="' + esc(row ? row.account || '' : '') + '"><datalist id="sd-cap-accts">' + PAY_ACCOUNTS.map((a) => '<option value="' + esc(a) + '">').join('') + '</datalist></div>' +

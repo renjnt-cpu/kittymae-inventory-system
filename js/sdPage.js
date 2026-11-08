@@ -1,6 +1,6 @@
 // Sales & Profit Dashboard -- the page: title, filters, data-quality notes, the tabs, and the glue between them.
 // Who sees what is decided by the database (keys "dashboard.*" in the Position Access Matrix); this page only hides what it is told not to ask for.
-import { api, esc, friendly, fmtDateTime, int, money } from './sdCore.js?v=20261031a';
+import { api, esc, friendly, fmtDateTime, fmtDayLong, int, money } from './sdCore.js?v=20261031a';
 import { mountShell, loadingBox, errorBox, lockedBox, badge, toast, openDrawer } from './sdUi.js?v=20261031a';
 import { createFilters } from './sdFilters.js?v=20261031a';
 import { renderOverview } from './sdOverview.js?v=20261031a';
@@ -70,7 +70,7 @@ export async function startDashboardPage({ root, employee }) {
 
   const panelEl = root.querySelector('#sd-panel');
   const ctx = { meta, can, filters: null, goTab, reloadAll, onSettingsSaved: () => { setFresh(); if (active === 'settings') show('settings'); loadQuality(); } };
-  let current = null, qToken = 0;
+  let current = null, qToken = 0, lastLoadAt = Date.now();
 
   function setFresh() { root.querySelector('#sd-fresh').textContent = 'Online orders last synced ' + ago(meta.sync && meta.sync.last_run_at) + (meta.sync && meta.sync.last_error ? ' (the last refresh had a problem)' : ''); }
   setFresh();
@@ -80,11 +80,12 @@ export async function startDashboardPage({ root, employee }) {
     root.querySelectorAll('.sd-tab').forEach((b) => { const on = b.dataset.tab === id; b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on)); });
     panelEl.innerHTML = '';
     const t = tabs.find((x) => x.id === id);
+    lastLoadAt = Date.now();
     try { current = t.make(panelEl, ctx); current.reload(); }
     catch (err) { panelEl.innerHTML = errorBox('This tab could not be drawn: ' + friendly(err)); }
   }
   function goTab(id) { if (tabs.some((t) => t.id === id)) { show(id); window.scrollTo({ top: 0, behavior: 'smooth' }); } }
-  function reloadAll() { if (current) current.reload(); loadQuality(); }
+  function reloadAll() { lastLoadAt = Date.now(); if (current) current.reload(); loadQuality(); }
 
   // ---- data-quality notes: what is missing, in plain words (the cost warning is always visible)
   async function loadQuality() {
@@ -127,6 +128,22 @@ export async function startDashboardPage({ root, employee }) {
     } catch (err) { toast(friendly(err), true); } finally { rf.disabled = false; rf.textContent = old; }
   });
   window.addEventListener('hashchange', () => { const id = (location.hash || '').replace('#', ''); if (id !== active && tabs.some((t) => t.id === id)) show(id); });
+
+  // ---- the Philippine clock: at midnight, or when a tab that was left open comes back to the front, "Today" moves on by itself and the figures are read again
+  async function refreshSync() { try { meta.sync = (await api.meta()).sync; setFresh(); } catch (err) { /* the old note stays */ } }
+  function dayWatch() {
+    if (document.hidden || !ctx.filters.checkDay()) return false;
+    toast('A new day has started in the Philippines — the figures now follow ' + fmtDayLong(ctx.filters.today()) + '.');
+    reloadAll(); refreshSync(); return true;
+  }
+  function comeBack() {
+    if (document.hidden || dayWatch()) return;
+    if (Date.now() - lastLoadAt > 5 * 60 * 1000) { reloadAll(); refreshSync(); }   // the figures are minutes old: read them again
+  }
+  setInterval(dayWatch, 30000);
+  document.addEventListener('visibilitychange', comeBack);
+  window.addEventListener('pageshow', comeBack);
+  window.addEventListener('focus', comeBack);
 
   show(active); loadQuality();
   void employee; void lockedBox; void fmtDateTime; void money;

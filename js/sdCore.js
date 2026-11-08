@@ -35,8 +35,21 @@ export const endOfMonth = (s) => { const d = toDate(startOfMonth(s)); d.setUTCMo
 export const addMonths = (s, n) => { const d = toDate(startOfMonth(s)); d.setUTCMonth(d.getUTCMonth() + n, 1); return toStr(d); };
 export const startOfWeek = (s) => addDays(s, -((toDate(s).getUTCDay() + 6) % 7)); // Monday
 export const startOfYear = (s) => s.slice(0, 4) + '-01-01';
-export const todayIn = (tz) => new Date().toLocaleDateString('en-CA', { timeZone: tz || 'Asia/Manila' });
+const DAY_FMT = {};
+/** The calendar date (YYYY-MM-DD) in time zone `tz` (default: the Philippines) of an instant (default: now). The browser's own time zone is never used. */
+export function todayIn(tz, ms) {
+  const zone = tz || 'Asia/Manila', f = DAY_FMT[zone] || (DAY_FMT[zone] = new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }));
+  const p = {}; f.formatToParts(new Date(ms === undefined ? Date.now() : ms)).forEach((x) => { p[x.type] = x.value; });
+  return p.year + '-' + p.month + '-' + p.day;
+}
+/** A clock that follows the DATABASE's clock (meta.now_ms), so a phone or laptop with a wrong clock cannot move "Today"; without it (older database) the device clock is used. */
+export function createClock(meta) {
+  const tz = (meta && meta.tz) || 'Asia/Manila', server = Number(meta && meta.now_ms), skew = Number.isFinite(server) && server > 0 ? server - Date.now() : 0;
+  const now = () => Date.now() + skew;
+  return { tz, now, today: () => todayIn(tz, now()), time: () => new Date(now()).toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }) };
+}
 export const fmtDate = (s) => !s ? '—' : toDate(s).toLocaleDateString('en-US', { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' });
+export const fmtDayLong = (s) => !s ? '—' : toDate(s).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 export const fmtDateTime = (iso, tz) => iso ? new Date(iso).toLocaleString('en-US', { timeZone: tz || 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
 export const rangeText = (a, b) => (!b || a === b) ? fmtDate(a) : fmtDate(a) + ' – ' + fmtDate(b);
 const sameYm = (a, b) => a.slice(0, 7) === b.slice(0, 7);
