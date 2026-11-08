@@ -1,12 +1,12 @@
 // Item Monitoring -- every Supabase call the page makes lives here, so the screens never touch `supabase` directly (and can be exercised against a stand-in object in tests).
 // Two kinds of call: the old reads (stock, counts, purchases, product changes -- same tables and same helpers as before) and the approval functions (fpr_* / fpd_*, migrations 264-269),
 // which check who is calling. A purchase never becomes stock from this file's reads; only fprApprove() does that, and the database lets only the Final Approver call it.
-import { supabase } from './supabaseClient.js?v=20261031a';
+import { supabase } from './supabaseClient.js?v=20261108a';
 import {
   getBranches as apiBranches, searchProducts as apiSearch, logCycleCount as apiLogCount, listRecentCycleCounts as apiRecentCounts, markCycleCountInvestigated as apiMarkInvestigated,
   listProductChangeLog as apiChanges, listFactoryPurchases as apiPurchases, subscribeToChanges,
-} from './api.js?v=20261031a';
-import { openSkuMovement } from './skuMovement.js?v=20261031a';
+} from './api.js?v=20261108a';
+import { openSkuMovement } from './skuMovement.js?v=20261108a';
 
 export const BUCKET = 'factory-purchase-files';
 

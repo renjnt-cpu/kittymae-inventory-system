@@ -1,9 +1,9 @@
 // Scrap Monitoring page -- "All Scrap": every scrap record of every branch the person may see, read live from the branches' own records, and the drawer that shows one record in full.
 // Nothing here is typed in again: the list and the drawer only show what the POS (Branches > Scrap) already stores; "Open original record" goes back to it.
-import { esc, grams, money, num, fmtDate, fmtTime, fmtDateTime, fmtShortDateTime, kindBadge, statusBadge, markBadge, ageBadge, KINDS, STATUS, SORT_ENTRIES, SOURCE_TYPES, METALS, posEntryUrl, scrapId, friendly, saleStatusBadge, groupStatusBadge, kindOfSale, plural } from './smFormat.js?v=20261102a';
-import { openDrawer, closeDrawer, drawerFooter, kv, emptyBox, fileThumb, wireFiles } from './smUi.js?v=20261102a';
-import { renderList } from './smList.js?v=20261102a';
-import { openLotEdit, canEditLots, lotIsHeld } from './smLotEdit.js?v=20261102a';
+import { esc, grams, money, num, fmtDate, fmtTime, fmtDateTime, fmtShortDateTime, kindBadge, statusBadge, markBadge, ageBadge, KINDS, STATUS, SORT_ENTRIES, SOURCE_TYPES, METALS, posEntryUrl, scrapId, friendly, saleStatusBadge, groupStatusBadge, kindOfSale, plural } from './smFormat.js?v=20261108a';
+import { openDrawer, closeDrawer, drawerFooter, kv, emptyBox, fileThumb, wireFiles } from './smUi.js?v=20261108a';
+import { renderList } from './smList.js?v=20261108a';
+import { openLotEdit, canEditLots, lotIsHeld } from './smLotEdit.js?v=20261108a';
 
 export function entriesCfg(ctx) {
   const v = ctx.value;
