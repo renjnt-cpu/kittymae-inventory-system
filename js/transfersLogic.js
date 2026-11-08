@@ -96,7 +96,9 @@ export function makeCaps(ctx) {
   const e = ctx.employee || {}, mgr = e.role === 'Admin' || e.role === 'Manager', admin = e.role === 'Admin';
   const unscoped = !(e.role === 'None' && !UNSCOPED_POSITIONS.includes(e.position || ''));
   const srcOk = (t) => mgr || (e.role === 'Branch Supervisor' && e.branch_id === t.from_branch_id);
-  const dstOk = (t) => mgr || (e.role === 'Branch Supervisor' && e.branch_id === t.to_branch_id) || !!ctx.recvAny;
+  const dstOk = (t) => mgr || (e.role === 'Branch Supervisor' && e.branch_id === t.to_branch_id) || !!ctx.recvAny || (ctx.receiveBranches || []).includes(t.to_branch_id);
+  // a Sales Admin Associate (transfer.approve_own_branch) approves / rejects the transfers whose source or destination is one of their branches
+  const apprOk = (t) => mgr || (ctx.approveBranches || []).some((b) => b === t.from_branch_id || b === t.to_branch_id);
   const own = (t) => t.requested_by === e.id;
   const involved = (t) => mgr || own(t) || (e.branch_id && [t.from_branch_id, t.to_branch_id].includes(e.branch_id)) || (e.role === 'None' && UNSCOPED_POSITIONS.includes(e.position || ''));
   return {
@@ -105,8 +107,8 @@ export function makeCaps(ctx) {
     canEdit: (t) => (t.status === 'Draft' && (own(t) || mgr)) || (t.status === 'Requested' && admin),
     canSubmit: (t) => t.status === 'Draft' && (own(t) || mgr),
     canSendBack: (t) => mgr && t.status === 'Requested',
-    canApprove: (t) => mgr && t.status === 'Requested' && !own(t) && !(t.revision_count > 0 && t.revised_by === e.id),
-    canReject: (t) => mgr && ['Requested', 'Approved'].includes(t.status),
+    canApprove: (t) => apprOk(t) && t.status === 'Requested' && !own(t) && !(t.revision_count > 0 && t.revised_by === e.id),
+    canReject: (t) => (mgr && ['Requested', 'Approved'].includes(t.status)) || (apprOk(t) && t.status === 'Requested'),
     canPrepare: (t) => srcOk(t) && t.status === 'Approved',
     canRelease: (t) => srcOk(t) && ['Approved', 'Preparing'].includes(t.status) && !own(t),
     canRevise: (t) => mgr && ['Approved', 'Preparing'].includes(t.status),

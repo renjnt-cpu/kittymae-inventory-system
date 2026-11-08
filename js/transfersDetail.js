@@ -249,7 +249,7 @@ export async function openDetail(ctx, id, opts = {}) {
 
   // submit a draft; the stock-short question appears only if the database raises it (Admin / Manager may continue with a reason)
   const submit = (extra) => actionPanel('detail', {
-    title: 'Submit for approval?', message: 'The transfer becomes Requested and a manager can approve it. No stock moves until it is released.', okLabel: 'Submit Request',
+    title: 'Submit for approval?', message: 'The transfer becomes Requested and can then be approved. No stock moves until it is released.', okLabel: 'Submit Request',
     onOk: async () => {
       const res = await ctx.api.submitTransfer(t.id, extra || {});
       if (res && res.ok === false && res.insufficient && ctx.caps.mgr && !(extra && extra.override)) {

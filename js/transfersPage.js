@@ -24,7 +24,7 @@ const $ = (id) => document.getElementById(id);
 /** Everything a Transfers screen needs besides its own markup. The caller supplies ctx.refresh / rerender. */
 export function createTransfersContext(api, employee) {
   const ctx = {
-    api, employee, today: manilaDate(new Date().toISOString()), settings: { ...DEFAULTS }, recvAny: false, recvAnyChecked: false,
+    api, employee, today: manilaDate(new Date().toISOString()), settings: { ...DEFAULTS }, recvAny: false, recvAnyChecked: false, approveBranches: [], receiveBranches: [], myBranches: [],
     branches: [], branchById: {}, names: {}, stock: {}, products: {}, ledger: [], receiptItems: [], data: { transfers: [], receipts: [], discrepancies: [], ledger: [] }, transfers: [], byId: new Map(),
     filters: defaultFilters(), caps: null, ui: { table: newTableState(), disc: newDiscState(), sku: newSkuState(), log: newLogState(), repOpen: new Set() },
   };
@@ -53,7 +53,14 @@ export function createTransfersContext(api, employee) {
     if (missing.length) { try { Object.assign(ctx.names, await api.employeeNames(missing)); } catch (err) { /* names fall back to "Unknown" */ } }
     if (employee && !ctx.names[employee.id]) ctx.names[employee.id] = employee.full_name || '';
     transfers.forEach((t) => (t.inventory_transfer_items || []).forEach((i) => { if (i.products) ctx.products[i.sku] = { ...(ctx.products[i.sku] || {}), ...i.products }; }));
-    if (!ctx.recvAnyChecked) { ctx.recvAny = await api.hasPermission(employee.id, 'transfer.receive_any_branch'); ctx.recvAnyChecked = true; }
+    if (!ctx.recvAnyChecked) {
+      // one call: the old any-branch receive grant plus the two own-branch keys (Sales Admin Associates) and the branches they cover
+      try {
+        const a = (await api.transferAccess()) || {};
+        ctx.recvAny = !!a.recv_any; ctx.approveBranches = a.approve_branches || []; ctx.receiveBranches = a.receive_branches || []; ctx.myBranches = a.branches || [];
+      } catch (err) { ctx.recvAny = await api.hasPermission(employee.id, 'transfer.receive_any_branch'); }
+      ctx.recvAnyChecked = true;
+    }
     ctx.ledger = ledger; ctx.receiptItems = receiptItems;
     ctx.data = { transfers, receipts, discrepancies, ledger };
     ctx.caps = makeCaps(ctx);
@@ -107,8 +114,14 @@ export async function startTransfersPage({ root, api, employee, search, hash }) 
     const e = employee, role = ctx.caps.admin ? 'Admin' : ctx.caps.mgr ? 'Manager' : e.role === 'Branch Supervisor' ? 'Branch Supervisor' : 'Staff';
     const cls = { Admin: 'lv-orange', Manager: 'lv-blue', 'Branch Supervisor': 'lv-green', Staff: 'lv-gray' }[role];
     const branch = (ctx.branchById[e.branch_id] || {}).name;
+    const names = (list) => (list || []).map((b) => (ctx.branchById[b] || {}).name).filter(Boolean).join(' and ') || 'your branch';
+    const canAppr = (ctx.approveBranches || []).length > 0, canRecv = (ctx.receiveBranches || []).length > 0;
+    const staffNote = canAppr || canRecv
+      ? 'You can request transfers' + (canAppr && canRecv ? ', approve or reject the requests of ' + names(ctx.approveBranches) + ', and receive what arrives at ' + names(ctx.receiveBranches)
+        : canAppr ? ' and approve or reject the requests of ' + names(ctx.approveBranches) : ' and receive what arrives at ' + names(ctx.receiveBranches)) + '.'
+      : 'You can request transfers and follow those that involve ' + (branch ? branch : 'your branch') + '.';
     const note = { Admin: 'You can do everything here, including editing a requested transfer and the settings.', Manager: 'You approve, reject, release, receive and resolve discrepancies.',
-      'Branch Supervisor': 'You request transfers, and release from and receive at ' + (branch || 'your branch') + '.', Staff: 'You can request transfers and follow those that involve ' + (branch ? branch : 'your branch') + '.' }[role];
+      'Branch Supervisor': 'You request transfers, and release from and receive at ' + (branch || 'your branch') + '.', Staff: staffNote }[role];
     $('tf-whoami').innerHTML = '<span>Signed in as <b>' + esc(ctx.names[e.id] || e.full_name || '') + '</b> <span class="badge ' + cls + '">' + esc(role) + '</span> <span class="muted">' + esc(note) + '</span></span>' +
       '<span class="bl-whoami-right"><button type="button" class="btn small" id="tf-add-top">+ New Transfer</button></span>';
     $('tf-add-top').addEventListener('click', () => ctx.openForm({}));

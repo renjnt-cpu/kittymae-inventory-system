@@ -51,6 +51,8 @@ export async function employeeNames(ids) {
 export async function hasPermission(employeeId, key) {
   try { return !!(await rpc('has_permission', { p_employee_id: employeeId, p_permission_key: key })); } catch (e) { return false; }
 }
+/** What this signed-in person may do for their own branch: {recv_any, branches, approve_branches, receive_branches}. The page only shows buttons from it; the database decides every action. */
+export const transferAccess = () => rpc('transfer_my_access');
 export async function listTimeline(id) {
   return check(await supabase.from('transfer_timeline').select('*').eq('transfer_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(300));
 }

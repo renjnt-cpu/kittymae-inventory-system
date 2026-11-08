@@ -34,8 +34,9 @@ export function openApprove(ctx, id) {
   const t = ctx.byId.get(id);
   if (!t) return gone(ctx);
   if (!ctx.caps.canApprove(t)) {
-    ctx.toast(t.status !== 'Requested' ? 'Only a Requested transfer can be approved.' : ctx.caps.own(t) ? 'You cannot approve a transfer you requested yourself — ask another manager.'
-      : t.revision_count > 0 && t.revised_by === ctx.employee.id ? 'You revised this transfer, so someone else has to approve it.' : 'Only an Admin or a Manager can approve transfers.', true);
+    ctx.toast(t.status !== 'Requested' ? 'Only a Requested transfer can be approved.' : ctx.caps.own(t) ? 'You cannot approve a transfer you requested yourself — ask someone else to approve it.'
+      : t.revision_count > 0 && t.revised_by === ctx.employee.id ? 'You revised this transfer, so someone else has to approve it.'
+      : (ctx.approveBranches || []).length ? 'You can approve only the transfers that involve your own branch (' + ctx.approveBranches.map((b) => (ctx.branchById[b] || {}).name).filter(Boolean).join(' and ') + ').' : 'Only an Admin or a Manager can approve transfers.', true);
     return;
   }
   const rows = t._items.map((i) => '<tr data-item="' + i.id + '" data-sku="' + esc(i.sku) + '"><td data-label="Item">' + itemCell(i) + '</td><td data-label="Requested"><b>' + qty(i.req) + '</b></td>' +
@@ -48,9 +49,12 @@ export function openApprove(ctx, id) {
     table(['Item', 'Requested', 'In stock at ' + esc(t._from), 'Approve', 'Source stock after', 'Note'], rows) +
     '<div id="tf-ap-sum" class="lv-preview"></div>' +
     field('<span id="tf-ap-reasonlabel">Note (optional)</span>', '<textarea id="tf-ap-reason" rows="2" maxlength="500" placeholder="Approval note"></textarea>') +
-    '<div id="tf-ap-over" class="msg lv-warn" hidden><b>Not enough stock at ' + esc(t._from) + ' for some lines.</b> As an Admin or Manager you may approve anyway. The reason is kept in the history, and the pieces still cannot be released unless the stock is there at release time.' +
-      '<label class="lv-check"><input type="checkbox" id="tf-ap-overtick"> Approve anyway (stock override)</label>' + field('Reason for the override *', '<textarea id="tf-ap-overreason" rows="2" maxlength="300"></textarea>') + '</div>',
-    '<button type="button" class="btn" id="tf-ap-ok">Approve</button><button type="button" class="btn secondary" id="tf-ap-reject">Reject…</button><button type="button" class="btn secondary" id="tf-ap-back">Return for Editing…</button><button type="button" class="btn secondary" id="tf-ap-x">Close</button>');
+    (ctx.caps.mgr
+      ? '<div id="tf-ap-over" class="msg lv-warn" hidden><b>Not enough stock at ' + esc(t._from) + ' for some lines.</b> As an Admin or Manager you may approve anyway. The reason is kept in the history, and the pieces still cannot be released unless the stock is there at release time.' +
+        '<label class="lv-check"><input type="checkbox" id="tf-ap-overtick"> Approve anyway (stock override)</label>' + field('Reason for the override *', '<textarea id="tf-ap-overreason" rows="2" maxlength="300"></textarea>') + '</div>'
+      : '<div id="tf-ap-over" class="msg lv-warn" hidden><b>Not enough stock at ' + esc(t._from) + ' for some lines.</b> Lower those quantities to what is in stock — only an Admin or a Manager can approve more than the stock.</div>'),
+    '<button type="button" class="btn" id="tf-ap-ok">Approve</button>' + (ctx.caps.canReject(t) ? '<button type="button" class="btn secondary" id="tf-ap-reject">Reject…</button>' : '') +
+      (ctx.caps.canSendBack(t) ? '<button type="button" class="btn secondary" id="tf-ap-back">Return for Editing…</button>' : '') + '<button type="button" class="btn secondary" id="tf-ap-x">Close</button>');
   const root = drawerBody('side');
   const read = () => t._items.map((i) => { const tr = root.querySelector('tr[data-item="' + i.id + '"]'); return { i, tr, q: whole(tr.querySelector('[data-k="q"]').value), note: tr.querySelector('[data-k="note"]').value.trim() }; });
   const recalc = () => {
@@ -75,7 +79,7 @@ export function openApprove(ctx, id) {
     const reason = val('tf-ap-reason').trim();
     if (r.partial && reason.length < 3) { flagInvalid($('tf-ap-reason')); return errBox('Say why the approved quantity is lower than what was requested.'); }
     const p = { items: r.list.map((x) => ({ item_id: x.i.id, approved_qty: x.q, note: x.note || null })), reason };
-    if (!$('tf-ap-over').hidden && $('tf-ap-overtick').checked) {
+    if (!$('tf-ap-over').hidden && $('tf-ap-overtick') && $('tf-ap-overtick').checked) {
       p.override = true; p.override_reason = val('tf-ap-overreason').trim();
       if (p.override_reason.length < 5) { flagInvalid($('tf-ap-overreason')); return errBox('Write the reason for the stock override.'); }
     }
@@ -91,9 +95,9 @@ export function openApprove(ctx, id) {
   });
   const reasonPanel = (cfg) => actionPanel('side', { ...cfg, fields: '<textarea id="tf-rs-reason" rows="3" maxlength="500" placeholder="' + esc(cfg.placeholder) + '"></textarea>',
     onOk: async () => { const x = val('tf-rs-reason').trim(); if (x.length < 3) throw new Error(cfg.err); must(await cfg.call(x)); closeDrawer('side'); ctx.toast(cfg.done); await afterChange(ctx, t.id); } });
-  $('tf-ap-reject').addEventListener('click', () => reasonPanel({ title: 'Reject this transfer?', message: 'Nothing moves. The reason is kept in the history and shown on the transfer, which can never be deleted.', placeholder: 'Reason for rejecting (required)', okLabel: 'Reject Transfer', danger: true,
+  if ($('tf-ap-reject')) $('tf-ap-reject').addEventListener('click', () => reasonPanel({ title: 'Reject this transfer?', message: 'Nothing moves. The reason is kept in the history and shown on the transfer, which can never be deleted.', placeholder: 'Reason for rejecting (required)', okLabel: 'Reject Transfer', danger: true,
     err: 'A rejection reason is required.', call: (x) => ctx.api.rejectTransfer(t.id, x), done: t.transfer_number + ' rejected.' }));
-  $('tf-ap-back').addEventListener('click', () => reasonPanel({ title: 'Return for editing?', message: 'The transfer goes back to its requester as a Draft, with your note, so they can correct it and submit it again.', placeholder: 'What needs to change? (required)', okLabel: 'Return for Editing',
+  if ($('tf-ap-back')) $('tf-ap-back').addEventListener('click', () => reasonPanel({ title: 'Return for editing?', message: 'The transfer goes back to its requester as a Draft, with your note, so they can correct it and submit it again.', placeholder: 'What needs to change? (required)', okLabel: 'Return for Editing',
     err: 'Say what needs to change.', call: (x) => ctx.api.returnForEditing(t.id, x), done: t.transfer_number + ' returned for editing.' }));
 }
 
@@ -155,7 +159,7 @@ export function openReceive(ctx, id) {
   const t = ctx.byId.get(id);
   if (!t) return gone(ctx);
   if (!ctx.caps.canReceive(t)) {
-    ctx.toast(!['In Transit', 'Partially Received'].includes(t.status) ? 'This transfer is ' + t.status + ' — it can only be received while In Transit or Partially Received.' : 'Only the ' + t._to + ' supervisor, an Admin or a Manager can receive this transfer.', true);
+    ctx.toast(!['In Transit', 'Partially Received'].includes(t.status) ? 'This transfer is ' + t.status + ' — it can only be received while In Transit or Partially Received.' : 'Only the ' + t._to + ' supervisor or Sales Admin Associate, an Admin or a Manager can receive this transfer.', true);
     return;
   }
   const lines = t._items.filter((i) => i.outstanding > 0);
