@@ -1,8 +1,8 @@
 // Bills Management -- the Recurring tab: every repeating bill is driven by a template (name, amount, branch,
 // schedule). From here you can see what is coming and what has fallen behind, generate a bill by hand, edit,
 // pause or archive a template. Automatic generation is OFF for every template until someone turns it on.
-import { esc, money, fmtDate, tagBadge, kpiCard, openDrawer, closeDrawer, drawerBody, confirmSide, friendly, errorsText, plural, prioBadge } from './billsUi.js?v=20261108a';
-import { recurringSummary, frequencyText, nextGenerationDate, daysBetween, FREQUENCIES, PRIORITIES, REMINDER_CHOICES, matchesScope } from './billsLogic.js?v=20261108a';
+import { esc, money, fmtDate, tagBadge, kpiCard, openDrawer, closeDrawer, drawerBody, confirmSide, friendly, errorsText, plural, prioBadge, dayOptions } from './billsUi.js?v=20261108a';
+import { recurringSummary, frequencyText, nextGenerationDate, daysBetween, FREQUENCIES, TWICE, twiceDateNote, PRIORITIES, REMINDER_CHOICES, matchesScope } from './billsLogic.js?v=20261108a';
 import { flagInvalid } from './uiKit.js?v=20261108a';
 
 const $ = (id) => document.getElementById(id);
@@ -102,9 +102,11 @@ export function openTemplateForm(ctx, id) {
       field('Account name', '<input type="text" id="bt-acn" maxlength="120" value="' + esc(t ? t.account_name || '' : '') + '">') +
       field('Account number', '<input type="text" id="bt-acc" maxlength="80" value="' + esc(t ? t.account_number || '' : '') + '">') +
       field('Usual amount (PHP)', '<input type="number" id="bt-amt" step="0.01" min="0" inputmode="decimal" value="' + (t && t.default_amount !== null ? t.default_amount : '') + '"><span class="muted">Each new expense starts with this; change it when the real invoice arrives.</span>') +
-      field('Next expense due on *', '<input type="date" id="bt-next" value="' + esc(t ? t.next_due_date || '' : '') + '"><span class="muted">The day of the month stays the same (an expense due on the 31st is due on the last day of shorter months).</span>') +
+      field('Next expense due on *', '<input type="date" id="bt-next" value="' + esc(t ? t.next_due_date || '' : '') + '"><span class="muted" id="bt-next-hint"></span>') +
       field('Repeats *', '<select id="bt-freq">' + FREQUENCIES.map((x) => '<option' + (t && t.frequency === x ? ' selected' : '') + '>' + x + '</option>').join('') + '</select>') +
       field('Every', '<div class="bl-inline"><input type="number" id="bt-int" min="1" max="366" value="' + (t ? t.interval_count : 1) + '" style="width:80px"><select id="bt-unit">' + ['day', 'week', 'month', 'year'].map((u) => '<option value="' + u + '"' + ((t ? t.interval_unit : 'month') === u ? ' selected' : '') + '>' + u + 's</option>').join('') + '</select></div>', { id: 'bt-custom', hidden: true }) +
+      field('Due on these two days', '<div class="bl-inline bl-twodays"><select id="bt-day1" aria-label="First day of the month">' + dayOptions(t && t.frequency === TWICE ? t.anchor_day : 15) + '</select><span>and</span><select id="bt-day2" aria-label="Second day of the month">' + dayOptions(t && t.frequency === TWICE ? t.anchor_day_2 : 31) + '</select></div>' +
+        '<span class="muted">Every month, on both days. “Last day” follows the month (28th to 31st), and a month without a 30th uses its last day.</span>', { id: 'bt-twice', hidden: true }) +
       field('How it is paid', '<select id="bt-pay"><option value="Manual"' + (!t || t.payment_type !== 'Auto-Debit' ? ' selected' : '') + '>Paid by hand</option><option value="Auto-Debit"' + (t && t.payment_type === 'Auto-Debit' ? ' selected' : '') + '>Auto-debited</option></select>') +
       field('Priority', '<select id="bt-prio"><option value="auto"' + (prioNow === 'auto' ? ' selected' : '') + '>Automatic</option>' + PRIORITIES.map((p) => '<option' + (prioNow === p ? ' selected' : '') + '>' + p + '</option>').join('') + '</select>') +
       field('Remind before the due date', '<div class="bl-checks">' + remChoices.map((d) => '<label class="bl-chk"><input type="checkbox" name="bt-rem" value="' + d + '"' + (rem.includes(d) ? ' checked' : '') + '> ' + d + (d === 1 ? ' day' : ' days') + '</label>').join('') + '</div>') +
@@ -115,8 +117,14 @@ export function openTemplateForm(ctx, id) {
     field('Note added to every generated expense', '<textarea id="bt-notes" rows="2" maxlength="500">' + esc(t ? t.notes_template || '' : '') + '</textarea>'),
     footer: '<button type="button" class="btn" id="bt-save">' + (t ? 'Save Template' : 'Create Template') + '</button><button type="button" class="btn secondary" id="bt-cancel">Cancel</button>',
   });
-  const sync = () => { $('bt-custom').hidden = val('bt-freq') !== 'Custom'; $('bt-gen-wrap').hidden = !$('bt-auto').checked; };
-  $('bt-freq').addEventListener('change', sync); $('bt-auto').addEventListener('change', sync); sync();
+  const sync = () => {
+    const twice = val('bt-freq') === TWICE;
+    $('bt-custom').hidden = val('bt-freq') !== 'Custom'; $('bt-twice').hidden = !twice; $('bt-gen-wrap').hidden = !$('bt-auto').checked;
+    $('bt-next-hint').textContent = twice
+      ? (twiceDateNote(val('bt-next'), val('bt-day1'), val('bt-day2')) || 'After this one, expenses are due on the two days chosen under Repeats.')
+      : 'The day of the month stays the same (an expense due on the 31st is due on the last day of shorter months).';
+  };
+  ['bt-freq', 'bt-auto', 'bt-next', 'bt-day1', 'bt-day2'].forEach((id) => $(id).addEventListener('change', sync)); sync();
   $('bt-cancel').addEventListener('click', () => closeDrawer('side'));
   $('bt-save').addEventListener('click', async () => {
     const p = {
@@ -125,10 +133,12 @@ export function openTemplateForm(ctx, id) {
       reminder_days: [...document.querySelectorAll('input[name="bt-rem"]:checked')].map((x) => Number(x.value)), auto_generate: $('bt-auto').checked, generate_days_before: Number(val('bt-gen') || 10), notes_template: val('bt-notes').trim(),
     };
     if (p.frequency === 'Custom') { p.interval_count = Number(val('bt-int') || 1); p.interval_unit = val('bt-unit'); }
+    if (p.frequency === TWICE) { p.anchor_day = Number(val('bt-day1')); p.anchor_day_2 = Number(val('bt-day2')); }
     const bad = [];
     if (!p.name) bad.push(['bt-name', 'Give the template a name.']);
     if (!p.category_id) bad.push(['bt-cat', 'Choose a category.']);
     if (!p.next_due_date) bad.push(['bt-next', 'Enter when the next expense is due.']);
+    if (p.frequency === TWICE && p.anchor_day === p.anchor_day_2) bad.push(['bt-day2', 'Choose two different days of the month.']);
     if (bad.length) { $('bt-errors').innerHTML = '<div class="msg error">' + bad.map((x) => esc(x[1])).join('<br>') + '</div>'; flagInvalid($(bad[0][0])); return; }
     const btn = $('bt-save'); btn.disabled = true; $('bt-errors').innerHTML = '';
     try {

@@ -8,7 +8,8 @@
 export const PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
 export const PRIORITY_RANK = { Critical: 0, High: 1, Medium: 2, Low: 3 };
 export const METHODS = ['Bank Transfer', 'Cash', 'Check', 'GCash', 'Auto-Debit', 'Online Banking', 'Other'];
-export const FREQUENCIES = ['Monthly', 'Quarterly', 'Annual', 'Custom'];
+export const TWICE = 'Twice a Month'; // two chosen days of every month, e.g. the 15th and the last day
+export const FREQUENCIES = ['Monthly', TWICE, 'Quarterly', 'Annual', 'Custom'];
 export const REMINDER_CHOICES = [1, 3, 7, 14];
 export const STATUSES = ['Unpaid', 'Due Soon', 'Due Today', 'Overdue', 'Paid', 'Partially Paid', 'Auto-Debited', 'Cancelled', 'Archived'];
 const STATUS_RANK = { Overdue: 0, 'Due Today': 1, 'Due Soon': 2, 'Partially Paid': 3, Unpaid: 4, 'Auto-Debited': 5, Paid: 6, Cancelled: 7, Archived: 8 };
@@ -306,6 +307,35 @@ export function addInterval(d, n, unit, anchor) {
   const { y, m } = addMonths(yearOf(d), monthOf(d), unit === 'year' ? 12 * n : n);
   return ymd(y, m, Math.min(anchor || Number(String(d).slice(8, 10)), daysInMonth(y, m)));
 }
+/** "1st", "2nd", "3rd", "11th", "22nd" ... */
+export const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th'));
+/** A day of the month as people say it. 31 stands for "the last day": a month that is shorter uses its own last day. */
+export const monthDayLabel = (n) => Number(n) >= 31 ? 'last day' : ordinal(Number(n));
+/** The choices for a twice-a-month day: 1st ... 30th, then the last day of the month (stored as 31). */
+export const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => ({ value: i + 1, label: i + 1 >= 31 ? 'Last day' : ordinal(i + 1) }));
+/** The next date after `d` for a twice-a-month series: the two days of the month, each held to that month's last day.
+ * The same rule as the database's _bills_next_due (the two days may be given in either order). */
+export function nextTwice(d, a, b) {
+  const lo = Math.min(a, b), hi = Math.max(a, b), y = yearOf(d), m = monthOf(d), day = Number(String(d).slice(8, 10)), dim = daysInMonth(y, m);
+  if (day < Math.min(lo, dim)) return ymd(y, m, Math.min(lo, dim));
+  if (day < Math.min(hi, dim)) return ymd(y, m, Math.min(hi, dim));
+  const nx = addMonths(y, m, 1);
+  return ymd(nx.y, nx.m, Math.min(lo, daysInMonth(nx.y, nx.m)));
+}
+/** Is `d` one of the two days of a twice-a-month series? */
+export function onTwiceDays(d, a, b) {
+  const dim = daysInMonth(yearOf(d), monthOf(d)), day = Number(String(d).slice(8, 10));
+  return day === Math.min(a, dim) || day === Math.min(b, dim);
+}
+/** The date after `d` in a template's series, whatever its schedule. */
+export const nextDue = (d, t) => t.frequency === TWICE && t.anchor_day && t.anchor_day_2
+  ? nextTwice(d, t.anchor_day, t.anchor_day_2) : addInterval(d, t.interval_count, t.interval_unit, t.anchor_day);
+/** A gentle note for the date field of a twice-a-month series when the date typed is not one of the two days ('' when there is nothing to say). */
+export function twiceDateNote(d, a, b) {
+  a = Number(a); b = Number(b);
+  if (!d || !a || !b || a === b || onTwiceDays(d, a, b)) return '';
+  return 'The ' + ordinal(Number(String(d).slice(8, 10))) + ' is not one of the two days, so only this expense is due then. After it they follow the ' + monthDayLabel(Math.min(a, b)) + ' and the ' + monthDayLabel(Math.max(a, b)) + '.';
+}
 /** Bills that the active templates WILL create up to `until` and have not created yet, shaped like bills so the planning
  * numbers can treat them the same way. Marked _projected. */
 export function projectTemplates(templates, bills, ctx, until) {
@@ -321,7 +351,7 @@ export function projectTemplates(templates, bills, ctx, until) {
           _remaining: Number(t.default_amount || 0), _paid: 0, _cat: cat ? cat.name : 'Other', _branch: t.branch_id ? ((ctx.branchById[t.branch_id] || {}).name || '') : 'Unassigned',
           branch_id: t.branch_id, category_id: t.category_id, _prio: t.priority || (cat ? cat.default_priority : 'Medium'), is_recurring: true });
       }
-      due = addInterval(due, t.interval_count, t.interval_unit, t.anchor_day);
+      due = nextDue(due, t);
     }
   });
   return out;
@@ -336,8 +366,9 @@ export function recurringSummary(templates, today) {
   const missed = active.filter((t) => t.next_due_date && daysBetween(today, t.next_due_date) < 0).sort((a, b) => a.next_due_date.localeCompare(b.next_due_date));
   return { total: live.length, active: active.length, paused: live.length - active.length, auto: active.filter((t) => t.auto_generate).length, archived: templates.length - live.length, upcoming, missed };
 }
-export const frequencyText = (t) => t.frequency === 'Custom'
-  ? 'Every ' + t.interval_count + ' ' + t.interval_unit + (t.interval_count === 1 ? '' : 's') : t.frequency;
+export const frequencyText = (t) => t.frequency === TWICE && t.anchor_day && t.anchor_day_2
+  ? 'Twice a month (' + monthDayLabel(Math.min(t.anchor_day, t.anchor_day_2)) + ' & ' + monthDayLabel(Math.max(t.anchor_day, t.anchor_day_2)) + ')'
+  : t.frequency === 'Custom' ? 'Every ' + t.interval_count + ' ' + t.interval_unit + (t.interval_count === 1 ? '' : 's') : t.frequency;
 
 // ---------------------------------------------------------------- branch suggestions (a helper for the one-time assignment)
 const STOP = new Set(['mall', 'branch', 'store', 'shop', 'the', 'and']);

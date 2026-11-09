@@ -1,8 +1,8 @@
 // Bills Management -- the add / edit bill drawer, plus the small drawers for recording a payment,
 // attaching a proof file and snoozing a reminder. Forms open in drawers (never a permanent column);
 // nothing here uses confirm() or prompt() -- confirmations are inline panels.
-import { esc, money, openDrawer, closeDrawer, drawerBody, drawerFooter, actionPanel, friendly, errorsText, fmtDate, fmtBytes, setDrawerTitle } from './billsUi.js?v=20261108a';
-import { PRIORITIES, METHODS, FREQUENCIES, REMINDER_CHOICES, suggestPriority, addDays, uniqueSorted, FILE_TYPES, MAX_FILE } from './billsLogic.js?v=20261108a';
+import { esc, money, openDrawer, closeDrawer, drawerBody, drawerFooter, actionPanel, friendly, errorsText, fmtDate, fmtBytes, setDrawerTitle, dayOptions } from './billsUi.js?v=20261108a';
+import { PRIORITIES, METHODS, FREQUENCIES, TWICE, twiceDateNote, REMINDER_CHOICES, suggestPriority, addDays, uniqueSorted, FILE_TYPES, MAX_FILE } from './billsLogic.js?v=20261108a';
 import { flagInvalid } from './uiKit.js?v=20261108a';
 
 const $ = (id) => document.getElementById(id);
@@ -44,7 +44,7 @@ function formHtml(ctx, b) {
     '<div class="drawer-section"><h4>Amount and due date</h4><div class="bl-formgrid">' +
       field('Amount (PHP)', '<input type="number" id="bf-amount" step="0.01" min="0" inputmode="decimal" value="' + (b && b._amount !== null ? b._amount : '') + '">' +
         '<span class="muted">' + (editing && b._paid > 0 ? 'Already paid ' + money(b._paid) + ' — the amount cannot go below that.' : 'Leave blank if the invoice has not arrived yet.') + '</span>') +
-      field('Due date *', '<input type="date" id="bf-due" value="' + esc(b ? b.due_date || '' : '') + '">') +
+      field('Due date *', '<input type="date" id="bf-due" value="' + esc(b ? b.due_date || '' : '') + '"><span class="muted" id="bf-due-hint"></span>') +
       field('How it is paid', '<select id="bf-paytype"><option value="Manual"' + (!b || b.payment_type !== 'Auto-Debit' ? ' selected' : '') + '>Paid by hand (bank transfer, cash, GCash…)</option>' +
         '<option value="Auto-Debit"' + (b && b.payment_type === 'Auto-Debit' ? ' selected' : '') + '>Auto-debited from an account</option></select>') +
     '</div></div>' +
@@ -61,6 +61,8 @@ function formHtml(ctx, b) {
           '<div id="bf-rec-fields" class="bl-formgrid" hidden>' +
             field('How often', '<select id="bf-freq">' + FREQUENCIES.map((f) => '<option>' + f + '</option>').join('') + '</select>') +
             field('Every', '<div class="bl-inline"><input type="number" id="bf-int" min="1" max="366" value="1" style="width:80px"><select id="bf-unit"><option value="day">days</option><option value="week">weeks</option><option value="month" selected>months</option><option value="year">years</option></select></div>', { id: 'bf-custom', hidden: true }) +
+            field('Due on these two days', '<div class="bl-inline bl-twodays"><select id="bf-day1" aria-label="First day of the month">' + dayOptions(15) + '</select><span>and</span><select id="bf-day2" aria-label="Second day of the month">' + dayOptions(31) + '</select></div>' +
+              '<span class="muted">Every month, on both days. “Last day” follows the month (28th to 31st), and a month without a 30th uses its last day.</span>', { id: 'bf-twice', hidden: true }) +
             '<label class="lv-check bl-span2"><input type="checkbox" id="bf-auto"> Create each next expense automatically <span class="muted">(off by default — you can still generate it by hand)</span></label>' +
             field('Create it this many days before it is due', '<input type="number" id="bf-gen" min="0" max="90" value="10" style="width:100px">', { id: 'bf-gen-wrap', hidden: true }) +
           '</div>') + '</div>') +
@@ -81,6 +83,7 @@ function readForm(ctx, b) {
     if (p.is_recurring) {
       p.frequency = val('bf-freq'); p.auto_generate = $('bf-auto').checked; p.generate_days_before = Number(val('bf-gen') || 10);
       if (p.frequency === 'Custom') { p.interval_count = Number(val('bf-int') || 1); p.interval_unit = val('bf-unit'); }
+      if (p.frequency === TWICE) { p.anchor_day = Number(val('bf-day1')); p.anchor_day_2 = Number(val('bf-day2')); }
     }
   }
   return p;
@@ -93,6 +96,7 @@ function clientValidate(p, editing) {
   if (!p.category_id) bad.push(['bf-category', 'Choose a category.']);
   if (!p.due_date && (!editing || p.is_recurring)) bad.push(['bf-due', editing ? 'A recurring expense needs a due date.' : 'Enter the due date so the expense shows in alerts and the calendar.']);
   if (p.amount !== null && (!Number.isFinite(p.amount) || p.amount < 0 || Math.abs(p.amount * 100 - Math.round(p.amount * 100)) > 1e-6)) bad.push(['bf-amount', 'Enter a valid amount (up to two decimal places).']);
+  if (p.is_recurring && p.frequency === TWICE && p.anchor_day === p.anchor_day_2) bad.push(['bf-day2', 'Choose two different days of the month.']);
   return bad;
 }
 
@@ -115,10 +119,12 @@ export function openBillForm(ctx, opts = {}) {
     const on = $('bf-recurring').checked;
     $('bf-rec-fields').hidden = !on;
     $('bf-custom').hidden = !on || val('bf-freq') !== 'Custom';
+    $('bf-twice').hidden = !on || val('bf-freq') !== TWICE;
     $('bf-gen-wrap').hidden = !on || !$('bf-auto').checked;
+    $('bf-due-hint').textContent = on && val('bf-freq') === TWICE ? twiceDateNote(val('bf-due'), val('bf-day1'), val('bf-day2')) : '';
   };
   ['bf-category', 'bf-priority', 'bf-amount'].forEach((id) => $(id).addEventListener('input', hint));
-  ['bf-recurring', 'bf-freq', 'bf-auto'].forEach((id) => { if ($(id)) $(id).addEventListener('change', syncRecurring); });
+  ['bf-recurring', 'bf-freq', 'bf-auto', 'bf-due', 'bf-day1', 'bf-day2'].forEach((id) => { if ($(id)) $(id).addEventListener('change', syncRecurring); });
   hint(); syncRecurring();
   formState.snapshot = snapshot();
 
