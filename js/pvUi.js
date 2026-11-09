@@ -1,7 +1,7 @@
 // Payment Verification page -- the drawers every screen uses, the toast, the inline confirmation panel (the app never uses confirm() / prompt()), the picture
 // viewer (zoom + side-by-side compare) and the small cards. Pure display code: no database calls here.
-import { esc, friendly, imgTag } from './pvFormat.js?v=20261108a';
-import { hydrateImages } from './pvApi.js?v=20261108a';
+import { esc, friendly, imgTag } from './pvFormat.js?v=20261109a';
+import { hydrateImages } from './pvApi.js?v=20261109a';
 
 const $ = (id) => document.getElementById(id);
 export { esc, friendly };

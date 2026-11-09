@@ -2,9 +2,9 @@
 // the lot itself is corrected: its grams move from the old purity's balance to the new one. Needs a reason and is logged (migration 273, scrap_lot_set_purity).
 // A lot that is already sold, disposed of, held in a sale or a group, or counted as released by a POS out entry cannot change -- the database refuses it, and this screen
 // only hides the button. The "accepted as" value of a sold lot (smAccepted.js, the sale page) is a different thing: it leaves the recorded purity alone.
-import { esc, num, scrapId } from './smFormat.js?v=20261108a';
-import { openDrawer, closeDrawer, actionPanel } from './smUi.js?v=20261108a';
-import { acceptedControls, readAccepted, wireAccepted, sameAs, metalPurity } from './smAccepted.js?v=20261108a';
+import { esc, num, scrapId } from './smFormat.js?v=20261109a';
+import { openDrawer, closeDrawer, actionPanel } from './smUi.js?v=20261109a';
+import { acceptedControls, readAccepted, wireAccepted, sameAs, metalPurity } from './smAccepted.js?v=20261109a';
 
 /** who gets the button (the database decides for real: anyone who may sell, approve or dispose of scrap, in the branches they can see) */
 export const canEditLots = (ctx) => !!(ctx.can.sell || ctx.can.approve_sale || ctx.can.dispose);

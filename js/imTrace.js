@@ -1,10 +1,10 @@
 // Item Monitoring > Trace Product -- follow one product (or a search) through the purchases: by SKU or name, by Gold / Silver / Coated, by delivery dates. When the search points at one SKU the
 // answer is the whole picture: stock at every branch, the last count, every purchase and a button for the full movement history (transfers, sales, online orders, adjustments, reservations).
-import { esc, money, weight, num, fmtDate, plural } from './imFormat.js?v=20261108a';
-import { skuSummary, singleSku, materialOf } from './imData.js?v=20261108a';
-import { MATERIAL_GROUPS } from './productMaterial.js?v=20261108a';
-import { summaryTiles } from './imHistory.js?v=20261108a';
-import { emptyBox } from './imUi.js?v=20261108a';
+import { esc, money, weight, num, fmtDate, plural } from './imFormat.js?v=20261109a';
+import { skuSummary, singleSku, materialOf } from './imData.js?v=20261109a';
+import { MATERIAL_GROUPS } from './productMaterial.js?v=20261109a';
+import { summaryTiles } from './imHistory.js?v=20261109a';
+import { emptyBox } from './imUi.js?v=20261109a';
 
 export function renderTrace(ctx, panel, opts) {
   const st = ctx.ui.trace;

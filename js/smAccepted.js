@@ -2,7 +2,7 @@
 // always stay as recorded). A small metal + purity picker used by the group confirmation and by the sale page, and the words that say what a lot was accepted as.
 // The purities are the ones the POS offers (GOLD 10K..24K, SILVER 999 / 925 / 800) plus every purity the branches have actually recorded (setKnownPurities); anything else is typed under
 // "Custom…", so a purity is never lost. The same picker is used to correct a lot itself (smLotEdit.js).
-import { esc, METALS } from './smFormat.js?v=20261108a';
+import { esc, METALS } from './smFormat.js?v=20261109a';
 
 export const GOLD_PURITIES = ['10K', '14K', '16K', '18K', '20K', '21K', '22K', '24K'];
 export const SILVER_PURITIES = ['999', '925', '800'];
